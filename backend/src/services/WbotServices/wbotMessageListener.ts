@@ -4327,15 +4327,7 @@ const handleMessage = async (
       }
     }
 
-    if (ticket.flowStopped && ticket.lastFlowId) {
-      logger.info(`[FLOW STOPPED] Continuando fluxo interrompido - ticket ${ticket.id}`);
-      await flowBuilderQueue(ticket, msg, wbot, whatsapp, companyId, contact, ticket);
-      return;
-    }
-
     if (
-      ticket.status !== "open" &&
-      !isGroup &&
       !msg.key.fromMe &&
       !ticket.fromMe &&
       ticket.flowStopped &&

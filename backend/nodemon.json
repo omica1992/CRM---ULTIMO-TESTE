@@ -1,0 +1,19 @@
+{
+  "watch": ["dist"],
+  "ext": "js",
+  "ignore": [
+    "node_modules/**/*",
+    "sessions/**/*",
+    "public/**/*",
+    "logs/**/*",
+    "*.log",
+    "*.tmp",
+    "dist/**/*.map",
+    "coverage/**/*",
+    ".git/**/*"
+  ],
+  "delay": 1000,
+  "env": {
+    "NODE_ENV": "development"
+  }
+}

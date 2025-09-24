@@ -742,7 +742,7 @@ export const ActionsWebhookService = async (
 
           // Se inputResponded é true, significa que estamos retomando o fluxo após uma resposta
           // Neste caso, devemos continuar para o próximo nó sem processar este input novamente
-          if (inputResponded) {
+          if (inputResponded && thisInputResponded) {
             logger.info(`[INPUT NODE] Retomando fluxo após resposta - Ticket ${ticket.id}`);
 
             // Recuperar o valor do próximo nó salvo anteriormente
@@ -755,7 +755,23 @@ export const ActionsWebhookService = async (
               delete global.flowVariables[`${inputIdentifier}_next`];
               logger.info(`[INPUT NODE] Continuando para próximo nó: ${next}`);
             } else {
-              logger.warn(`[INPUT NODE] Nenhum próximo nó encontrado para ${inputIdentifier}`);
+              // Backup: tentar buscar o próximo nó a partir do dataWebhook
+              const backupNext = ticket?.dataWebhook?.nextNodeId;
+              if (backupNext) {
+                next = backupNext;
+                logger.info(`[INPUT NODE] Usando próximo nó do backup: ${next}`);
+              } else {
+                // Último recurso: buscar conexão de saída do nó atual
+                const outputConnection = connects.filter(
+                  connect => connect.source === nodeSelected.id && connect.sourceHandle === "a"
+                )[0];
+                if (outputConnection) {
+                  next = outputConnection.target;
+                  logger.info(`[INPUT NODE] Usando próximo nó da conexão de saída: ${next}`);
+                } else {
+                  logger.warn(`[INPUT NODE] Nenhum próximo nó encontrado para ${inputIdentifier}`);
+                }
+              }
             }
 
             await ticket.update({
@@ -1488,7 +1504,7 @@ export const ActionsWebhookService = async (
       }
 
       let isMenu: boolean;
-      if (nodeSelected.type === "menu") {
+      if (nodeSelected.type === "menu" && !msg?.key?.fromMe) {
 
         if (pressKey) {
           console.log(`[MENU NODE] Processando pressKey: ${pressKey}`);

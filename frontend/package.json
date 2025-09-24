@@ -97,12 +97,12 @@
     "zustand": "^4.4.1"
   },
   "scripts": {
-    "start": "export NODE_OPTIONS='--openssl-legacy-provider' && react-scripts start",
-    "start:dev": "set NODE_OPTIONS='--openssl-legacy-provider' && react-scripts start",
-    "build": "export NODE_OPTIONS='--max-old-space-size=4096 --openssl-legacy-provider' && react-scripts build",
-    "builddev": "export NODE_OPTIONS='--openssl-legacy-provider' && react-scripts build",
+    "start": "cross-env NODE_OPTIONS=\"--openssl-legacy-provider\" react-scripts start",
+    "start:dev": "cross-env NODE_OPTIONS=\"--openssl-legacy-provider\" react-scripts start",
+    "build": "cross-env NODE_OPTIONS=\"--max-old-space-size=4096 --openssl-legacy-provider\" react-scripts build",
+    "builddev": "cross-env NODE_OPTIONS=\"--openssl-legacy-provider\" react-scripts build",
     "winBuild": "react-scripts build",
-    "test": "export NODE_OPTIONS='--openssl-legacy-provider' && react-scripts test",
+    "test": "cross-env NODE_OPTIONS=\"--openssl-legacy-provider\" react-scripts test",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
@@ -121,6 +121,7 @@
     ]
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "typescript": "^5.5.3"
   }
 }

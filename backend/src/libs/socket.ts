@@ -21,16 +21,22 @@ export const initIO = (httpServer: Server): SocketIO => {
   if (process.env.SOCKET_ADMIN && JSON.parse(process.env.SOCKET_ADMIN)) {
     User.findByPk(1).then(
       (adminUser) => {
-        instrument(io, {
-          auth: {
-            type: "basic",
-            username: adminUser.email,
-            password: adminUser.passwordHash
-          },
-          mode: "development",
-        });
+        if (adminUser) {
+          instrument(io, {
+            auth: {
+              type: "basic",
+              username: adminUser.email,
+              password: adminUser.passwordHash
+            },
+            mode: "development",
+          });
+        } else {
+          logger.warn("Admin user with ID 1 not found for Socket.IO admin interface");
+        }
       }
-    );
+    ).catch((error) => {
+      logger.error("Error finding admin user for Socket.IO admin interface:", error);
+    });
   }
 
   const workspaces = io.of(/^\/\w+$/);
