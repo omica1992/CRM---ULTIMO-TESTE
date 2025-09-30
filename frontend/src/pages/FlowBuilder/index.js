@@ -24,6 +24,8 @@ import {
   Delete,
   PlayArrow,
   Pause,
+  CloudUpload,
+  CloudDownload,
 } from "@mui/icons-material";
 
 import {
@@ -392,7 +394,7 @@ function HideOnScroll({ children }) {
   );
 }
 
-function FlowCard({ flow, onEdit, onDuplicate, onDelete, onNavigate, classes }) {
+function FlowCard({ flow, onEdit, onDuplicate, onDelete, onNavigate, onExport, classes }) {
   const [anchorEl, setAnchorEl] = useState(null);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -502,6 +504,22 @@ function FlowCard({ flow, onEdit, onDuplicate, onDelete, onNavigate, classes }) 
           }}>
             <Edit fontSize="small" style={{ marginRight: 12, color: theme.palette.text.secondary }} />
             Editar fluxo
+          </MenuItem>
+          <Divider />
+          <MenuItem onClick={(event) => {
+            event.stopPropagation();
+            handleAction(() => onDuplicate());
+          }}>
+            <ContentCopy fontSize="small" style={{ marginRight: 12, color: theme.palette.text.secondary }} />
+            Duplicar fluxo
+          </MenuItem>
+          <Divider />
+          <MenuItem onClick={(event) => {
+            event.stopPropagation();
+            handleAction(() => onExport());
+          }}>
+            <CloudDownload fontSize="small" style={{ marginRight: 12, color: theme.palette.primary.main }} />
+            Exportar fluxo
           </MenuItem>
           <Divider />
           <MenuItem onClick={(event) => {
@@ -637,6 +655,120 @@ const FlowBuilder = () => {
     }
   };
 
+  const handleExportFlow = async (flow) => {
+    try {
+      console.log("Exportando fluxo:", flow);
+      
+      // Buscar dados completos do fluxo
+      const { data } = await api.get(`/flowbuilder/${flow.id}`);
+      console.log("Dados recebidos:", data);
+      
+      // O backend retorna data.flow com os dados
+      const flowData = data.flow || data;
+      
+      // Criar objeto para exportação
+      const exportData = {
+        name: flowData.name,
+        flowData: flowData.flow, // O JSON do fluxo está em flowData.flow
+        userId: flowData.user_id,
+        isActive: flowData.active,
+        exportedAt: new Date().toISOString(),
+        version: "1.0"
+      };
+
+      console.log("Dados para exportar:", exportData);
+
+      // Converter para JSON
+      const jsonString = JSON.stringify(exportData, null, 2);
+      
+      // Criar blob e download
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `fluxo_${flowData.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${Date.now()}.json`;
+      
+      console.log("Iniciando download:", link.download);
+      
+      document.body.appendChild(link);
+      link.click();
+      
+      // Pequeno delay antes de remover
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 100);
+      
+      toast.success("Fluxo exportado com sucesso!");
+    } catch (err) {
+      console.error("Erro ao exportar fluxo:", err);
+      toastError(err);
+    }
+  };
+
+  const handleImportFlow = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const importData = JSON.parse(event.target.result);
+            
+            console.log("Dados do arquivo importado:", importData);
+            
+            if (!importData.name || !importData.flowData) {
+              throw new Error("Arquivo JSON inválido. Estrutura esperada não encontrada.");
+            }
+
+            // Validar se flowData contém nodes e connections
+            if (!importData.flowData.nodes || !importData.flowData.connections) {
+              throw new Error("Arquivo JSON inválido. Dados do fluxo incompletos.");
+            }
+
+            // Passo 1: Criar o fluxo (retorna o ID)
+            const { data: createdFlow } = await api.post("/flowbuilder", {
+              name: `${importData.name} (Importado)`
+            });
+
+            console.log("Fluxo criado:", createdFlow);
+
+            // Verificar se o fluxo foi criado com sucesso
+            if (!createdFlow || !createdFlow.id) {
+              throw new Error("Erro ao criar o fluxo no banco de dados.");
+            }
+
+            // Passo 2: Atualizar o conteúdo do fluxo
+            await api.post("/flowbuilder/flow", {
+              idFlow: createdFlow.id,
+              nodes: importData.flowData.nodes,
+              connections: importData.flowData.connections
+            });
+
+            console.log("Conteúdo do fluxo atualizado");
+
+            setReloadData((old) => !old);
+            toast.success("Fluxo importado com sucesso!");
+          } catch (parseErr) {
+            console.error("Erro ao processar JSON:", parseErr);
+            toast.error("Erro ao processar arquivo JSON: " + parseErr.message);
+          }
+        };
+        reader.readAsText(file);
+      } catch (err) {
+        toastError(err);
+      }
+    };
+    
+    input.click();
+  };
+
   const loadMore = () => {
     setPageNumber((prevState) => prevState + 1);
   };
@@ -730,6 +862,15 @@ const FlowBuilder = () => {
             }}
           />
           <Button
+            variant="outlined"
+            color="primary"
+            onClick={handleImportFlow}
+            startIcon={<CloudUpload />}
+            style={{ marginRight: 8 }}
+          >
+            Importar
+          </Button>
+          <Button
             variant="contained"
             color="primary"
             onClick={handleOpenContactModal}
@@ -784,6 +925,7 @@ const FlowBuilder = () => {
                   setDeletingContact(flow);
                   setConfirmDuplicateOpen(true);
                 }}
+                onExport={() => handleExportFlow(flow)}
                 onDelete={() => {
                   setDeletingContact(flow);
                   setConfirmOpen(true);
