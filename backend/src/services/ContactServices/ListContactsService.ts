@@ -127,6 +127,8 @@ const ListContactsService = async ({
       "name",
       "number",
       "email",
+      "empresa",
+      "cpf",
       "birthDate",
       "isGroup",
       "urlPicture",

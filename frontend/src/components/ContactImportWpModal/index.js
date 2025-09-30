@@ -125,6 +125,8 @@ const ContactImportWpModal = ({ isOpen, handleClose, selectedTags, hideNum, user
         name: "Nome Contato",
         number: "5599999999999",
         email: "email-contato@email.com",
+        empresa: "Nome da Empresa",
+        cpf: "000.000.000-00",
         tags: "tag1, tag2",
         carteira: "funcionario-empresa@email.com",
       });
@@ -134,7 +136,9 @@ const ContactImportWpModal = ({ isOpen, handleClose, selectedTags, hideNum, user
       return { 
         name: e.name, 
         number: (hideNum && userProfile === "user" ? e.isGroup ? e.number : e.number.slice(0, -6) + "**-**" + e.number.slice(-2) : e.number), 
-        email: e.email, 
+        email: e.email,
+        empresa: e.empresa || "",
+        cpf: e.cpf || "",
         tags: e.tags,
         carteira: e.carteira 
       };

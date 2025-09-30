@@ -107,6 +107,8 @@ const ContactImport = () => {
         {id: "name", label: "Nome", required: true},
         {id: "number", label: "Número", required: true},
         {id: "email", label: "E-mail", required: false},
+        {id: "empresa", label: "Empresa", required: false},
+        {id: "cpf", label: "CPF", required: false},
         {id: "tags", label: "Tags", required: false},
         {id: "carteira", label: "Carteira", required: false},
     ];

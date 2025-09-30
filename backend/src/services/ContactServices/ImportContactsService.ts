@@ -18,6 +18,8 @@ export async function ImportContactsService(
     let name = "";
     let number = "";
     let email = "";
+    let empresa = "";
+    let cpf = "";
 
     if (has(row, "nome") || has(row, "Nome")) {
       name = row["nome"] || row["Nome"];
@@ -42,7 +44,15 @@ export async function ImportContactsService(
       email = row["email"] || row["e-mail"] || row["Email"] || row["E-mail"];
     }
 
-    return { name, number, email, companyId };
+    if (has(row, "empresa") || has(row, "Empresa")) {
+      empresa = row["empresa"] || row["Empresa"];
+    }
+
+    if (has(row, "cpf") || has(row, "CPF")) {
+      cpf = row["cpf"] || row["CPF"];
+    }
+
+    return { name, number, email, empresa, cpf, companyId };
   });
 
 
