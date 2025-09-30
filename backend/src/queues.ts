@@ -56,7 +56,8 @@ import { checkAndDedup } from "./services/WbotServices/verifyContact";
 import QuickMessage from "./models/QuickMessage";
 import QuickMessageComponent from "./models/QuickMessageComponent";
 import SendWhatsAppOficialMessage from "./services/WhatsAppOficial/SendWhatsAppOficialMessage";
-import { IMetaMessageTemplate, IMetaMessageTemplateComponents } from "./libs/whatsAppOficial/IWhatsAppOficial.interfaces";
+import { IMetaMessageTemplate, IMetaMessageTemplateComponents, ISendMessageOficial } from "./libs/whatsAppOficial/IWhatsAppOficial.interfaces";
+import { sendMessageWhatsAppOficial } from "./libs/whatsAppOficial/whatsAppOficial.service";
 
 const connection = process.env.REDIS_URI || "";
 const limiterMax = process.env.REDIS_OPT_LIMITER_MAX || 1;
@@ -1300,14 +1301,6 @@ async function handleDispatchCampaign(job) {
     const { data } = job;
     const { campaignShippingId, campaignId }: DispatchCampaignData = data;
     const campaign = await getCampaign(campaignId);
-    const wbot = await GetWhatsappWbot(campaign.whatsapp);
-
-    if (!wbot) {
-      logger.error(
-        `campaignQueue -> DispatchCampaign -> error: wbot not found`
-      );
-      return;
-    }
 
     if (!campaign.whatsapp) {
       logger.error(
@@ -1316,16 +1309,39 @@ async function handleDispatchCampaign(job) {
       return;
     }
 
-    if (!wbot?.user?.id) {
+    // ✅ Buscar informações do WhatsApp ANTES de tentar wbot
+    const whatsapp = await Whatsapp.findByPk(campaign.whatsappId);
+    
+    if (!whatsapp) {
       logger.error(
-        `campaignQueue -> DispatchCampaign -> error: wbot user not found`
+        `campaignQueue -> DispatchCampaign -> error: whatsapp ${campaign.whatsappId} not found`
       );
       return;
     }
 
     logger.info(
-      `Disparo de campanha solicitado: Campanha=${campaignId};Registro=${campaignShippingId}`
+      `Disparo de campanha solicitado: Campanha=${campaignId};Registro=${campaignShippingId};Canal=${whatsapp.channel}`
     );
+
+    // ✅ Apenas busca wbot se NÃO for WhatsApp Oficial
+    let wbot = null;
+    if (whatsapp.channel !== "whatsapp_oficial") {
+      wbot = await GetWhatsappWbot(campaign.whatsapp);
+
+      if (!wbot) {
+        logger.error(
+          `campaignQueue -> DispatchCampaign -> error: wbot not found for Baileys connection`
+        );
+        return;
+      }
+
+      if (!wbot?.user?.id) {
+        logger.error(
+          `campaignQueue -> DispatchCampaign -> error: wbot user not found for Baileys connection`
+        );
+        return;
+      }
+    }
 
     const campaignShipping = await CampaignShipping.findByPk(
       campaignShippingId,
@@ -1359,7 +1375,6 @@ async function handleDispatchCampaign(job) {
           profilePicUrl: ""
         }
       });
-      const whatsapp = await Whatsapp.findByPk(campaign.whatsappId);
 
       let ticket = await Ticket.findOne({
         where: {
@@ -1603,44 +1618,170 @@ async function handleDispatchCampaign(job) {
         await campaignShipping.update({ deliveredAt: moment() });
       }
     } else {
-      if (campaign.confirmation && campaignShipping.confirmation === null) {
-        await wbot.sendMessage(getJidOf(chatId), {
-          text: campaignShipping.confirmationMessage
-        });
-        await campaignShipping.update({ confirmationRequestedAt: moment() });
-      } else {
-        if (!campaign.mediaPath) {
+      // ✅ Para WhatsApp Baileys quando openTicket está desabilitado
+      if (whatsapp.channel !== "whatsapp_oficial" && wbot) {
+        if (campaign.confirmation && campaignShipping.confirmation === null) {
           await wbot.sendMessage(getJidOf(chatId), {
-            text: campaignShipping.message
+            text: campaignShipping.confirmationMessage
           });
-        }
+          await campaignShipping.update({ confirmationRequestedAt: moment() });
+        } else {
+          if (!campaign.mediaPath) {
+            await wbot.sendMessage(getJidOf(chatId), {
+              text: campaignShipping.message
+            });
+          }
 
-        if (campaign.mediaPath) {
-          const publicFolder = path.resolve(__dirname, "..", "public");
-          const filePath = path.join(
-            publicFolder,
-            `company${campaign.companyId}`,
-            campaign.mediaPath
-          );
+          if (campaign.mediaPath) {
+            const publicFolder = path.resolve(__dirname, "..", "public");
+            const filePath = path.join(
+              publicFolder,
+              `company${campaign.companyId}`,
+              campaign.mediaPath
+            );
 
-          const options = await getMessageOptions(
-            campaign.mediaName,
-            filePath,
-            String(campaign.companyId),
-            campaignShipping.message
-          );
-          if (Object.keys(options).length) {
-            if (options.mimetype === "audio/mp4") {
-              await wbot.sendMessage(getJidOf(chatId), {
-                text: campaignShipping.message
-              });
+            const options = await getMessageOptions(
+              campaign.mediaName,
+              filePath,
+              String(campaign.companyId),
+              campaignShipping.message
+            );
+            if (Object.keys(options).length) {
+              if (options.mimetype === "audio/mp4") {
+                await wbot.sendMessage(getJidOf(chatId), {
+                  text: campaignShipping.message
+                });
+              }
+              await wbot.sendMessage(getJidOf(chatId), { ...options });
             }
-            await wbot.sendMessage(getJidOf(chatId), { ...options });
           }
         }
-      }
 
-      await campaignShipping.update({ deliveredAt: moment() });
+        await campaignShipping.update({ deliveredAt: moment() });
+      } else if (whatsapp.channel === "whatsapp_oficial" && campaign.templateId) {
+        // ✅ WhatsApp Oficial SEM ticket mas COM template (envio direto via API Meta)
+        logger.info(`Enviando template da Meta SEM criar ticket: Campanha=${campaignId}`);
+        
+        const template = await QuickMessage.findByPk(campaign.templateId, {
+          include: [{ model: QuickMessageComponent, as: "components" }]
+        });
+
+        if (!template) {
+          throw new Error(`Template ${campaign.templateId} não encontrado`);
+        }
+
+        // Monta estrutura do template (igual ao MessageController)
+        let templateData: IMetaMessageTemplate = {
+          name: template.shortcode,
+          language: { code: template.language }
+        };
+
+        let buttonsToSave = [];
+
+        // Processa variáveis se houver
+        if (campaign.templateVariables) {
+          const variables = JSON.parse(campaign.templateVariables);
+
+          if (Object.keys(variables).length > 0) {
+            if (Array.isArray(template.components) && template.components.length > 0) {
+              template.components.forEach((component, index) => {
+                const componentType = component.type.toLowerCase() as "header" | "body" | "footer" | "button";
+                
+                if (variables[componentType] && Object.keys(variables[componentType]).length > 0) {
+                  let newComponent;
+
+                  if (componentType.replace("buttons", "button") === "button") {
+                    const buttons = JSON.parse(component.buttons);
+                    buttons.forEach((button, btnIndex) => {
+                      const subButton = Object.values(variables[componentType]);
+                      subButton.forEach((sub: any) => {
+                        if (sub.buttonIndex === btnIndex) {
+                          newComponent = {
+                            type: componentType.replace("buttons", "button"),
+                            sub_type: button.type,
+                            index: btnIndex,
+                            parameters: []
+                          };
+                        }
+                      });
+                    });
+                  } else {
+                    newComponent = {
+                      type: componentType,
+                      parameters: []
+                    };
+                  }
+
+                  if (newComponent) {
+                    Object.keys(variables[componentType]).forEach(key => {
+                      if (componentType.replace("buttons", "button") === "button") {
+                        if ((newComponent as any)?.sub_type === "COPY_CODE") {
+                          newComponent.parameters.push({
+                            type: "coupon_code",
+                            coupon_code: variables[componentType][key].value
+                          });
+                        } else {
+                          newComponent.parameters.push({
+                            type: "text",
+                            text: variables[componentType][key].value
+                          });
+                        }
+                      } else {
+                        if (template.components[index].format === 'IMAGE') {
+                          newComponent.parameters.push({
+                            type: "image",
+                            image: { link: variables[componentType][key].value }
+                          });
+                        } else {
+                          newComponent.parameters.push({
+                            type: "text",
+                            text: variables[componentType][key].value
+                          });
+                        }
+                      }
+                    });
+                  }
+
+                  if (!Array.isArray(templateData.components)) {
+                    templateData.components = [];
+                  }
+                  templateData.components.push(newComponent as IMetaMessageTemplateComponents);
+                }
+              });
+            }
+          }
+        }
+
+        // Processa botões
+        if (template.components.length > 0) {
+          for (const component of template.components) {
+            if (component.type === 'BUTTONS') {
+              buttonsToSave.push(component.buttons);
+            }
+          }
+        }
+
+        // Envia template direto via API Meta usando lib
+        const options: ISendMessageOficial = {
+          type: 'template',
+          body_template: templateData,
+          to: campaignShipping.number
+        };
+
+        const result = await sendMessageWhatsAppOficial(
+          null, // sem arquivo
+          whatsapp.send_token,
+          options
+        );
+
+        await campaignShipping.update({ deliveredAt: moment() });
+        logger.info(`Template enviado via Meta API sem ticket: Campanha=${campaignId};Numero=${campaignShipping.number};Status=${result ? 'Enviado' : 'Falha'}`);
+      } else if (whatsapp.channel === "whatsapp_oficial") {
+        // WhatsApp Oficial sem template - não pode enviar
+        logger.warn(
+          `WhatsApp Oficial sem template configurado: Campanha=${campaignId};openTicket=disabled requer template`
+        );
+      }
     }
     await verifyAndFinalizeCampaign(campaign);
 

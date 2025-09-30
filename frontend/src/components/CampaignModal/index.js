@@ -379,6 +379,27 @@ const CampaignModal = ({
           setWhatsappId(null);
         }
         
+        // ✅ Carregar template se existir
+        if (data?.templateId && data?.templateVariables) {
+          try {
+            const variables = JSON.parse(data.templateVariables);
+            // Buscar informações do template
+            api.get(`/quick-messages/${data.templateId}`).then(({ data: templateData }) => {
+              setSelectedTemplate({
+                id: templateData.id,
+                shortcode: templateData.shortcode,
+                language: templateData.language,
+                variables: variables
+              });
+              console.log("Template carregado ao editar campanha:", templateData.shortcode);
+            }).catch(err => {
+              console.error("Erro ao carregar template:", err);
+            });
+          } catch (err) {
+            console.error("Erro ao parsear templateVariables:", err);
+          }
+        }
+        
         setCampaign((prev) => {
           let prevCampaignData = Object.assign({}, prev);
 
@@ -456,6 +477,10 @@ const CampaignModal = ({
 
 const handleSaveCampaign = async (values) => {
   try {
+    console.log("=== DEBUG SAVE CAMPAIGN ===");
+    console.log("selectedTemplate:", selectedTemplate);
+    console.log("isWhatsAppOficial:", isWhatsAppOficial);
+    
     const dataValues = {
       ...values,
       whatsappId: whatsappId,
@@ -469,6 +494,9 @@ const handleSaveCampaign = async (values) => {
       templateId: selectedTemplate?.id || null,
       templateVariables: selectedTemplate?.variables ? JSON.stringify(selectedTemplate.variables) : null,
     };
+    
+    console.log("templateId sendo enviado:", dataValues.templateId);
+    console.log("templateVariables sendo enviado:", dataValues.templateVariables);
 
     // Processar datas
     Object.entries(values).forEach(([key, value]) => {
@@ -476,7 +504,8 @@ const handleSaveCampaign = async (values) => {
         dataValues[key] = moment(value).format("YYYY-MM-DD HH:mm:ss");
       } else if (key === "recurrenceEndDate" && value !== "" && value !== null) {
         dataValues[key] = moment(value).format("YYYY-MM-DD HH:mm:ss");
-      } else if (key !== "recurrenceDaysOfWeek") { // Não processar recurrenceDaysOfWeek aqui
+      } else if (key !== "recurrenceDaysOfWeek" && key !== "templateId" && key !== "templateVariables") {
+        // Não processar recurrenceDaysOfWeek, templateId e templateVariables aqui
         dataValues[key] = value === "" ? null : value;
       }
     });
@@ -490,6 +519,10 @@ const handleSaveCampaign = async (values) => {
       dataValues.recurrenceEndDate = null;
       dataValues.maxExecutions = null;
     }
+
+    console.log("=== DADOS FINAIS ANTES DE ENVIAR ===");
+    console.log("templateId:", dataValues.templateId);
+    console.log("templateVariables:", dataValues.templateVariables);
 
     if (campaignId) {
       await api.put(`/campaigns/${campaignId}`, dataValues);

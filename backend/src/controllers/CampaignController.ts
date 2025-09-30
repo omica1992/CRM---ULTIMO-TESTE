@@ -176,7 +176,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       recurrenceType,
       recurrenceDaysOfWeek,
       recurrenceDaysOfWeekType: typeof recurrenceDaysOfWeek,
-      recurrenceDaysOfWeekIsArray: Array.isArray(recurrenceDaysOfWeek)
+      recurrenceDaysOfWeekIsArray: Array.isArray(recurrenceDaysOfWeek),
+      templateId,
+      templateVariables
     });
 
     // Processar dados de recorrência com logs
@@ -234,6 +236,11 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       templateId: templateId || null,
       templateVariables: templateVariables || null
     };
+
+    console.log('[Campaign Store] Template sendo salvo:', {
+      templateId: processedData.templateId,
+      templateVariables: processedData.templateVariables
+    });
 
     await schema.validate(processedData);
 

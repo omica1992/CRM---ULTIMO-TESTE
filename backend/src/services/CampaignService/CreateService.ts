@@ -34,6 +34,8 @@ interface Data {
   recurrenceDayOfMonth?: number;
   recurrenceEndDate?: string;
   maxExecutions?: number;
+  templateId?: number | null;
+  templateVariables?: string | null;
 }
 
 const CreateService = async (data: Data): Promise<Campaign> => {
