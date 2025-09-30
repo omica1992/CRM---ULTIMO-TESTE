@@ -1762,20 +1762,35 @@ async function handleDispatchCampaign(job) {
         }
 
         // Envia template direto via API Meta usando lib
+        // Formatar número para padrão WhatsApp (apenas dígitos)
+        let cleanNumber = campaignShipping.number.replace(/\D/g, '');
+        
+        // Se não começar com código do país, adicionar 55 (Brasil)
+        if (cleanNumber.length === 11 && !cleanNumber.startsWith('55')) {
+          cleanNumber = '55' + cleanNumber;
+        }
+        
+        // API Oficial exige formato +5511999999999
+        const formattedNumber = '+' + cleanNumber;
+        
         const options: ISendMessageOficial = {
           type: 'template',
           body_template: templateData,
-          to: campaignShipping.number
+          to: formattedNumber
         };
+
+        logger.info(`Enviando template via API Meta: Numero original=${campaignShipping.number}, Numero formatado=${formattedNumber}`);
+        logger.info(`Token sendo usado: ${whatsapp.token || whatsapp.send_token}`);
+        logger.info(`Dados do whatsapp: id=${whatsapp.id}, channel=${whatsapp.channel}, token=${whatsapp.token?.substring(0, 10)}..., send_token=${whatsapp.send_token?.substring(0, 10)}...`);
 
         const result = await sendMessageWhatsAppOficial(
           null, // sem arquivo
-          whatsapp.send_token,
+          whatsapp.token || whatsapp.send_token, // Tentar token primeiro
           options
         );
 
         await campaignShipping.update({ deliveredAt: moment() });
-        logger.info(`Template enviado via Meta API sem ticket: Campanha=${campaignId};Numero=${campaignShipping.number};Status=${result ? 'Enviado' : 'Falha'}`);
+        logger.info(`Template enviado via Meta API sem ticket: Campanha=${campaignId};Numero=${cleanNumber};Status=${result ? 'Enviado' : 'Falha'}`);
       } else if (whatsapp.channel === "whatsapp_oficial") {
         // WhatsApp Oficial sem template - não pode enviar
         logger.warn(
