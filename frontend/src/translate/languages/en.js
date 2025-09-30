@@ -1859,8 +1859,10 @@ const messages = {
         fieldQueueId: '"queueId": Queue ID or ""',
         fieldSendSignature: '"sendSignature": Sign message - true/false',
         fieldCloseTicket: '"closeTicket": Close the ticket - true/false',
+        fieldIsPrivate: '"isPrivate": Private message (internal note) - true/false',
         singMessage: "Sign message - true/false",
         closeTicket: "Close the ticket - true/false",
+        isPrivate: "Private message (internal note, not sent to customer) - true/false",
         testSend: "The Test Send",
       },
       recurrenceSection: {

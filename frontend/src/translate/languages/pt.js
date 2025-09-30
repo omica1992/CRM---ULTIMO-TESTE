@@ -1920,8 +1920,10 @@ const messages = {
         fieldQueueId: '"queueId": ID da Fila ou ""',
         fieldSendSignature: '"sendSignature": Assinar mensagem - true/false',
         fieldCloseTicket: '"closeTicket": Encerrar o ticket - true/false',
+        fieldIsPrivate: '"isPrivate": Mensagem privada (nota interna) - true/false',
         singMessage: "Assinar mensagem - true/false",
         closeTicket: "Encerrar o ticket - true/false",
+        isPrivate: "Mensagem privada (nota interna, não envia ao cliente) - true/false",
         testSend: "Teste de envio",
       },
       recurrenceSection: {

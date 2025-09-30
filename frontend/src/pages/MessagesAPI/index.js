@@ -413,6 +413,7 @@ const MessagesAPI = () => {
             {i18n.t("messagesAPIInstructions.fieldQueueId")} <br />
             {i18n.t("messagesAPIInstructions.fieldSendSignature")} <br />
             {i18n.t("messagesAPIInstructions.fieldCloseTicket")} <br />
+            {i18n.t("messagesAPIInstructions.fieldIsPrivate")} <br />
             {"}"}
           </Typography>
         </Grid>
@@ -462,6 +463,10 @@ const MessagesAPI = () => {
               <li>
                 <b>closeTicket:</b>{" "}
                 {i18n.t("messagesAPIInstructions.closeTicket")} <br />
+              </li>
+              <li>
+                <b>isPrivate:</b>{" "}
+                {i18n.t("messagesAPIInstructions.isPrivate")} <br />
               </li>
             </ul>
           </Typography>

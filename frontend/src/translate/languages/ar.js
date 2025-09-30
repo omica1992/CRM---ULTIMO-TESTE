@@ -1876,8 +1876,10 @@ const messages = {
         fieldQueueId: '"queueId": معرف الطابور أو ""',
         fieldSendSignature: '"sendSignature": توقيع الرسالة - true/false',
         fieldCloseTicket: '"closeTicket": إنهاء المحادثة - true/false',
+        fieldIsPrivate: '"isPrivate": رسالة خاصة (ملاحظة داخلية) - true/false',
         singMessage: "توقيع الرسالة - true/false",
         closeTicket: "إنهاء المحادثة - true/false",
+        isPrivate: "رسالة خاصة (ملاحظة داخلية، لا يتم إرسالها إلى العميل) - true/false",
         testSend: "اختبار الإرسال",
       },
       recurrenceSection: {

@@ -1825,8 +1825,10 @@ const messages = {
         fieldQueueId: '"queueId": ID de la Cola o ""',
         fieldSendSignature: '"sendSignature": Firmar mensaje - true/false',
         fieldCloseTicket: '"closeTicket": Cerrar el ticket - true/false',
+        fieldIsPrivate: '"isPrivate": Mensaje privado (nota interna) - true/false',
         singMessage: "Firmar mensaje - true/false",
         closeTicket: "Cerrar el ticket - true/false",
+        isPrivate: "Mensaje privado (nota interna, no se envía al cliente) - true/false",
         testSend: "la test del envio",
       },
       recurrenceSection: {

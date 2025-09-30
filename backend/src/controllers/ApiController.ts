@@ -15,6 +15,7 @@ import UpdateTicketService from "../services/TicketServices/UpdateTicketService"
 import { getWbot } from "../libs/wbot";
 import SendWhatsAppMessageLink from "../services/WbotServices/SendWhatsAppMessageLink";
 import SendWhatsAppMessageAPI from "../services/WbotServices/SendWhatsAppMessageAPI";
+import CreateMessageService from "../services/MessageServices/CreateMessageService";
 import SendWhatsAppMediaImage from "../services/WbotServices/SendWhatsappMediaImage";
 import ApiUsages from "../models/ApiUsages";
 import { useDate } from "../utils/useDate";
@@ -49,6 +50,7 @@ type MessageData = {
   closeTicket?: boolean;
   ignoreTicket?: boolean;
   noRegister?: boolean;
+  isPrivate?: boolean;
 };
 
 interface ContactData {
@@ -172,7 +174,8 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     queueId,
     sendSignature = false,
     closeTicket = false,
-    noRegister = false
+    noRegister = false,
+    isPrivate = false
   }: MessageData = req.body;
   const medias = req.files as Express.Multer.File[];
 
@@ -210,9 +213,23 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   let bodyMessage;
 
   // @ts-ignore: Unreachable code error
-  if (sendSignature && !isNil(user)) {
+  if (isPrivate) {
+    // Para mensagens privadas, mostrar "Mensagem Privada:" independentemente de userId
+    if (sendSignature && !isNil(user)) {
+      // Mensagem privada + assinatura
+      bodyMessage = `*${user.name} - Mensagem Privada:*\n${body.trim()}`
+    } else if (!isNil(user)) {
+      // Mensagem privada + usuário (sem assinatura explícita)
+      bodyMessage = `*${user.name} - Mensagem Privada:*\n${body.trim()}`
+    } else {
+      // Mensagem privada sem usuário
+      bodyMessage = `*Mensagem Privada:*\n${body.trim()}`
+    }
+  } else if (sendSignature && !isNil(user)) {
+    // Mensagem normal com assinatura
     bodyMessage = `*${user.name}:*\n${body.trim()}`
   } else {
+    // Mensagem normal sem assinatura
     bodyMessage = body.trim();
   }
 
@@ -254,27 +271,81 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     let sentMessage
 
     if (medias) {
-      try {
-        await Promise.all(
-          medias.map(async (media: Express.Multer.File) => {
-            sentMessage = await SendWhatsAppMedia({ body: `\u200e ${bodyMessage}`, media, ticket: contactAndTicket, isForwarded: false });
+      if (isPrivate) {
+        // Mensagens privadas com mídia: apenas salva no banco, não envia pelo WhatsApp
+        try {
+          await Promise.all(
+            medias.map(async (media: Express.Multer.File) => {
+              const messageData = {
+                wid: `PVT${contactAndTicket.updatedAt.toString().replace(' ', '')}`,
+                ticketId: contactAndTicket.id,
+                contactId: undefined,
+                body: `${bodyMessage}`,
+                fromMe: true,
+                mediaUrl: media.filename,
+                mediaType: media.mimetype.split('/')[0],
+                read: true,
+                quotedMsgId: null,
+                ack: 2,
+                remoteJid: contactAndTicket.contact?.remoteJid,
+                participant: null,
+                dataJson: null,
+                ticketTrakingId: null,
+                isPrivate: true
+              };
 
-            const publicFolder = path.resolve(__dirname, "..", "..", "public");
-            const filePath = path.join(publicFolder, `company${companyId}`, media.filename);
-            const fileExists = fs.existsSync(filePath);
+              await CreateMessageService({ messageData, companyId: contactAndTicket.companyId });
+            })
+          );
+        } catch (error) {
+          throw new AppError("Error creating private media message: " + error.message);
+        }
+      } else {
+        // Mensagens normais: envia pelo WhatsApp
+        try {
+          await Promise.all(
+            medias.map(async (media: Express.Multer.File) => {
+              sentMessage = await SendWhatsAppMedia({ body: `${bodyMessage}`, media, ticket: contactAndTicket, isForwarded: false, isPrivate: false });
+              await verifyMediaMessage(sentMessage, contactAndTicket, contactAndTicket.contact, null, false, false, wbot);
 
-            if (fileExists) {
-              fs.unlinkSync(filePath);
-            }
-          })
-        );
-        await verifyMediaMessage(sentMessage, contactAndTicket, contactAndTicket.contact, null, false, false, wbot);
-      } catch (error) {
-        throw new AppError("Error sending API media: " + error.message);
+              const publicFolder = path.resolve(__dirname, "..", "..", "public");
+              const filePath = path.join(publicFolder, `company${companyId}`, media.filename);
+              const fileExists = fs.existsSync(filePath);
+
+              if (fileExists) {
+                fs.unlinkSync(filePath);
+              }
+            })
+          );
+        } catch (error) {
+          throw new AppError("Error sending API media: " + error.message);
+        }
       }
     } else {
-      sentMessage = await SendWhatsAppMessageAPI({ body: `\u200e${bodyMessage}`, whatsappId: whatsapp.id, contact: contactAndTicket.contact, quotedMsg, msdelay });
-      await verifyMessage(sentMessage, contactAndTicket, contactAndTicket.contact)
+      if (isPrivate) {
+        // Para mensagens privadas, criar mensagem diretamente como no /tickets
+        const messageData = {
+          wid: `PVT${contactAndTicket.updatedAt.toString().replace(' ', '')}`,
+          ticketId: contactAndTicket.id,
+          contactId: undefined,
+          body: `${bodyMessage}`,
+          fromMe: true,
+          mediaType: 'extendedTextMessage',
+          read: true,
+          quotedMsgId: null,
+          ack: 2,
+          remoteJid: contactAndTicket.contact?.remoteJid,
+          participant: null,
+          dataJson: null,
+          ticketTrakingId: null,
+          isPrivate: true
+        };
+
+        await CreateMessageService({ messageData, companyId: contactAndTicket.companyId });
+      } else {
+        sentMessage = await SendWhatsAppMessageAPI({ body: `\u200e ${bodyMessage}`, whatsappId: whatsapp.id, contact: contactAndTicket.contact, quotedMsg, msdelay });
+        await verifyMessage(sentMessage, contactAndTicket, contactAndTicket.contact);
+      }
     }
     // @ts-ignore: Unreachable code error
     if (closeTicket) {
