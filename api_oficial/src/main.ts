@@ -4,6 +4,7 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { ErrorExceptionFilter } from './@core/infra/filters/error-exception.filter';
 import { PrismaClienteExceptionFilter } from './@core/infra/filters/prisma.filter';
+import { CustomLoggerService } from './@core/infra/logger/custom-logger.service';
 import {
   DocumentBuilder,
   SwaggerDocumentOptions,
@@ -11,8 +12,12 @@ import {
 } from '@nestjs/swagger';
 
 async function bootstrap() {
-  const logger = new Logger('MainServer');
-  const app = await NestFactory.create(AppModule);
+  const customLogger = new CustomLoggerService();
+  customLogger.setContext('MainServer');
+  
+  const app = await NestFactory.create(AppModule, {
+    logger: customLogger,
+  });
 
   app.enableCors();
 
@@ -44,6 +49,7 @@ async function bootstrap() {
   SwaggerModule.setup('swagger', app, document);
 
   await app.listen(process.env.PORT);
-  logger.log(`🚀 Servidor API Oficial iniciado na porta ${process.env.PORT}`);
+  customLogger.log(`🚀 Servidor API Oficial iniciado na porta ${process.env.PORT}`);
+  customLogger.log(`📝 Logs sendo salvos em: ${process.cwd()}/logs/api-oficial.log`);
 }
 bootstrap();
