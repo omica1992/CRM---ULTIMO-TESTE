@@ -417,20 +417,18 @@ const CampaignModal = ({
       const selectedWhatsapp = whatsapps.find(w => w.id === whatsappId);
       setIsWhatsAppOficial(selectedWhatsapp?.channel === "whatsapp_oficial");
       
-      // Buscar templates se for oficial
+      // Buscar templates se for oficial (usando mesmo endpoint das conversas)
       if (selectedWhatsapp?.channel === "whatsapp_oficial") {
-        api.get(`/quick-messages`, {
+        api.get(`/quick-messages/list`, {
           params: { 
-            companyId, 
+            isOficial: "true",
             userId: user.id,
-            whatsappId: whatsappId
+            companyId: companyId,
+            status: "APPROVED"
           }
         }).then(({ data }) => {
-          // Filtrar apenas templates oficiais aprovados
-          const templates = data.quickMessages.filter(
-            qm => qm.isOficial && qm.status === "APPROVED"
-          );
-          setAvailableTemplates(templates);
+          console.log("Templates carregados:", data);
+          setAvailableTemplates(data || []);
         }).catch(err => {
           console.error("Erro ao buscar templates:", err);
           setAvailableTemplates([]);
@@ -542,11 +540,11 @@ const handleSaveCampaign = async (values) => {
         fullWidth
         rows={5}
         label={i18n.t(`campaigns.dialog.form.${identifier}`)}
-        placeholder={i18n.t("campaigns.dialog.form.messagePlaceholder")}
+        placeholder={selectedTemplate ? "Template selecionado - Mensagens desabilitadas" : i18n.t("campaigns.dialog.form.messagePlaceholder")}
         multiline={true}
         variant="outlined"
-        helperText="Utilize variáveis como {nome}, {numero}, {email} ou defina variáveis personalizadas."
-        disabled={!campaignEditable && campaign.status !== "CANCELADA"}
+        helperText={selectedTemplate ? "Quando um template é selecionado, as mensagens são desabilitadas" : "Utilize variáveis como {nome}, {numero}, {email} ou defina variáveis personalizadas."}
+        disabled={selectedTemplate || (!campaignEditable && campaign.status !== "CANCELADA")}
       />
     );
   };
@@ -560,10 +558,11 @@ const handleSaveCampaign = async (values) => {
         fullWidth
         rows={5}
         label={i18n.t(`campaigns.dialog.form.${identifier}`)}
-        placeholder={i18n.t("campaigns.dialog.form.messagePlaceholder")}
+        placeholder={selectedTemplate ? "Template selecionado - Mensagens desabilitadas" : i18n.t("campaigns.dialog.form.messagePlaceholder")}
         multiline={true}
         variant="outlined"
-        disabled={!campaignEditable && campaign.status !== "CANCELADA"}
+        helperText={selectedTemplate ? "Quando um template é selecionado, as mensagens de confirmação são desabilitadas" : ""}
+        disabled={selectedTemplate || (!campaignEditable && campaign.status !== "CANCELADA")}
       />
     );
   };
@@ -781,6 +780,25 @@ const handleSaveCampaign = async (values) => {
                     </FormControl>
                   </Grid>
 
+                  <Grid xs={12} md={4} item>
+                    <Field
+                      as={TextField}
+                      label={i18n.t("campaigns.dialog.form.scheduledAt")}
+                      name="scheduledAt"
+                      error={touched.scheduledAt && Boolean(errors.scheduledAt)}
+                      helperText={touched.scheduledAt && errors.scheduledAt}
+                      variant="outlined"
+                      margin="dense"
+                      type="datetime-local"
+                      InputLabelProps={{
+                        shrink: true,
+                      }}
+                      fullWidth
+                      className={classes.textField}
+                      disabled={!campaignEditable}
+                    />
+                  </Grid>
+
                   {/* Seletor de Template (só aparece para WhatsApp Oficial) */}
                   {isWhatsAppOficial && (
                     <Grid xs={12} item>
@@ -815,25 +833,6 @@ const handleSaveCampaign = async (values) => {
                       </FormControl>
                     </Grid>
                   )}
-
-                  <Grid xs={12} md={4} item>
-                    <Field
-                      as={TextField}
-                      label={i18n.t("campaigns.dialog.form.scheduledAt")}
-                      name="scheduledAt"
-                      error={touched.scheduledAt && Boolean(errors.scheduledAt)}
-                      helperText={touched.scheduledAt && errors.scheduledAt}
-                      variant="outlined"
-                      margin="dense"
-                      type="datetime-local"
-                      InputLabelProps={{
-                        shrink: true,
-                      }}
-                      fullWidth
-                      className={classes.textField}
-                      disabled={!campaignEditable}
-                    />
-                  </Grid>
 
                   {/* SEÇÃO DE RECORRÊNCIA */}
                   <Grid xs={12} item>

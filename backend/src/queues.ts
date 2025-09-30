@@ -1395,70 +1395,111 @@ async function handleDispatchCampaign(job) {
           throw new Error(`Template ${campaign.templateId} não encontrado`);
         }
 
-        // Monta estrutura do template
+        // Monta estrutura do template (igual ao MessageController)
         let templateData: IMetaMessageTemplate = {
           name: template.shortcode,
           language: { code: template.language }
         };
 
-        // Processa variáveis se houver
+        let buttonsToSave = [];
+
+        // Processa variáveis se houver (seguindo exatamente o MessageController)
         if (campaign.templateVariables) {
           const variables = JSON.parse(campaign.templateVariables);
-          const components: IMetaMessageTemplateComponents[] = [];
 
-          template.components.forEach((component, index) => {
-            const componentType = component.type.toLowerCase() as "header" | "body" | "footer" | "button";
-            
-            if (variables[componentType] && Object.keys(variables[componentType]).length > 0) {
-              const newComponent: any = {
-                type: componentType,
-                parameters: []
-              };
+          if (Object.keys(variables).length > 0) {
+            templateData = {
+              name: template.shortcode,
+              language: { code: template.language }
+            };
 
-              Object.keys(variables[componentType]).forEach((key) => {
-                const value = variables[componentType][key].value;
+            if (Array.isArray(template.components) && template.components.length > 0) {
+              template.components.forEach((component, index) => {
+                const componentType = component.type.toLowerCase() as "header" | "body" | "footer" | "button";
                 
-                if (component.format === 'IMAGE') {
-                  newComponent.parameters.push({
-                    type: "image",
-                    image: { link: value }
-                  });
-                } else if (component.format === 'VIDEO') {
-                  newComponent.parameters.push({
-                    type: "video",
-                    video: { link: value }
-                  });
-                } else {
-                  newComponent.parameters.push({
-                    type: "text",
-                    text: value
-                  });
-                }
+                // Verifique se há variáveis para o componente atual
+                if (variables[componentType] && Object.keys(variables[componentType]).length > 0) {
+                  let newComponent;
 
-                // Processa botões
-                if (componentType === 'button' && variables[componentType][key]?.buttonIndex !== undefined) {
-                  try {
-                    const buttons = JSON.parse(template.components[index].buttons);
-                    newComponent.sub_type = buttons[variables[componentType][key].buttonIndex]?.type;
-                    newComponent.index = String(variables[componentType][key].buttonIndex);
-                  } catch (e) {
-                    logger.error(`Erro ao processar botões do template: ${e.message}`);
+                  if (componentType.replace("buttons", "button") === "button") {
+                    const buttons = JSON.parse(component.buttons);
+                    buttons.forEach((button, btnIndex) => {
+                      const subButton = Object.values(variables[componentType]);
+                      subButton.forEach((sub: any, indexSub) => {
+                        // Verifica se o buttonIndex corresponde ao button.index
+                        if (sub.buttonIndex === btnIndex) {
+                          const buttonType = button.type;
+                          newComponent = {
+                            type: componentType.replace("buttons", "button"),
+                            sub_type: buttonType,
+                            index: btnIndex,
+                            parameters: []
+                          };
+                        }
+                      });
+                    });
+                  } else {
+                    newComponent = {
+                      type: componentType,
+                      parameters: []
+                    };
                   }
+
+                  if (newComponent) {
+                    Object.keys(variables[componentType]).forEach(key => {
+                      if (componentType.replace("buttons", "button") === "button") {
+                        if ((newComponent as any)?.sub_type === "COPY_CODE") {
+                          newComponent.parameters.push({
+                            type: "coupon_code",
+                            coupon_code: variables[componentType][key].value
+                          });
+                        } else {
+                          newComponent.parameters.push({
+                            type: "text",
+                            text: variables[componentType][key].value
+                          });
+                        }
+                      } else {
+                        if (template.components[index].format === 'IMAGE') {
+                          newComponent.parameters.push({
+                            type: "image",
+                            image: { link: variables[componentType][key].value }
+                          });
+                        } else {
+                          const variableValue = variables[componentType][key].value;
+                          newComponent.parameters.push({
+                            type: "text",
+                            text: variableValue
+                          });
+                        }
+                      }
+                    });
+                  }
+
+                  if (!Array.isArray(templateData.components)) {
+                    templateData.components = [];
+                  }
+                  templateData.components.push(newComponent as IMetaMessageTemplateComponents);
                 }
               });
-
-              components.push(newComponent as IMetaMessageTemplateComponents);
             }
-          });
-
-          if (components.length > 0) {
-            templateData.components = components;
           }
         }
 
+        // Processa botões para salvar (igual ao MessageController)
+        if (template.components.length > 0) {
+          for (const component of template.components) {
+            if (component.type === 'BUTTONS') {
+              buttonsToSave.push(component.buttons);
+            }
+          }
+        }
+
+        const bodyToSave = campaignShipping.message.concat('||||', JSON.stringify(buttonsToSave));
+
         // Envia template via API Meta
         await SendWhatsAppOficialMessage({
-          body: campaignShipping.message,
+          body: bodyToSave,
           ticket,
           type: 'template',
           media: null,
