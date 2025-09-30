@@ -16,6 +16,7 @@ import ContactList from "./ContactList";
 import Whatsapp from "./Whatsapp";
 import User from "./User";
 import Queue from "./Queue";
+import QuickMessage from "./QuickMessage";
 
 @Table({ tableName: "Campaigns" })
 class Campaign extends Model<Campaign> {
@@ -157,6 +158,16 @@ class Campaign extends Model<Campaign> {
 
   @Column
   tagListId: string; // ID da tag para seleção de contatos
+
+  @ForeignKey(() => QuickMessage)
+  @Column
+  templateId: number; // ID do template da Meta (QuickMessage isOficial)
+
+  @Column
+  templateVariables: string; // JSON com variáveis do template
+
+  @BelongsTo(() => QuickMessage)
+  template: QuickMessage;
 }
 
 export default Campaign;

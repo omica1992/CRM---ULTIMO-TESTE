@@ -28,7 +28,6 @@ import RecurrenceService from "../services/CampaignService/RecurrenceService";
 type IndexQuery = {
   searchParam: string;
   pageNumber: string;
-  companyId: string | number;
 };
 
 // src/controllers/CampaignController.ts - Type StoreData completo
@@ -67,6 +66,9 @@ type StoreData = {
   executionCount?: number;
   nextScheduledAt?: Date | null;
   lastExecutedAt?: Date | null;
+  // Novos campos para templates Meta
+  templateId?: number | null;
+  templateVariables?: string | null;
 };
 
 type FindParams = {
@@ -129,7 +131,10 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       is: true,
       then: Yup.number().min(1).nullable(),
       otherwise: Yup.number().nullable()
-    })
+    }),
+    // Validação de templates Meta
+    templateId: Yup.number().nullable(),
+    templateVariables: Yup.string().nullable()
   });
 
   try {
@@ -161,7 +166,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       recurrenceDaysOfWeek,
       recurrenceDayOfMonth,
       recurrenceEndDate,
-      maxExecutions
+      maxExecutions,
+      templateId,
+      templateVariables
     }: StoreData = req.body;
 
     console.log('[Campaign Store] Dados recebidos:', {
@@ -222,7 +229,10 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       companyId,
       status: "PROGRAMADA",
       // Adicionar campos de recorrência processados
-      ...processedRecurrenceData
+      ...processedRecurrenceData,
+      // Adicionar campos de template
+      templateId: templateId || null,
+      templateVariables: templateVariables || null
     };
 
     await schema.validate(processedData);

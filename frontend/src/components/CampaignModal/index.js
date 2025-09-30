@@ -53,6 +53,7 @@ import ConfirmationModal from "../ConfirmationModal";
 import UserStatusIcon from "../UserModal/statusIcon";
 import Autocomplete, { createFilterOptions } from "@material-ui/lab/Autocomplete";
 import useQueues from "../../hooks/useQueues";
+import TemplateMetaModal from "../TemplateMetaModal";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -178,6 +179,9 @@ const CampaignModal = ({
     recurrenceDayOfMonth: 1,
     recurrenceEndDate: "",
     maxExecutions: null,
+    // Novos campos para templates Meta
+    templateId: null,
+    templateVariables: null,
   };
 
   const [campaign, setCampaign] = useState(initialState);
@@ -202,6 +206,12 @@ const CampaignModal = ({
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedQueue, setSelectedQueue] = useState(null);
   const { findAll: findAllQueues } = useQueues();
+  
+  // Estados para templates Meta
+  const [availableTemplates, setAvailableTemplates] = useState([]);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [isWhatsAppOficial, setIsWhatsAppOficial] = useState(false);
 
   // Opções para dias da semana
   const daysOfWeekOptions = [
@@ -402,6 +412,36 @@ const CampaignModal = ({
     setCampaignEditable(isEditable);
   }, [campaign.status, campaign.scheduledAt]);
 
+  useEffect(() => {
+    if (whatsappId) {
+      const selectedWhatsapp = whatsapps.find(w => w.id === whatsappId);
+      setIsWhatsAppOficial(selectedWhatsapp?.channel === "whatsapp_oficial");
+      
+      // Buscar templates se for oficial
+      if (selectedWhatsapp?.channel === "whatsapp_oficial") {
+        api.get(`/quick-messages`, {
+          params: { 
+            companyId, 
+            userId: user.id,
+            whatsappId: whatsappId
+          }
+        }).then(({ data }) => {
+          // Filtrar apenas templates oficiais aprovados
+          const templates = data.quickMessages.filter(
+            qm => qm.isOficial && qm.status === "APPROVED"
+          );
+          setAvailableTemplates(templates);
+        }).catch(err => {
+          console.error("Erro ao buscar templates:", err);
+          setAvailableTemplates([]);
+        });
+      } else {
+        setAvailableTemplates([]);
+        setSelectedTemplate(null);
+      }
+    }
+  }, [whatsappId, whatsapps, companyId, user.id]);
+
   const handleClose = () => {
     onClose();
     setCampaign(initialState);
@@ -427,6 +467,9 @@ const handleSaveCampaign = async (values) => {
       recurrenceDaysOfWeek: (values.isRecurring && values.recurrenceDaysOfWeek && values.recurrenceDaysOfWeek.length > 0) 
         ? values.recurrenceDaysOfWeek // Enviar array, o backend irá converter para JSON
         : null, // Enviar null se não for recorrente ou array vazio
+      // Adicionar campos de template
+      templateId: selectedTemplate?.id || null,
+      templateVariables: selectedTemplate?.variables ? JSON.stringify(selectedTemplate.variables) : null,
     };
 
     // Processar datas
@@ -737,6 +780,41 @@ const handleSaveCampaign = async (values) => {
                       </Field>
                     </FormControl>
                   </Grid>
+
+                  {/* Seletor de Template (só aparece para WhatsApp Oficial) */}
+                  {isWhatsAppOficial && (
+                    <Grid xs={12} item>
+                      <FormControl variant="outlined" fullWidth margin="dense">
+                        <Button
+                          variant="outlined"
+                          color="primary"
+                          onClick={() => setTemplateModalOpen(true)}
+                          disabled={!campaignEditable || availableTemplates.length === 0}
+                        >
+                          {selectedTemplate
+                            ? `Template: ${selectedTemplate.shortcode}`
+                            : availableTemplates.length === 0
+                            ? "Nenhum template disponível"
+                            : "Selecionar Template da Meta"
+                          }
+                        </Button>
+                        {selectedTemplate && (
+                          <Box mt={1}>
+                            <Chip
+                              label={`${selectedTemplate.shortcode} (${selectedTemplate.language})`}
+                              onDelete={() => {
+                                setSelectedTemplate(null);
+                                setFieldValue("templateId", null);
+                                setFieldValue("templateVariables", null);
+                              }}
+                              color="primary"
+                              disabled={!campaignEditable}
+                            />
+                          </Box>
+                        )}
+                      </FormControl>
+                    </Grid>
+                  )}
 
                   <Grid xs={12} md={4} item>
                     <Field
@@ -1308,6 +1386,15 @@ const handleSaveCampaign = async (values) => {
             </Form>
           )}
         </Formik>
+        <TemplateMetaModal
+          open={templateModalOpen}
+          handleClose={() => setTemplateModalOpen(false)}
+          templates={availableTemplates}
+          onSelectTemplate={(templateWithVariables) => {
+            setSelectedTemplate(templateWithVariables);
+            setTemplateModalOpen(false);
+          }}
+        />
       </Dialog>
     </div>
   );

@@ -53,6 +53,10 @@ import { getJidOf } from "./services/WbotServices/getJidOf";
 import RecurrenceService from "./services/CampaignService/RecurrenceService";
 import WhatsappLidMap from "./models/WhatsapplidMap";
 import { checkAndDedup } from "./services/WbotServices/verifyContact";
+import QuickMessage from "./models/QuickMessage";
+import QuickMessageComponent from "./models/QuickMessageComponent";
+import SendWhatsAppOficialMessage from "./services/WhatsAppOficial/SendWhatsAppOficialMessage";
+import { IMetaMessageTemplate, IMetaMessageTemplateComponents } from "./libs/whatsAppOficial/IWhatsAppOficial.interfaces";
 
 const connection = process.env.REDIS_URI || "";
 const limiterMax = process.env.REDIS_OPT_LIMITER_MAX || 1;
@@ -1379,7 +1383,93 @@ async function handleDispatchCampaign(job) {
 
       ticket = await ShowTicketService(ticket.id, campaign.companyId);
 
-      if (whatsapp.status === "CONNECTED") {
+      // ✅ Verifica se é WhatsApp Oficial e tem template configurado
+      if (whatsapp.channel === "whatsapp_oficial" && campaign.templateId) {
+        logger.info(`Enviando template da Meta para campanha ${campaignId}`);
+        
+        const template = await QuickMessage.findByPk(campaign.templateId, {
+          include: [{ model: QuickMessageComponent, as: "components" }]
+        });
+
+        if (!template) {
+          throw new Error(`Template ${campaign.templateId} não encontrado`);
+        }
+
+        // Monta estrutura do template
+        let templateData: IMetaMessageTemplate = {
+          name: template.shortcode,
+          language: { code: template.language }
+        };
+
+        // Processa variáveis se houver
+        if (campaign.templateVariables) {
+          const variables = JSON.parse(campaign.templateVariables);
+          const components: IMetaMessageTemplateComponents[] = [];
+
+          template.components.forEach((component, index) => {
+            const componentType = component.type.toLowerCase() as "header" | "body" | "footer" | "button";
+            
+            if (variables[componentType] && Object.keys(variables[componentType]).length > 0) {
+              const newComponent: any = {
+                type: componentType,
+                parameters: []
+              };
+
+              Object.keys(variables[componentType]).forEach((key) => {
+                const value = variables[componentType][key].value;
+                
+                if (component.format === 'IMAGE') {
+                  newComponent.parameters.push({
+                    type: "image",
+                    image: { link: value }
+                  });
+                } else if (component.format === 'VIDEO') {
+                  newComponent.parameters.push({
+                    type: "video",
+                    video: { link: value }
+                  });
+                } else {
+                  newComponent.parameters.push({
+                    type: "text",
+                    text: value
+                  });
+                }
+
+                // Processa botões
+                if (componentType === 'button' && variables[componentType][key]?.buttonIndex !== undefined) {
+                  try {
+                    const buttons = JSON.parse(template.components[index].buttons);
+                    newComponent.sub_type = buttons[variables[componentType][key].buttonIndex]?.type;
+                    newComponent.index = String(variables[componentType][key].buttonIndex);
+                  } catch (e) {
+                    logger.error(`Erro ao processar botões do template: ${e.message}`);
+                  }
+                }
+              });
+
+              components.push(newComponent as IMetaMessageTemplateComponents);
+            }
+          });
+
+          if (components.length > 0) {
+            templateData.components = components;
+          }
+        }
+
+        // Envia template via API Meta
+        await SendWhatsAppOficialMessage({
+          body: campaignShipping.message,
+          ticket,
+          type: 'template',
+          media: null,
+          template: templateData,
+          quotedMsg: null
+        });
+
+        await campaignShipping.update({ deliveredAt: moment() });
+      }
+      // ✅ Lógica original para WhatsApp não oficial
+      else if (whatsapp.status === "CONNECTED") {
         if (campaign.confirmation && campaignShipping.confirmation === null) {
           const confirmationMessage = await wbot.sendMessage(getJidOf(chatId), {
             text: `\u200c ${campaignShipping.confirmationMessage}`
