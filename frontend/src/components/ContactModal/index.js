@@ -86,6 +86,8 @@ const ContactSchema = Yup.object().shape({
 		.required("Required"),
 	number: Yup.string().min(8, "Too Short!").max(50, "Too Long!"),
 	email: Yup.string().email("Invalid email"),
+	empresa: Yup.string().max(100, "Too Long!"),
+	cpf: Yup.string().max(20, "Too Long!"),
 });
 
 const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
@@ -96,6 +98,8 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 		name: "",
 		number: "",
 		email: "",
+		empresa: "",
+		cpf: "",
 		disableBot: false,
 		lgpdAcceptedAt: "",
 		birthDate: ""
@@ -336,6 +340,34 @@ const ContactModal = ({ open, onClose, contactId, initialValues, onSave }) => {
 										variant="outlined"
 									/>
 								</div>
+								<Grid container spacing={2}>
+									<Grid item xs={12} sm={6}>
+										<Field
+											as={TextField}
+											label="Empresa"
+											name="empresa"
+											error={touched.empresa && Boolean(errors.empresa)}
+											helperText={touched.empresa && errors.empresa}
+											placeholder="Nome da empresa"
+											fullWidth
+											margin="dense"
+											variant="outlined"
+										/>
+									</Grid>
+									<Grid item xs={12} sm={6}>
+										<Field
+											as={TextField}
+											label="CPF"
+											name="cpf"
+											error={touched.cpf && Boolean(errors.cpf)}
+											helperText={touched.cpf && errors.cpf}
+											placeholder="000.000.000-00"
+											fullWidth
+											margin="dense"
+											variant="outlined"
+										/>
+									</Grid>
+								</Grid>
 								<div>
   <Field
     as={TextField}

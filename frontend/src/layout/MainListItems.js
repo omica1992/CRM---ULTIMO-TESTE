@@ -7,51 +7,49 @@ import ListItemIcon from "@material-ui/core/ListItemIcon";
 import ListItemText from "@material-ui/core/ListItemText";
 import ListSubheader from "@material-ui/core/ListSubheader";
 import Divider from "@material-ui/core/Divider";
-import Avatar from "@material-ui/core/Avatar";
 import Badge from "@material-ui/core/Badge";
 import Collapse from "@material-ui/core/Collapse";
 import List from "@material-ui/core/List";
 import Tooltip from "@material-ui/core/Tooltip";
-import Typography from "@material-ui/core/Typography";
+import { Box } from "@material-ui/core";
 
-import DashboardOutlinedIcon from "@material-ui/icons/DashboardOutlined";
-import WhatsAppIcon from "@material-ui/icons/WhatsApp";
-import SyncAltIcon from "@material-ui/icons/SyncAlt";
-import SettingsOutlinedIcon from "@material-ui/icons/SettingsOutlined";
-import PeopleAltOutlinedIcon from "@material-ui/icons/PeopleAltOutlined";
-import ContactPhoneOutlinedIcon from "@material-ui/icons/ContactPhoneOutlined";
-import AccountBalanceWalletIcon from "@material-ui/icons/AccountBalanceWallet";
-import AccountTreeOutlinedIcon from "@material-ui/icons/AccountTreeOutlined";
-import FlashOnIcon from "@material-ui/icons/FlashOn";
-import HelpOutlineIcon from "@material-ui/icons/HelpOutline";
-import CodeRoundedIcon from "@material-ui/icons/CodeRounded";
-import ViewKanban from "@mui/icons-material/ViewKanban";
-import Schedule from "@material-ui/icons/Schedule";
-import LocalOfferIcon from "@material-ui/icons/LocalOffer";
-import EventAvailableIcon from "@material-ui/icons/EventAvailable";
-import ExpandLessIcon from "@material-ui/icons/ExpandLess";
-import ExpandMoreIcon from "@material-ui/icons/ExpandMore";
-import PeopleIcon from "@material-ui/icons/People";
-import ListIcon from "@material-ui/icons/ListAlt";
-import AnnouncementIcon from "@material-ui/icons/Announcement";
-import ForumIcon from "@material-ui/icons/Forum";
-import LocalAtmIcon from "@material-ui/icons/LocalAtm";
-import BusinessIcon from "@material-ui/icons/Business";
-import CakeIcon from "@material-ui/icons/Cake";
+// Ícones do Lucide React
 import {
-  AllInclusive,
-  AttachFile,
-  Dashboard,
-  Description,
-  DeviceHubOutlined,
-  GridOn,
-  PhonelinkSetup,
-} from "@material-ui/icons";
+  BarChart3,
+  PieChart,
+  MessageCircle,
+  KanbanSquare,
+  MessagesSquare,
+  HelpCircle,
+  ListChecks,
+  Bot,
+  BotMessageSquare,
+  Users,
+  CalendarPlus,
+  Zap,
+  GitMerge,
+  TrendingUp,
+  Settings,
+  ListTodo,
+  BookOpen,
+  Workflow,
+  SmartphoneNfc,
+  FolderSymlink,
+  UserPlus,
+  Landmark,
+  FileJson2,
+  MonitorCog,
+  Monitor,
+  Tag,
+  ChevronUp,
+  ChevronDown,
+  LogOut,
+  Cpu
+} from "lucide-react";
 
 import { WhatsAppsContext } from "../context/WhatsApp/WhatsAppsContext";
 import { AuthContext } from "../context/Auth/AuthContext";
 import { useActiveMenu } from "../context/ActiveMenuContext";
-
 import { Can } from "../components/Can";
 
 import { isArray } from "lodash";
@@ -60,181 +58,148 @@ import toastError from "../errors/toastError";
 import usePlans from "../hooks/usePlans";
 import useVersion from "../hooks/useVersion";
 import { i18n } from "../translate/i18n";
-import { Campaign, ShapeLine, Webhook } from "@mui/icons-material";
+
 
 import useCompanySettings from "../hooks/useSettings/companySettings";
 
+// Componente wrapper para ícones do Lucide React
+const LucideIcon = ({ icon: Icon, size = 24, ...props }) => {
+  return <Icon size={size} {...props} />;
+};
+
 const useStyles = makeStyles((theme) => ({
   listItem: {
-    height: "44px",
-    width: "auto",
-    // Remove margin personalizada para manter alinhamento original
-    "&:hover $iconHoverActive": {
-      backgroundColor: theme.palette.primary.main, // Usa cor do tema
-      color: "#fff",
-      transform: "scale(1.05)",
+    borderRadius: "6px",
+    marginBottom: "6px",
+    padding: "6px 15px",
+    color: "#ffffff",
+    position: "relative",
+    "&:hover": {
+      backgroundColor: "#202C33",
+      "&::before": {
+        content: '""',
+        position: "absolute",
+        left: 0,
+        top: 0,
+        bottom: 0,
+        width: "4px",
+        backgroundColor: "#21C063",
+        borderRadius: "0px"
+      },
+      "& .MuiListItemIcon-root": {
+        transform: "translateX(4px)",
+        transition: "transform 0.2s",
+        color: "#21C063"
+      },
+      "& .MuiListItemText-primary": {
+         color: "#21C063"
+      }
     },
-    "&:hover $listItemText": {
-      color: theme.palette.primary.main, // Usa cor do tema
-      fontWeight: 600,
-    },
-    // Transição suave
-    transition: "all 0.3s ease",
   },
 
   listItemText: {
     fontSize: "14px",
-    color: theme.mode === "light" ? "#666" : "#FFF",
-    transition: "color 0.3s ease", // Só transição de cor
+    color: "#ffffff",
+    "& .MuiListItemText-primary": {
+      fontSize: "14px",
     fontWeight: 500,
-    "& .MuiTypography-root": {
-      fontFamily: "'Inter', 'Roboto', sans-serif",
+      color: "#ffffff"
     }
   },
 
-  avatarActive: {
-    backgroundColor: "transparent",
-  },
-
-  avatarHover: {
-    backgroundColor: "transparent",
-  },
-
-  iconHoverActive: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: "50%", // Mantém circular original
-    height: 36, // Mantém tamanho original
-    width: 36,  // Mantém tamanho original
-    backgroundColor:
-      theme.mode === "light"
-        ? "rgba(120,120,120,0.1)"
-        : "rgba(120,120,120,0.5)",
-    color: theme.mode === "light" ? "#666" : "#FFF",
-    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)", // Transição mais suave
-    "&:hover, &.active": {
-      backgroundColor: theme.palette.primary.main, // Usa cor do tema
-      color: "#fff",
-      boxShadow: `0 4px 12px ${theme.palette.primary.main}30`, // Sombra dinâmica
+  active: {
+    backgroundColor: "#202C33",
+    "&::before": {
+      content: '""',
+      position: "absolute",
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: "4px",
+      backgroundColor: "#21C063",
+      borderRadius: "0px"
     },
-    "& .MuiSvgIcon-root": {
-      fontSize: "1.4rem", // Mantém tamanho original
-      transition: "transform 0.3s ease",
+    "& .MuiListItemIcon-root": {
+      transform: "translateX(4px)",
+      color: "#21C063"
     },
-    "&:hover .MuiSvgIcon-root": {
-      transform: "scale(1.1)", // Pequena animação no hover
+    "& .MuiListItemText-primary": {
+      color: "#21C063"
     }
   },
 
-  // Badge melhorado mas mantendo funcionalidade
+  nested: {
+    paddingLeft: theme.spacing(3),
+    marginBottom: "2px",
+    "&:hover": {
+      "& .MuiListItemIcon-root": {
+        color: "#21C063"
+      },
+      "& .MuiListItemText-primary": {
+        color: "#21C063"
+      }
+    }
+  },
+
+  list: {
+    padding: 0,
+    margin: 0,
+  },
+
+  logoutButton: {
+    borderRadius: "6px",
+    marginBottom: "6px",
+    padding: "6px 15px",
+    color: "#ffffff",
+    "&:hover": {
+      backgroundColor: "#202C33",
+    },
+  },
+
+  listItemIcon: {
+    transition: "all 0.2s",
+    minWidth: "45px",
+    color: "#ffffff"
+  },
+  
+  listItemIconSmall: {
+    minWidth: "35px",
+    color: "#ffffff"
+  },
+
+  listSubheader: {
+    position: "relative",
+    fontSize: "17px",
+    textAlign: "left",
+    paddingLeft: 20,
+    color: "inherit",
+  },
+
+  mainItemsContainer: {
+    flex: 1,
+    overflowY: "auto",
+    "&::-webkit-scrollbar": {
+      width: "4px",
+      display: "none"
+    },
+  },
+
+  expandIcon: {
+    color: "#ffffff"
+  },
+
   badge: {
     "& .MuiBadge-badge": {
       backgroundColor: "#ef4444",
       color: "#fff",
       fontSize: "0.75rem",
       fontWeight: 600,
-      animation: "$pulse 2s infinite",
     }
   },
-
-  "@keyframes pulse": {
-    "0%, 100%": {
-      opacity: 1,
-    },
-    "50%": {
-      opacity: 0.7,
-    }
-  },
-
-  // Melhorias para submenus mantendo estrutura original
-  submenuContainer: {
-    backgroundColor: theme.mode === "light"
-      ? "rgba(0, 0, 0, 0.02)"
-      : "rgba(255, 255, 255, 0.02)",
-  },
-
-  // Tooltip melhorado
-  customTooltip: {
-    backgroundColor: theme.mode === "light" ? "#1e293b" : "#374151",
-    color: "#fff",
-    fontSize: "0.875rem",
-    fontWeight: 500,
-    borderRadius: "8px",
-    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-    "& .MuiTooltip-arrow": {
-      color: theme.mode === "light" ? "#1e293b" : "#374151",
-    }
-  },
-
-  // Versão com destaque sutil
-  versionContainer: {
-    textAlign: "center",
-    padding: "10px",
-    color: theme.palette.primary.main, // Usa cor do tema
-    fontSize: "12px",
-    fontWeight: "bold",
-    borderTop: `1px solid ${theme.mode === "light" ? "#f0f0f0" : "#333"}`,
-    marginTop: "auto",
-  },
-
-  // Seções de administração com destaque sutil
-  adminSection: {
-    "& .MuiListSubheader-root": {
-      color: theme.palette.primary.main, // Usa cor do tema
-      fontSize: "0.875rem",
-      fontWeight: 600,
-      textTransform: "uppercase",
-      letterSpacing: "0.5px",
-    }
-  },
-
-  // Efeitos suaves para expand/collapse
-  expandIcon: {
-    transition: "transform 0.3s ease",
-    color: theme.palette.primary.main, // Usa cor do tema
-    "&.expanded": {
-      transform: "rotate(180deg)",
-    }
-  },
-
-  // Menu container com melhorias sutis
-  menuContainer: {
-    overflowY: "auto",
-    "&::-webkit-scrollbar": {
-      width: "6px",
-    },
-    "&::-webkit-scrollbar-track": {
-      background: "transparent",
-    },
-    "&::-webkit-scrollbar-thumb": {
-      background: theme.mode === "light"
-        ? "rgba(0, 0, 0, 0.1)"
-        : "rgba(255, 255, 255, 0.1)",
-      borderRadius: "3px",
-      "&:hover": {
-        background: theme.mode === "light"
-          ? "rgba(0, 0, 0, 0.2)"
-          : "rgba(255, 255, 255, 0.2)",
-      }
-    },
-  },
-
-  // Estado ativo melhorado mantendo funcionalidade original
-  activeItem: {
-    "& $iconHoverActive": {
-      backgroundColor: theme.palette.primary.main, // Usa cor do tema
-      color: "#fff",
-    },
-    "& $listItemText": {
-      color: theme.palette.primary.main, // Usa cor do tema
-      fontWeight: 700,
-    }
-  }
 }));
 
 function ListItemLink(props) {
-  const { icon, primary, to, tooltip, showBadge } = props;
+  const { icon, primary, to, tooltip, showBadge, isSubItem, collapsed, small } = props;
   const classes = useStyles();
   const { activeMenu } = useActiveMenu();
   const location = useLocation();
@@ -248,9 +213,9 @@ function ListItemLink(props) {
     [to]
   );
 
-  const ConditionalTooltip = ({ children, tooltipEnabled }) =>
+  const ConditionalTooltip = ({ children, tooltipEnabled, tooltipText }) =>
     tooltipEnabled ? (
-      <Tooltip title={primary} placement="right">
+      <Tooltip title={tooltipText} placement="right">
         {children}
       </Tooltip>
     ) : (
@@ -258,11 +223,16 @@ function ListItemLink(props) {
     );
 
   return (
-    <ConditionalTooltip tooltipEnabled={!!tooltip}>
+    <ConditionalTooltip tooltipEnabled={!!tooltip} tooltipText={primary}>
       <li>
-        <ListItem button component={renderLink} className={classes.listItem}>
+        <ListItem 
+          button 
+          dense
+          component={renderLink} 
+          className={`${classes.listItem} ${isActive ? classes.active : ""} ${isSubItem && !collapsed ? classes.nested : ""}`}
+        >
           {icon ? (
-            <ListItemIcon>
+            <ListItemIcon className={small ? classes.listItemIconSmall : classes.listItemIcon}>
               {showBadge ? (
                 <Badge
                   badgeContent="!"
@@ -270,29 +240,16 @@ function ListItemLink(props) {
                   overlap="circular"
                   className={classes.badge}
                 >
-                  <Avatar
-                    className={`${classes.iconHoverActive} ${isActive ? "active" : ""
-                      }`}
-                  >
-                    {icon}
-                  </Avatar>
+                  {icon}
                 </Badge>
               ) : (
-                <Avatar
-                  className={`${classes.iconHoverActive} ${isActive ? "active" : ""
-                    }`}
-                >
-                  {icon}
-                </Avatar>
+                icon
               )}
             </ListItemIcon>
           ) : null}
           <ListItemText
-            primary={
-              <Typography className={classes.listItemText}>
-                {primary}
-              </Typography>
-            }
+            primary={primary}
+            className={classes.listItemText}
           />
         </ListItem>
       </li>
@@ -360,7 +317,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
   const theme = useTheme();
   const classes = useStyles();
   const { whatsApps } = useContext(WhatsAppsContext);
-  const { user, socket } = useContext(AuthContext);
+  const { user, socket, handleLogout } = useContext(AuthContext);
 
   const { setActiveMenu } = useActiveMenu();
   const location = useLocation();
@@ -368,6 +325,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
   const [connectionWarning, setConnectionWarning] = useState(false);
   const [openCampaignSubmenu, setOpenCampaignSubmenu] = useState(false);
   const [openDashboardSubmenu, setOpenDashboardSubmenu] = useState(false);
+  const [openAdminSubmenu, setOpenAdminSubmenu] = useState(false);
   const [showCampaigns, setShowCampaigns] = useState(false);
   const [showKanban, setShowKanban] = useState(false);
   const [showOpenAi, setShowOpenAi] = useState(false);
@@ -385,6 +343,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
   const [version, setVersion] = useState(false);
   const [managementHover, setManagementHover] = useState(false);
   const [campaignHover, setCampaignHover] = useState(false);
+  const [adminHover, setAdminHover] = useState(false);
   const { list } = useHelps(); // INSERIR
   const [hasHelps, setHasHelps] = useState(false);
 
@@ -435,6 +394,20 @@ const MainListItems = ({ collapsed, drawerClose }) => {
     location.pathname === "/campaigns" ||
     location.pathname.startsWith("/contact-lists") ||
     location.pathname.startsWith("/campaigns-config");
+
+  const isAdminRouteActive =
+    location.pathname === "/announcements" ||
+    location.pathname.startsWith("/messages-api") ||
+    location.pathname === "/users" ||
+    location.pathname === "/queues" ||
+    location.pathname === "/prompts" ||
+    location.pathname === "/queue-integration" ||
+    location.pathname === "/connections" ||
+    location.pathname === "/allConnections" ||
+    location.pathname === "/files" ||
+    location.pathname === "/financeiro" ||
+    location.pathname === "/settings" ||
+    location.pathname === "/companies";
 
   useEffect(() => {
     if (location.pathname.startsWith("/tickets")) {
@@ -571,8 +544,22 @@ useEffect(() => {
     }
   };
 
+  const handleClickLogout = () => {
+    handleLogout();
+  };
+
   return (
-    <div onClick={drawerClose}>
+    <Box
+      onClick={drawerClose}
+      display="flex"
+      flexDirection="column"
+      height="100%"
+      sx={{
+        padding: "8px",
+      }}
+    >
+      {/* Container principal (flex: 1) - Aplicado o overflow aqui */}
+      <Box className={classes.mainItemsContainer}>
       <Can
         role={
           (user.profile === "user" && user.showDashboard === "enabled") ||
@@ -593,23 +580,16 @@ useEffect(() => {
                 onClick={() => setOpenDashboardSubmenu((prev) => !prev)}
                 onMouseEnter={() => setManagementHover(true)}
                 onMouseLeave={() => setManagementHover(false)}
+                className={`${classes.listItem} ${isManagementActive || managementHover ? classes.active : ""}`}
               >
-                <ListItemIcon>
-                  <Avatar
-                    className={`${classes.iconHoverActive} ${isManagementActive || managementHover ? "active" : ""
-                      }`}
-                  >
-                    <Dashboard />
-                  </Avatar>
+                <ListItemIcon className={classes.listItemIcon}>
+                  <LucideIcon icon={Landmark} />
                 </ListItemIcon>
                 <ListItemText
-                  primary={
-                    <Typography className={classes.listItemText}>
-                      {i18n.t("mainDrawer.listItems.management")}
-                    </Typography>
-                  }
+                  primary={i18n.t("mainDrawer.listItems.management")}
+                  className={classes.listItemText}
                 />
-                {openDashboardSubmenu ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                {openDashboardSubmenu ? <LucideIcon icon={ChevronUp} className={classes.expandIcon} /> : <LucideIcon icon={ChevronDown} className={classes.expandIcon} />}
               </ListItem>
             </Tooltip>
             <Collapse
@@ -636,14 +616,14 @@ useEffect(() => {
                       small
                       to="/"
                       primary="Dashboard"
-                      icon={<DashboardOutlinedIcon />}
+                      icon={<LucideIcon icon={BarChart3} />}
                       tooltip={collapsed}
                     />
                     <ListItemLink
                       small
                       to="/reports"
                       primary={i18n.t("mainDrawer.listItems.reports")}
-                      icon={<Description />}
+                      icon={<LucideIcon icon={PieChart} />}
                       tooltip={collapsed}
                     />
                   </>
@@ -660,7 +640,7 @@ useEffect(() => {
                   <ListItemLink
                     to="/moments"
                     primary={i18n.t("mainDrawer.listItems.chatsTempoReal")}
-                    icon={<GridOn />}
+                    icon={<LucideIcon icon={Monitor} />}
                     tooltip={collapsed}
                   />
                 )}
@@ -670,7 +650,7 @@ useEffect(() => {
                   <ListItemLink
                     to="/wallets"
                     primary={i18n.t("mainDrawer.listItems.wallets")}
-                    icon={<AccountBalanceWalletIcon />}
+                    icon={<LucideIcon icon={BookOpen} />}
                     tooltip={collapsed}
                   />
                 </>
@@ -682,14 +662,14 @@ useEffect(() => {
       <ListItemLink
         to="/tickets"
         primary={i18n.t("mainDrawer.listItems.tickets")}
-        icon={<WhatsAppIcon />}
+        icon={<LucideIcon icon={MessageCircle} />}
         tooltip={collapsed}
       />
 
       <ListItemLink
         to="/quick-messages"
         primary={i18n.t("mainDrawer.listItems.quickMessages")}
-        icon={<FlashOnIcon />}
+        icon={<LucideIcon icon={Zap} />}
         tooltip={collapsed}
       />
 
@@ -698,7 +678,7 @@ useEffect(() => {
           <ListItemLink
             to="/kanban"
             primary={i18n.t("mainDrawer.listItems.kanban")}
-            icon={<ViewKanban />}
+            icon={<LucideIcon icon={KanbanSquare} />}
             tooltip={collapsed}
           />
         </>
@@ -708,7 +688,7 @@ useEffect(() => {
         <ListItemLink
           to="/contacts"
           primary={i18n.t("mainDrawer.listItems.contacts")}
-          icon={<ContactPhoneOutlinedIcon />}
+          icon={<LucideIcon icon={Users} />}
           tooltip={collapsed}
         />
       )}
@@ -718,7 +698,7 @@ useEffect(() => {
           <ListItemLink
             to="/schedules"
             primary={i18n.t("mainDrawer.listItems.schedules")}
-            icon={<Schedule />}
+            icon={<LucideIcon icon={CalendarPlus} />}
             tooltip={collapsed}
           />
         </>
@@ -727,7 +707,7 @@ useEffect(() => {
       <ListItemLink
         to="/tags"
         primary={i18n.t("mainDrawer.listItems.tags")}
-        icon={<LocalOfferIcon />}
+        icon={<LucideIcon icon={Tag} />}
         tooltip={collapsed}
       />
 
@@ -738,7 +718,7 @@ useEffect(() => {
             primary={i18n.t("mainDrawer.listItems.chats")}
             icon={
               <Badge color="secondary" variant="dot" invisible={invisible}>
-                <ForumIcon />
+                <LucideIcon icon={MessagesSquare} />
               </Badge>
             }
             tooltip={collapsed}
@@ -758,7 +738,7 @@ useEffect(() => {
         <ListItemLink
           to="/helps"
           primary={i18n.t("mainDrawer.listItems.helps")}
-          icon={<HelpOutlineIcon />}
+          icon={<LucideIcon icon={HelpCircle} />}
           tooltip={collapsed}
         />
       )}
@@ -775,22 +755,16 @@ useEffect(() => {
               onClick={() => setOpenCampaignSubmenu((prev) => !prev)}
               onMouseEnter={() => setCampaignHover(true)}
               onMouseLeave={() => setCampaignHover(false)}
+              className={`${classes.listItem} ${isCampaignRouteActive || campaignHover ? classes.active : ""}`}
             >
-              <ListItemIcon>
-                <Avatar
-                  className={`${classes.iconHoverActive} ${isCampaignRouteActive || campaignHover ? "active" : ""}`}
-                >
-                  <EventAvailableIcon />
-                </Avatar>
+              <ListItemIcon className={classes.listItemIcon}>
+                <LucideIcon icon={TrendingUp} />
               </ListItemIcon>
               <ListItemText
-                primary={
-                  <Typography className={classes.listItemText}>
-                    {i18n.t("mainDrawer.listItems.campaigns")}
-                  </Typography>
-                }
+                primary={i18n.t("mainDrawer.listItems.campaigns")}
+                className={classes.listItemText}
               />
-              {openCampaignSubmenu ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              {openCampaignSubmenu ? <LucideIcon icon={ChevronUp} className={classes.expandIcon} /> : <LucideIcon icon={ChevronDown} className={classes.expandIcon} />}
             </ListItem>
           </Tooltip>
           <Collapse
@@ -808,19 +782,19 @@ useEffect(() => {
               <ListItemLink
                 to="/campaigns"
                 primary={i18n.t("campaigns.subMenus.list")}
-                icon={<ListIcon />}
+                icon={<LucideIcon icon={TrendingUp} />}
                 tooltip={collapsed}
               />
               <ListItemLink
                 to="/contact-lists"
                 primary={i18n.t("campaigns.subMenus.listContacts")}
-                icon={<PeopleIcon />}
+                icon={<LucideIcon icon={ListTodo} />}
                 tooltip={collapsed}
               />
               <ListItemLink
                 to="/campaigns-config"
                 primary={i18n.t("campaigns.subMenus.settings")}
-                icon={<SettingsOutlinedIcon />}
+                icon={<LucideIcon icon={Settings} />}
                 tooltip={collapsed}
               />
               <Can
@@ -830,7 +804,7 @@ useEffect(() => {
                   <ListItemLink
                     to="/files"
                     primary={i18n.t("mainDrawer.listItems.files")}
-                    icon={<AttachFile />}
+                    icon={<LucideIcon icon={FolderSymlink} />}
                     tooltip={collapsed}
                   />
                 )}
@@ -855,28 +829,19 @@ useEffect(() => {
               onClick={() => setOpenFlowSubmenu((prev) => !prev)}
               onMouseEnter={() => setFlowHover(true)}
               onMouseLeave={() => setFlowHover(false)}
+              className={`${classes.listItem} ${isFlowbuilderRouteActive || flowHover ? classes.active : ""}`}
             >
-              <ListItemIcon>
-                <Avatar
-                  className={`${classes.iconHoverActive} ${isFlowbuilderRouteActive || flowHover
-                    ? "active"
-                    : ""
-                    }`}
-                >
-                  <Webhook />
-                </Avatar>
+              <ListItemIcon className={classes.listItemIcon}>
+                <LucideIcon icon={Workflow} />
               </ListItemIcon>
               <ListItemText
-                primary={
-                  <Typography className={classes.listItemText}>
-                    {i18n.t("Flowbuilder")}
-                  </Typography>
-                }
+                primary={i18n.t("Flowbuilder")}
+                className={classes.listItemText}
               />
               {openFlowSubmenu ? (
-                <ExpandLessIcon />
+                <LucideIcon icon={ChevronUp} className={classes.expandIcon} />
               ) : (
-                <ExpandMoreIcon />
+                <LucideIcon icon={ChevronDown} className={classes.expandIcon} />
               )}
             </ListItem>
           </Tooltip>
@@ -896,14 +861,14 @@ useEffect(() => {
               <ListItemLink
                 to="/phrase-lists"
                 primary={"Fluxo de Campanha"}
-                icon={<EventAvailableIcon />}
+                icon={<LucideIcon icon={CalendarPlus} />}
                 tooltip={collapsed}
               />
 
               <ListItemLink
                 to="/flowbuilders"
                 primary={"Fluxo de conversa"}
-                icon={<ShapeLine />}
+                icon={<LucideIcon icon={Workflow} />}
               />
             </List>
           </Collapse>
@@ -919,17 +884,51 @@ useEffect(() => {
         perform="dashboard:view"
         yes={() => (
           <>
-            <Divider />
-            <ListSubheader inset>
-              {i18n.t("mainDrawer.listItems.administration")}
-            </ListSubheader>
-
+            <Tooltip
+              title={collapsed ? i18n.t("mainDrawer.listItems.administration") : ""}
+              placement="right"
+            >
+              <ListItem
+                dense
+                button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenAdminSubmenu((prev) => !prev);
+                }}
+                onMouseEnter={() => setAdminHover(true)}
+                onMouseLeave={() => setAdminHover(false)}
+                className={`${classes.listItem} ${isAdminRouteActive || adminHover ? classes.active : ""}`}
+              >
+                <ListItemIcon className={classes.listItemIcon}>
+                  <LucideIcon icon={MonitorCog} />
+                </ListItemIcon>
+                <ListItemText
+                  primary={i18n.t("mainDrawer.listItems.administration")}
+                  className={classes.listItemText}
+                />
+                {openAdminSubmenu ? <LucideIcon icon={ChevronUp} className={classes.expandIcon} /> : <LucideIcon icon={ChevronDown} className={classes.expandIcon} />}
+              </ListItem>
+            </Tooltip>
+            <Collapse
+              in={openAdminSubmenu}
+              timeout="auto"
+              unmountOnExit
+              style={{
+                backgroundColor:
+                  theme.mode === "light"
+                    ? "rgba(120,120,120,0.1)"
+                    : "rgba(120,120,120,0.5)",
+              }}
+            >
+              <List dense component="div" disablePadding>
             {user.super && (
               <ListItemLink
                 to="/announcements"
                 primary={i18n.t("mainDrawer.listItems.annoucements")}
-                icon={<AnnouncementIcon />}
+                icon={<LucideIcon icon={BookOpen} />}
                 tooltip={collapsed}
+                isSubItem={true}
+                collapsed={collapsed}
               />
             )}
 
@@ -942,8 +941,10 @@ useEffect(() => {
                     <ListItemLink
                       to="/messages-api"
                       primary={i18n.t("mainDrawer.listItems.messagesAPI")}
-                      icon={<CodeRoundedIcon />}
+                      icon={<LucideIcon icon={FileJson2} />}
                       tooltip={collapsed}
+                      isSubItem={true}
+                      collapsed={collapsed}
                     />
                   )}
                 />
@@ -957,8 +958,10 @@ useEffect(() => {
                 <ListItemLink
                   to="/users"
                   primary={i18n.t("mainDrawer.listItems.users")}
-                  icon={<PeopleAltOutlinedIcon />}
+                  icon={<LucideIcon icon={UserPlus} />}
                   tooltip={collapsed}
+                  isSubItem={true}
+                  collapsed={collapsed}
                 />
               )}
             />
@@ -970,8 +973,10 @@ useEffect(() => {
                 <ListItemLink
                   to="/queues"
                   primary={i18n.t("mainDrawer.listItems.queues")}
-                  icon={<AccountTreeOutlinedIcon />}
+                  icon={<LucideIcon icon={GitMerge} />}
                   tooltip={collapsed}
+                  isSubItem={true}
+                  collapsed={collapsed}
                 />
               )}
             />
@@ -984,8 +989,10 @@ useEffect(() => {
                   <ListItemLink
                     to="/prompts"
                     primary={i18n.t("mainDrawer.listItems.prompts")}
-                    icon={<AllInclusive />}
+                    icon={<LucideIcon icon={Bot} />}
                     tooltip={collapsed}
+                    isSubItem={true}
+                    collapsed={collapsed}
                   />
                 )}
               />
@@ -999,8 +1006,10 @@ useEffect(() => {
                   <ListItemLink
                     to="/queue-integration"
                     primary={i18n.t("mainDrawer.listItems.queueIntegration")}
-                    icon={<DeviceHubOutlined />}
+                    icon={<LucideIcon icon={MonitorCog} />}
                     tooltip={collapsed}
+                    isSubItem={true}
+                    collapsed={collapsed}
                   />
                 )}
               />
@@ -1016,9 +1025,11 @@ useEffect(() => {
                 <ListItemLink
                   to="/connections"
                   primary={i18n.t("mainDrawer.listItems.connections")}
-                  icon={<SyncAltIcon />}
+                  icon={<LucideIcon icon={SmartphoneNfc} />}
                   showBadge={connectionWarning}
                   tooltip={collapsed}
+                  isSubItem={true}
+                  collapsed={collapsed}
                 />
               )}
             />
@@ -1026,8 +1037,10 @@ useEffect(() => {
               <ListItemLink
                 to="/allConnections"
                 primary={i18n.t("mainDrawer.listItems.allConnections")}
-                icon={<PhonelinkSetup />}
+                icon={<LucideIcon icon={SmartphoneNfc} />}
                 tooltip={collapsed}
+                isSubItem={true}
+                collapsed={collapsed}
               />
             )}
             <Can
@@ -1037,8 +1050,10 @@ useEffect(() => {
                 <ListItemLink
                   to="/financeiro"
                   primary={i18n.t("mainDrawer.listItems.financeiro")}
-                  icon={<LocalAtmIcon />}
+                  icon={<LucideIcon icon={BarChart3} />}
                   tooltip={collapsed}
+                  isSubItem={true}
+                  collapsed={collapsed}
                 />
               )}
             />
@@ -1049,8 +1064,10 @@ useEffect(() => {
                 <ListItemLink
                   to="/settings"
                   primary={i18n.t("mainDrawer.listItems.settings")}
-                  icon={<SettingsOutlinedIcon />}
+                  icon={<LucideIcon icon={Settings} />}
                   tooltip={collapsed}
+                  isSubItem={true}
+                  collapsed={collapsed}
                 />
               )}
             />
@@ -1058,29 +1075,52 @@ useEffect(() => {
               <ListItemLink
                 to="/companies"
                 primary={i18n.t("mainDrawer.listItems.companies")}
-                icon={<BusinessIcon />}
+                icon={<LucideIcon icon={Landmark} />}
                 tooltip={collapsed}
+                isSubItem={true}
+                collapsed={collapsed}
               />
             )}
+              </List>
+            </Collapse>
           </>
         )}
       />
-      {!collapsed && (
-        <React.Fragment>
-          <Divider />
-          <Typography
-            style={{
-              fontSize: "12px",
-              padding: "10px",
-              textAlign: "center",
-              fontWeight: "bold",
-            }}
-          >
-            {`${version}`}
-          </Typography>
-        </React.Fragment>
-      )}
-    </div>
+      </Box>
+
+      {/* Divider para separar a parte de cima do rodapé */}
+      <Divider style={{ margin: "4px 0" }} />
+
+      {/* Rodapé: Versão e Sair */}
+      <Box>
+        <ListItem
+          button
+          dense
+          style={{ marginBottom: "6px" }}
+        >
+          <ListItemIcon className={classes.listItemIcon}> 
+            <LucideIcon icon={Cpu} />
+          </ListItemIcon>
+          {!collapsed && (
+            <ListItemText primary={`Versão ${version ? `${version}` : ""}`} className={classes.listItemText} /> 
+          )}
+        </ListItem>
+
+        <ListItem
+          button
+          dense
+          onClick={handleClickLogout}
+          className={classes.logoutButton}
+        >
+          <ListItemIcon className={classes.listItemIcon}> 
+            <LucideIcon icon={LogOut} />
+          </ListItemIcon>
+          {!collapsed && (
+            <ListItemText primary={i18n.t("Sair")} className={classes.listItemText} /> 
+          )}
+        </ListItem>
+      </Box>
+    </Box>
   );
 };
 

@@ -20,6 +20,8 @@ interface Request {
   name: string;
   number: string;
   email?: string;
+  empresa?: string;
+  cpf?: string;
   profilePicUrl?: string;
   acceptAudioMessage?: boolean;
   active?: boolean;
@@ -27,14 +29,16 @@ interface Request {
   extraInfo?: ExtraInfo[];
   remoteJid?: string;
   wallets?: null | number[] | string[];
-  birthDate?: Date | string; // 🎂 NOVO CAMPO ADICIONADO
+  birthDate?: Date | string; //  NOVO CAMPO ADICIONADO
 }
 
 const CreateContactService = async ({
   name,
   number,
   email = "",
-  birthDate, // 🎂 INCLUIR NO DESTRUCTURING
+  empresa = "",
+  cpf = "",
+  birthDate, //  INCLUIR NO DESTRUCTURING
   acceptAudioMessage,
   active,
   companyId,
@@ -56,13 +60,13 @@ const CreateContactService = async ({
   }
 
   const settings = await CompaniesSettings.findOne({
-    where: { companyId }
+    where: { companyId}
   });
 
   const acceptAudioMessageContact =
     settings?.acceptAudioMessageContact === "enabled";
 
-  // 🎂 PROCESSAR DATA DE NASCIMENTO
+  //  PROCESSAR DATA DE NASCIMENTO
   let processedBirthDate: Date | null = null;
   if (birthDate) {
     if (typeof birthDate === 'string') {
@@ -84,7 +88,9 @@ const CreateContactService = async ({
       name,
       number,
       email,
-      birthDate: processedBirthDate, // 🎂 INCLUIR NO CREATE
+      empresa,
+      cpf,
+      birthDate: processedBirthDate, //  INCLUIR NO CREATE
       acceptAudioMessage: acceptAudioMessageContact,
       active,
       companyId,

@@ -51,6 +51,14 @@ class Contact extends Model<Contact> {
 
   @Default("")
   @Column
+  empresa: string;
+
+  @Default("")
+  @Column
+  cpf: string;
+
+  @Default("")
+  @Column
   profilePicUrl: string;
 
   @Default(false)

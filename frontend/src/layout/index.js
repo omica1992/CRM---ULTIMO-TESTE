@@ -20,16 +20,20 @@ import {
   Chip,
   Dialog,
   DialogTitle,
-  DialogContent,
   DialogActions,
+  DialogContent,
   ListItem,
   ListItemAvatar,
   ListItemText,
 } from "@material-ui/core";
-import MenuIcon from "@material-ui/icons/Menu";
-import ChevronLeftIcon from "@material-ui/icons/ChevronLeft";
-import NotificationsIcon from "@material-ui/icons/Notifications";
-import CachedIcon from "@material-ui/icons/Cached";
+// Ícones do Lucide React
+import {
+  Text,
+  ChevronLeft,
+  Bell,
+  RefreshCcw,
+  Globe
+} from "lucide-react";
 import api from "../services/api";
 import MainListItems from "./MainListItems";
 import NotificationsPopOver from "../components/NotificationsPopOver";
@@ -44,14 +48,15 @@ import logo from "../assets/logo.png";
 import logoDark from "../assets/logo-black.png";
 import ChatPopover from "../pages/Chat/ChatPopover";
 import { useDate } from "../hooks/useDate";
-import ColorModeContext from "../layout/themeContext";
-import Brightness4Icon from "@material-ui/icons/Brightness4";
-import Brightness7Icon from "@material-ui/icons/Brightness7";
+import ColorModeContext from "./themeContext";
 import { getBackendUrl } from "../config";
 import useSettings from "../hooks/useSettings";
-import VersionControl from "../components/VersionControl";
 import useSocketListener from "../hooks/useSocketListener";
-import { FaGlobe } from "react-icons/fa";
+
+// Componente wrapper para ícones do Lucide React
+const LucideIcon = ({ icon: Icon, size = 24, ...props }) => {
+  return <Icon size={size} {...props} />;
+};
 
 const backendUrl = getBackendUrl();
 const drawerWidth = 240;
@@ -97,25 +102,21 @@ const useStyles = makeStyles((theme) => ({
   toolbar: {
     paddingRight: 24,
     color: theme.palette.dark.main,
-    // Usa a cor primária do tema para o fundo do AppBar
-    background: theme.palette.primary.main, // Mudança principal aqui
-    boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)", // Sombra sutil
-    transition: "all 0.3s ease",
+    background: "linear-gradient(to right, #182229, #182229, #182229)", // Mesma cor da sidebar
+    minHeight: "58px",
   },
 
   toolbarIcon: {
+    background: "linear-gradient(to right, #182229, #182229, #182229)",
     display: "flex",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
     padding: "0 8px",
-    minHeight: "48px",
+    minHeight: "58px",
     [theme.breakpoints.down("sm")]: {
-      height: "48px",
+      height: "58px",
     },
-    // ALTERAÇÃO: Removido o gradiente e definido fundo branco
-    backgroundColor: "#ffffff", // Fundo branco fixo
-    borderBottom: `1px solid ${theme.palette.divider}`, // Linha sutil para separação
-    transition: "all 0.3s ease",
+    color: "white",
   },
 
   appBar: {
@@ -151,26 +152,25 @@ const useStyles = makeStyles((theme) => ({
   },
 
   drawerPaper: {
+    background: "linear-gradient(to right, #182229, #182229, #182229)",
+    color: "white",
     position: "relative",
-    whiteSpace: "nowrap",
     width: drawerWidth,
     transition: theme.transitions.create("width", {
       easing: theme.transitions.easing.sharp,
       duration: theme.transitions.duration.enteringScreen,
     }),
-    overflowX: "hidden",
-    overflowY: "hidden",
-    // Melhorias sutis no drawer
-    borderRight: `1px solid ${theme.mode === "light" ? "#e0e0e0" : "#424242"}`,
-    boxShadow:
-      theme.mode === "light"
-        ? "2px 0 8px rgba(0, 0, 0, 0.1)"
-        : "2px 0 8px rgba(0, 0, 0, 0.3)",
+    [theme.breakpoints.down("sm")]: {
+      width: drawerWidth,
+      position: "fixed",
+      height: "100vh",
+      zIndex: theme.zIndex.drawer,
+    },
+    boxShadow: "0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23)",
   },
 
   drawerPaperClose: {
-    overflowX: "hidden",
-    overflowY: "hidden",
+    overflow: "hidden",
     transition: theme.transitions.create("width", {
       easing: theme.transitions.easing.sharp,
       duration: theme.transitions.duration.leavingScreen,
@@ -179,10 +179,14 @@ const useStyles = makeStyles((theme) => ({
     [theme.breakpoints.up("sm")]: {
       width: theme.spacing(9),
     },
+    [theme.breakpoints.down("sm")]: {
+      width: 0,
+      display: "none",
+    },
   },
 
   appBarSpacer: {
-    minHeight: "48px",
+    minHeight: "58px",
   },
 
   content: {
@@ -413,16 +417,17 @@ const LoggedInLayout = ({ children, themeToggle }) => {
   const { colorMode } = useContext(ColorModeContext);
   const greaterThenSm = useMediaQuery(theme.breakpoints.up("sm"));
 
-  const [volume, setVolume] = useState(localStorage.getItem("volume") || 1);
+  const [volume, setVolume] = useState(
+    localStorage.getItem("volume") !== null ? localStorage.getItem("volume") : 1
+  );
 
   const { dateToClient } = useDate();
   const [profileUrl, setProfileUrl] = useState(null);
-const [updateInProgress, setUpdateInProgress] = useState(false);
-
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const mainListItems = useMemo(
     () => <MainListItems drawerOpen={drawerOpen} collapsed={!drawerOpen} />,
+    [drawerOpen]
     [user, drawerOpen]
   );
 
@@ -542,14 +547,6 @@ useEffect(() => {
   }
 }, [socket, user?.companyId]);
 
-    const handleUpdateStart = () => {
-    setUpdateInProgress(true);
-  };
-
-  const handleUpdateComplete = () => {
-    setUpdateInProgress(false);
-  };
-
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
     setMenuOpen(true);
@@ -633,7 +630,7 @@ useEffect(() => {
     enabledLanguages.includes(lang.code)
   );
 
-    if (loading || updateInProgress) {
+    if (loading) {
     return <BackdropLoading />;
   }
 
@@ -652,17 +649,17 @@ useEffect(() => {
       >
         <div className={classes.toolbarIcon}>
           <img
+            src={colorMode.appLogoLight || logo}
             className={drawerOpen ? classes.logo : classes.hideLogo}
-            style={{
+            style={{ 
               display: "block",
               margin: "0 auto",
-              height: "50px",
               width: "100%",
             }}
             alt="logo"
           />
           <IconButton onClick={() => setDrawerOpen(!drawerOpen)}>
-            <ChevronLeftIcon />
+            <LucideIcon icon={ChevronLeft} size={22} style={{ color: "white" }} />
           </IconButton>
         </div>
         <List className={classes.containerWithScroll}>
@@ -686,7 +683,7 @@ useEffect(() => {
             onClick={() => setDrawerOpen(!drawerOpen)}
             className={clsx(drawerOpen && classes.menuButtonHidden)}
           >
-            <MenuIcon />
+            <LucideIcon icon={Text} />
           </IconButton>
 
           <Typography
@@ -716,10 +713,6 @@ useEffect(() => {
             )}
           </Typography>
 
-          <VersionControl 
-            onUpdateStart={handleUpdateStart}
-            onUpdateComplete={handleUpdateComplete}
-          />
 
           <div
             style={{ position: "relative", display: "inline-block" }}
@@ -737,7 +730,7 @@ useEffect(() => {
                 paddingTop: "8px",
               }}
             >
-              <FaGlobe />
+              <LucideIcon icon={Globe} />
             </button>
 
             {showOptions && (
@@ -775,14 +768,6 @@ useEffect(() => {
             )}
           </div>
 
-          <IconButton edge="start" onClick={colorMode.toggleColorMode}>
-            {theme.mode === "dark" ? (
-              <Brightness7Icon style={{ color: "white" }} />
-            ) : (
-              <Brightness4Icon style={{ color: "white" }} />
-            )}
-          </IconButton>
-
           <NotificationsVolume setVolume={setVolume} volume={volume} />
 
           <IconButton
@@ -790,7 +775,7 @@ useEffect(() => {
             aria-label={i18n.t("mainDrawer.appBar.refresh")}
             color="inherit"
           >
-            <CachedIcon style={{ color: "white" }} />
+            <LucideIcon icon={RefreshCcw} style={{ color: "white" }} />
           </IconButton>
 
           {/* <DarkMode themeToggle={themeToggle} /> */}
@@ -906,7 +891,7 @@ useEffect(() => {
                 >
                   <ListItemAvatar>
                     <Avatar>
-                      <NotificationsIcon />
+                      <LucideIcon icon={Bell} />
                     </Avatar>
                   </ListItemAvatar>
                   <ListItemText

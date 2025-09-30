@@ -23,6 +23,8 @@ interface Request {
   number: string;
   isGroup: boolean;
   email?: string;
+  empresa?: string;
+  cpf?: string;
   birthDate?: Date | string; // 🎂 NOVO CAMPO ADICIONADO
   profilePicUrl?: string;
   companyId: number;
@@ -40,6 +42,8 @@ interface ContactData {
   number?: string;
   isGroup?: boolean;
   email?: string;
+  empresa?: string;
+  cpf?: string;
   profilePicUrl?: string;
   companyId?: number;
   extraInfo?: ExtraInfo[];
@@ -73,6 +77,8 @@ const CreateOrUpdateContactService = async ({
   profilePicUrl,
   isGroup,
   email = "",
+  empresa = "",
+  cpf = "",
   birthDate = null, // 🎂 INCLUIR NO DESTRUCTURING
   channel = "whatsapp",
   companyId,
@@ -307,6 +313,8 @@ const CreateOrUpdateContactService = async ({
           name,
           number: cleanNumber, // Usar o número limpo aqui
           email,
+          empresa,
+          cpf,
           birthDate: processedBirthDate, // 🎂 INCLUIR NO CREATE
           isGroup,
           companyId,
@@ -381,6 +389,8 @@ const CreateOrUpdateContactService = async ({
           name,
           number: cleanNumber, // Usar o número limpo aqui
           email,
+          empresa,
+          cpf,
           birthDate: processedBirthDate, // 🎂 INCLUIR NO CREATE
           isGroup,
           companyId,

@@ -993,11 +993,25 @@ const fetchGroupParticipants = async () => {
 								<Typography style={{ fontSize: 12, textAlign: "center", marginBottom: 4 }}>
 									LID: {contact.lid || ""}
 								</Typography>
-								
+							
 								{/* Email */}
 								{contact.email && (
 									<Typography style={{ color: "primary", fontSize: 12 }} align="center">
 										<Link href={`mailto:${contact.email}`}>{contact.email}</Link>
+									</Typography>
+								)}
+								
+								{/* Empresa */}
+								{contact.empresa && (
+									<Typography style={{ fontSize: 12, textAlign: "center", marginTop: 4 }}>
+										Empresa: {contact.empresa}
+									</Typography>
+								)}
+								
+								{/* CPF */}
+								{contact.cpf && (
+									<Typography style={{ fontSize: 12, textAlign: "center", marginTop: 4 }}>
+										CPF: {contact.cpf}
 									</Typography>
 								)}
 							</div>

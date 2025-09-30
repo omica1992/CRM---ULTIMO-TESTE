@@ -15,13 +15,15 @@ interface ContactData {
   email?: string;
   number?: string;
   name?: string;
+  empresa?: string;
+  cpf?: string;
   acceptAudioMessage?: boolean;
   active?: boolean;
   extraInfo?: ExtraInfo[];
   disableBot?: boolean;
   remoteJid?: string;
   contactWallets?: null | number[] | string[];
-  birthDate?: Date | string; // 🎂 NOVO CAMPO ADICIONADO
+  birthDate?: Date | string; //  NOVO CAMPO ADICIONADO
 }
 
 interface Request {
@@ -70,13 +72,15 @@ const UpdateContactService = async ({
     email,
     name,
     number,
+    empresa,
+    cpf,
     extraInfo,
     acceptAudioMessage,
     active,
     disableBot,
     remoteJid,
     contactWallets,
-    birthDate // 🎂 INCLUIR NO DESTRUCTURING
+    birthDate //  INCLUIR NO DESTRUCTURING
   } = contactData;
 
   const contact = await Contact.findOne({
@@ -85,11 +89,11 @@ const UpdateContactService = async ({
   });
 
   if (!contact) {
-    throw new AppError("Contato não encontrado", 404);
+    throw new AppError("Contato n o encontrado", 404);
   }
 
   if (contact.companyId !== companyId) {
-    throw new AppError("Não é possível alterar registros de outra empresa");
+    throw new AppError("N o  poss vel alterar registros de outra empresa");
   }
 
   if (extraInfo) {
@@ -112,7 +116,7 @@ const UpdateContactService = async ({
     });
   }
 
-  // 🎂 PROCESSAR DATA DE NASCIMENTO
+  //  PROCESSAR DATA DE NASCIMENTO
   let processedBirthDate: Date | null = contact.birthDate;
   if (birthDate !== undefined) {
     if (birthDate === null || birthDate === '') {
@@ -132,11 +136,13 @@ const UpdateContactService = async ({
     name,
     number,
     email,
+    empresa,
+    cpf,
     acceptAudioMessage,
     active,
     disableBot,
     remoteJid,
-    birthDate: processedBirthDate // 🎂 INCLUIR NO UPDATE
+    birthDate: processedBirthDate //  INCLUIR NO UPDATE
   });
 
   await contact.reload({

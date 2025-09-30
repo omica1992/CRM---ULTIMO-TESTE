@@ -87,14 +87,13 @@ const ListTicketsService = async ({
     companyId
   };
 
-
   let includeCondition: Includeable[];
 
   includeCondition = [
     {
       model: Contact,
       as: "contact",
-      attributes: ["id", "name", "number", "email", "profilePicUrl", "acceptAudioMessage", "active", "urlPicture", "companyId", "isGroup", "remoteJid"],
+      attributes: ["id", "name", "number", "email", "empresa", "cpf", "profilePicUrl", "acceptAudioMessage", "active", "urlPicture", "companyId", "isGroup", "remoteJid"],
       include: ["extraInfo", "tags",
         {
           model: ContactWallet,

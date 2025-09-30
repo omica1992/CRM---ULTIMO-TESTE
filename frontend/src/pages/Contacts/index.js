@@ -873,6 +873,8 @@ const Contacts = () => {
               <TableCell align="center">
                 {i18n.t("contacts.table.email")}
               </TableCell>
+              <TableCell align="center">Empresa</TableCell>
+              <TableCell align="center">CPF</TableCell>
               <TableCell align="center">{"Status"}</TableCell>
               <TableCell align="center">{i18n.t("contacts.table.wallet")}</TableCell>
               <TableCell align="center">
@@ -923,6 +925,8 @@ const Contacts = () => {
                         : formatSerializedId(contact?.number)}
                     </TableCell>
                     <TableCell align="center">{contact.email}</TableCell>
+                    <TableCell align="center">{contact.empresa || "-"}</TableCell>
+                    <TableCell align="center">{contact.cpf || "-"}</TableCell>
                     <TableCell align="center">
                       {contact.active ? (
                         <CheckCircleIcon
