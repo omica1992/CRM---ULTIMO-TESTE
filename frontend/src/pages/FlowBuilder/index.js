@@ -723,18 +723,36 @@ const FlowBuilder = () => {
             
             console.log("Dados do arquivo importado:", importData);
             
-            if (!importData.name || !importData.flowData) {
-              throw new Error("Arquivo JSON inválido. Estrutura esperada não encontrada.");
+            // Detectar formato do arquivo
+            let flowName, nodes, connections;
+            
+            // Formato 1: { name, flowData: { nodes, connections } }
+            if (importData.name && importData.flowData) {
+              flowName = importData.name;
+              nodes = importData.flowData.nodes;
+              connections = importData.flowData.connections;
+            } 
+            // Formato 2: { nodes, connections } (direto)
+            else if (importData.nodes) {
+              flowName = "Fluxo Importado";
+              nodes = importData.nodes;
+              connections = importData.connections || importData.edges || [];
+            }
+            // Formato inválido
+            else {
+              throw new Error("Arquivo JSON inválido. O arquivo deve conter 'nodes' ou estrutura completa com 'name' e 'flowData'.");
             }
 
-            // Validar se flowData contém nodes e connections
-            if (!importData.flowData.nodes || !importData.flowData.connections) {
-              throw new Error("Arquivo JSON inválido. Dados do fluxo incompletos.");
+            // Validar se tem nodes
+            if (!nodes || !Array.isArray(nodes) || nodes.length === 0) {
+              throw new Error("Arquivo JSON inválido. Nenhum node encontrado.");
             }
+
+            console.log(`Formato detectado: ${flowName} | ${nodes.length} nodes | ${connections.length} connections`);
 
             // Passo 1: Criar o fluxo (retorna o ID)
             const { data: createdFlow } = await api.post("/flowbuilder", {
-              name: `${importData.name} (Importado)`
+              name: `${flowName} (Importado ${new Date().toLocaleString()})`
             });
 
             console.log("Fluxo criado:", createdFlow);
@@ -747,17 +765,17 @@ const FlowBuilder = () => {
             // Passo 2: Atualizar o conteúdo do fluxo
             await api.post("/flowbuilder/flow", {
               idFlow: createdFlow.id,
-              nodes: importData.flowData.nodes,
-              connections: importData.flowData.connections
+              nodes: nodes,
+              connections: connections
             });
 
             console.log("Conteúdo do fluxo atualizado");
 
             setReloadData((old) => !old);
-            toast.success("Fluxo importado com sucesso!");
+            toast.success(`Fluxo "${flowName}" importado com sucesso! ${nodes.length} nodes criados.`);
           } catch (parseErr) {
             console.error("Erro ao processar JSON:", parseErr);
-            toast.error("Erro ao processar arquivo JSON: " + parseErr.message);
+            toast.error("Erro ao processar arquivo: " + parseErr.message);
           }
         };
         reader.readAsText(file);
