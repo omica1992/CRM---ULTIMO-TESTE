@@ -16,6 +16,8 @@ interface Request {
   extraInfo?: ExtraInfo[];
   companyId: number;
   whatsappId?: number;
+  empresa?: string;
+  cpf?: string;
 }
 
 const CreateOrUpdateContactServiceForImport = async ({
@@ -27,7 +29,9 @@ const CreateOrUpdateContactServiceForImport = async ({
   commandBot = "",
   extraInfo = [],
   companyId,
-  whatsappId
+  whatsappId,
+  empresa = "",
+  cpf = ""
 }: Request): Promise<Contact> => {
   // Normalizar número de telefone para evitar duplicações com formatos diferentes
   const number = isGroup ? rawNumber : rawNumber.replace(/[^0-9]/g, "");
@@ -47,14 +51,18 @@ const CreateOrUpdateContactServiceForImport = async ({
           profilePicUrl, 
           companyId,
           email: email || contact.email,
-          whatsappId: whatsappId || contact.whatsappId
+          whatsappId: whatsappId || contact.whatsappId,
+          empresa: empresa || contact.empresa,
+          cpf: cpf || contact.cpf
         });
       } else {
         await contact.update({ 
           name, 
           profilePicUrl,
           email: email || contact.email,
-          whatsappId: whatsappId || contact.whatsappId
+          whatsappId: whatsappId || contact.whatsappId,
+          empresa: empresa || contact.empresa,
+          cpf: cpf || contact.cpf
         });
       }
 
@@ -74,7 +82,9 @@ const CreateOrUpdateContactServiceForImport = async ({
         commandBot,
         isGroup,
         extraInfo,
-        whatsappId
+        whatsappId,
+        empresa,
+        cpf
       });
 
       io.of(String(companyId))

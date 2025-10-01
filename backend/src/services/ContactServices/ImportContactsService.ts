@@ -44,12 +44,14 @@ export async function ImportContactsService(
       email = row["email"] || row["e-mail"] || row["Email"] || row["E-mail"];
     }
 
-    if (has(row, "empresa") || has(row, "Empresa")) {
-      empresa = row["empresa"] || row["Empresa"];
+    if (has(row, "empresa") || has(row, "Empresa") || has(row, "Name Cliente")) {
+      empresa = row["empresa"] || row["Empresa"] || row["Name Cliente"];
     }
 
     if (has(row, "cpf") || has(row, "CPF")) {
       cpf = row["cpf"] || row["CPF"];
+      // Remover formatação do CPF se necessário
+      cpf = `${cpf}`.replace(/\D/g, "");
     }
 
     return { name, number, email, empresa, cpf, companyId };
@@ -58,7 +60,15 @@ export async function ImportContactsService(
 
   const contactList: Contact[] = [];
 
+  console.log('=== DEBUG IMPORTAÇÃO DE CONTATOS ===');
+  console.log('Total de contatos a processar:', contacts.length);
+  if (contacts.length > 0) {
+    console.log('Exemplo de primeiro contato:', contacts[0]);
+  }
+
   for (const contact of contacts) {
+    console.log(`Processando contato: ${contact.name} | CPF: ${contact.cpf} | Empresa: ${contact.empresa}`);
+    
     const [newContact, created] = await Contact.findOrCreate({
       where: {
         number: `${contact.number}`,
@@ -66,8 +76,22 @@ export async function ImportContactsService(
       },
       defaults: contact
     });
+    
     if (created) {
+      console.log(`✅ Contato criado: ID ${newContact.id} | CPF: ${newContact.cpf} | Empresa: ${newContact.empresa}`);
       contactList.push(newContact);
+    } else {
+      console.log(`ℹ️ Contato já existia: ID ${newContact.id} | CPF atual: ${newContact.cpf} | Empresa atual: ${newContact.empresa}`);
+      
+      // Atualizar empresa e cpf se o contato já existe mas estava sem esses dados
+      if (!newContact.cpf && contact.cpf) {
+        await newContact.update({ cpf: contact.cpf });
+        console.log(`📝 CPF atualizado para contato ${newContact.id}`);
+      }
+      if (!newContact.empresa && contact.empresa) {
+        await newContact.update({ empresa: contact.empresa });
+        console.log(`📝 Empresa atualizada para contato ${newContact.id}`);
+      }
     }
   }
 

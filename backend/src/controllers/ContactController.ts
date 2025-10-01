@@ -90,7 +90,7 @@ export const importXls = async (
   res: Response
 ): Promise<Response> => {
   const {companyId} = req.user;
-  const {number, name, email, validateContact, tags, carteira} = req.body;
+  const {number, name, email, validateContact, tags, carteira, empresa, cpf} = req.body;
 
   try {
     logger.info(`Iniciando importação de contato: ${name} - ${number}`);
@@ -142,7 +142,9 @@ export const importXls = async (
       isGroup: false,
       email,
       companyId,
-      whatsappId
+      whatsappId,
+      empresa: empresa || "",
+      cpf: cpf || ""
     };
 
     logger.info(`RDS: Criando/atualizando contato: ${JSON.stringify(contactData)}`);

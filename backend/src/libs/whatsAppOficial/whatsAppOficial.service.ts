@@ -3,11 +3,11 @@ import { ICreateConnectionWhatsAppOficial, ICreateConnectionWhatsAppOficialWhats
 import fs from 'fs';
 import mime from "mime-types";
 import FormData from "form-data";
+import campaignLogger from "../../utils/campaignLogger";
 
 const useOficial = process.env.USE_WHATSAPP_OFICIAL;
 const urlApi = process.env.URL_API_OFICIAL;
 const token = process.env.TOKEN_API_OFICIAL;
-
 export const sendMessageWhatsAppOficial = async (
     filePath: string,
     token: string,
@@ -15,7 +15,6 @@ export const sendMessageWhatsAppOficial = async (
 ): Promise<IReturnMessageMeta> => {
 
     try {
-
         checkAPIOficial();
         const formData = new FormData();
 
@@ -30,17 +29,37 @@ export const sendMessageWhatsAppOficial = async (
 
         formData.append('data', JSON.stringify(data));
 
+        // Log da requisição
+        campaignLogger.apiRequest('POST', `/v1/send-message-whatsapp/${token.substring(0, 10)}...`, {
+            to: data.to,
+            type: data.type,
+            hasFile: !!filePath
+        });
+
         const res = await axios.post(`${urlApi}/v1/send-message-whatsapp/${token}`, formData, {
             headers: {
-                ...formData.getHeaders(), // Importante para definir os cabeçalhos corretos
+                ...formData.getHeaders(),
             },
+        });
+
+        // Log da resposta
+        campaignLogger.apiResponse('POST', `/v1/send-message-whatsapp/${token.substring(0, 10)}...`, res.status, {
+            messageId: res.data?.id,
+            status: res.data?.status
         });
 
         if (res.status == 200 || res.status == 201) return res.data as IReturnMessageMeta;
 
-        throw new Error('Falha em envia a mensagem para a API da Meta');
+        throw new Error('Falha em enviar a mensagem para a API da Meta');
 
     } catch (error) {
+        // Log do erro
+        campaignLogger.error('Erro ao enviar mensagem via API Oficial', error, {
+            to: data.to,
+            type: data.type,
+            apiUrl: urlApi
+        });
+        
         console.log(error.message);
         throw new Error('Mensagem não enviada para a meta');
     }

@@ -3,6 +3,7 @@ import BullQueue from "bull";
 import { MessageData, SendMessage } from "./helpers/SendMessage";
 import Whatsapp from "./models/Whatsapp";
 import logger from "./utils/logger";
+import campaignLogger from "./utils/campaignLogger";
 import moment from "moment";
 import Schedule from "./models/Schedule";
 import { Op, QueryTypes, Sequelize } from "sequelize";
@@ -1780,17 +1781,35 @@ async function handleDispatchCampaign(job) {
         };
 
         logger.info(`Enviando template via API Meta: Numero original=${campaignShipping.number}, Numero formatado=${formattedNumber}`);
-        logger.info(`Token sendo usado: ${whatsapp.token || whatsapp.send_token}`);
-        logger.info(`Dados do whatsapp: id=${whatsapp.id}, channel=${whatsapp.channel}, token=${whatsapp.token?.substring(0, 10)}..., send_token=${whatsapp.send_token?.substring(0, 10)}...`);
+        
+        // Log detalhado para arquivo
+        campaignLogger.info(`Iniciando envio de template`, {
+          campaignId,
+          contactNumber: campaignShipping.number,
+          formattedNumber,
+          templateId: campaign.templateId,
+          whatsappId: whatsapp.id,
+          whatsappName: whatsapp.name
+        });
 
-        const result = await sendMessageWhatsAppOficial(
-          null, // sem arquivo
-          whatsapp.token || whatsapp.send_token, // Tentar token primeiro
-          options
-        );
+        try {
+          const result = await sendMessageWhatsAppOficial(
+            null, // sem arquivo
+            whatsapp.token || whatsapp.send_token, // Tentar token primeiro
+            options
+          );
 
-        await campaignShipping.update({ deliveredAt: moment() });
-        logger.info(`Template enviado via Meta API sem ticket: Campanha=${campaignId};Numero=${cleanNumber};Status=${result ? 'Enviado' : 'Falha'}`);
+          await campaignShipping.update({ deliveredAt: moment() });
+          
+          // Log de sucesso
+          campaignLogger.templateSent(campaignId, formattedNumber, campaign.templateId, result);
+          logger.info(`Template enviado via Meta API sem ticket: Campanha=${campaignId};Numero=${cleanNumber};Status=Enviado`);
+        } catch (error) {
+          // Log de erro detalhado
+          campaignLogger.templateFailed(campaignId, formattedNumber, error);
+          logger.error(`Erro ao enviar template: Campanha=${campaignId};Numero=${formattedNumber};Erro=${error.message}`);
+          throw error;
+        }
       } else if (whatsapp.channel === "whatsapp_oficial") {
         // WhatsApp Oficial sem template - não pode enviar
         logger.warn(
