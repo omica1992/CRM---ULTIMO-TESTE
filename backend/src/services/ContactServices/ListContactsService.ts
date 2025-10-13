@@ -33,7 +33,11 @@ const buildWhereCondition = async ({
   userId
 }: Request): Promise<Filterable["where"]> => {
 
-  const userProfile = await User.findOne({ where: { id: userId }, attributes: ["profile"] });
+  // ✅ Buscar perfil E permissão showContacts do usuário
+  const userProfile = await User.findOne({ 
+    where: { id: userId }, 
+    attributes: ["profile", "showContacts"] 
+  });
 
   const settings = await FindCompanySettingsService({
     companyId
@@ -76,18 +80,26 @@ const buildWhereCondition = async ({
     };
   }
 
+  // ✅ CORREÇÃO: Verificar permissão showContacts antes de filtrar por carteira
   if (DirectTicketsToWallets && userProfile && userProfile.profile === "user" && userId) {
-    whereCondition = {
-      ...whereCondition,
-      [Op.and]: [
-        whereCondition,
-        {
-          id: {
-            [Op.in]: Sequelize.literal(`(SELECT "contactId" FROM "ContactWallets" WHERE "walletId" = ${userId} AND "companyId" = ${companyId})`)
+    // Se o usuário tem permissão de contatos "enabled", ele vê TODOS os contatos
+    const hasContactsPermission = userProfile.showContacts === "enabled";
+    
+    if (!hasContactsPermission) {
+      // Apenas filtrar por carteira se NÃO tiver permissão de ver todos
+      whereCondition = {
+        ...whereCondition,
+        [Op.and]: [
+          whereCondition,
+          {
+            id: {
+              [Op.in]: Sequelize.literal(`(SELECT "contactId" FROM "ContactWallets" WHERE "walletId" = ${userId} AND "companyId" = ${companyId})`)
+            }
           }
-        }
-      ]
-    };
+        ]
+      };
+    }
+    // Se hasContactsPermission === true, não aplica filtro adicional
   }
 
   if (isGroup === "false") {
