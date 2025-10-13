@@ -1025,6 +1025,7 @@ async function verifyAndFinalizeCampaign(campaign) {
   const campaignWithContacts = await getCampaign(campaign.id);
   const { companyId, contacts } = campaignWithContacts.contactList;
 
+  // Contar mensagens entregues com sucesso
   const deliveredCount = await CampaignShipping.count({
     where: {
       campaignId: campaign.id,
@@ -1035,68 +1036,75 @@ async function verifyAndFinalizeCampaign(campaign) {
     }
   });
 
-  const realExecutionCount = Math.floor(deliveredCount / contacts.length);
-
-  logger.info(`[VERIFY CAMPAIGN] Campanha ${campaign.id}: ${deliveredCount} mensagens entregues de ${contacts.length} contatos, ${realExecutionCount} execuções reais vs ${campaign.executionCount} registradas`);
-
-  if (realExecutionCount > campaign.executionCount) {
-    logger.info(`[VERIFY CAMPAIGN] Corrigindo executionCount da campanha ${campaign.id} de ${campaign.executionCount} para ${realExecutionCount}`);
-
-    await campaign.update({
-      executionCount: realExecutionCount,
-      lastExecutedAt: new Date()
-    });
-
-    if (campaign.isRecurring && campaign.maxExecutions && realExecutionCount >= campaign.maxExecutions) {
-      logger.info(`[VERIFY CAMPAIGN] Campanha ${campaign.id} atingiu limite de ${campaign.maxExecutions} execuções após correção - finalizando`);
-      await campaign.update({
-        status: "FINALIZADA",
-        completedAt: moment()
-      });
-      return;
+  // ✅ SOLUÇÃO 1 e 2: Contar total de registros processados (entregues + falhados)
+  const totalProcessed = await CampaignShipping.count({
+    where: {
+      campaignId: campaign.id,
+      [Op.or]: [
+        { deliveredAt: { [Op.ne]: null } },
+        { failedAt: { [Op.ne]: null } }
+      ]
     }
-  }
+  });
 
-  // Verificar se todas as mensagens foram entregues
-  if (deliveredCount > 0 && deliveredCount % contacts.length === 0) {
-    const currentExecutionCount = deliveredCount / contacts.length;
+  // Contar falhas para relatório
+  const failedCount = await CampaignShipping.count({
+    where: {
+      campaignId: campaign.id,
+      failedAt: { [Op.ne]: null }
+    }
+  });
 
-    if (currentExecutionCount > campaign.executionCount) {
+  logger.info(
+    `[VERIFY CAMPAIGN] Campanha ${campaign.id}: ${deliveredCount} entregues, ${failedCount} falharam, ${totalProcessed}/${contacts.length} processados`
+  );
+
+  const realExecutionCount = Math.floor(totalProcessed / contacts.length);
+
+  // ✅ LÓGICA CORRIGIDA: Verificar se todos os contatos foram processados
+  if (totalProcessed >= contacts.length) {
+    // Salvar executionCount antigo antes de atualizar
+    const oldExecutionCount = campaign.executionCount;
+    
+    // Atualizar executionCount se necessário
+    if (realExecutionCount > oldExecutionCount) {
+      logger.info(
+        `[VERIFY CAMPAIGN] Atualizando executionCount da campanha ${campaign.id} de ${oldExecutionCount} para ${realExecutionCount}`
+      );
+
       await campaign.update({
-        executionCount: currentExecutionCount,
+        executionCount: realExecutionCount,
         lastExecutedAt: new Date()
       });
+    }
 
-      logger.info(`[RDS-VERIFY CAMPAIGN] Campanha ${campaign.id} nova execução completada - executionCount: ${currentExecutionCount}`);
-
-      // Verificar se é recorrente e deve continuar
-      if (campaign.isRecurring) {
-        // Verificar se atingiu limite de execuções
-        if (campaign.maxExecutions && currentExecutionCount >= campaign.maxExecutions) {
-          logger.info(`[RDS-VERIFY CAMPAIGN] Campanha ${campaign.id} atingiu limite de ${campaign.maxExecutions} execuções - finalizando`);
-          await campaign.update({
-            status: "FINALIZADA",
-            completedAt: moment()
-          });
-        } else {
-          logger.info(`[RDS-VERIFY CAMPAIGN] Campanha ${campaign.id} é recorrente - agendando próxima execução (${currentExecutionCount}/${campaign.maxExecutions || 'ilimitado'})`);
-          await RecurrenceService.scheduleNextExecution(campaign.id);
-        }
-      } else {
-        logger.info(`[RDS-VERIFY CAMPAIGN] Campanha ${campaign.id} não é recorrente - finalizando`);
+    // Verificar se deve finalizar (usar realExecutionCount calculado, não o do banco)
+    if (campaign.isRecurring) {
+      // Verificar se atingiu limite de execuções
+      if (campaign.maxExecutions && realExecutionCount >= campaign.maxExecutions) {
+        logger.info(
+          `[RDS-VERIFY CAMPAIGN] Campanha ${campaign.id} atingiu limite de ${campaign.maxExecutions} execuções - finalizando`
+        );
         await campaign.update({
           status: "FINALIZADA",
           completedAt: moment()
         });
+      } else {
+        logger.info(
+          `[RDS-VERIFY CAMPAIGN] Campanha ${campaign.id} é recorrente - agendando próxima execução (${realExecutionCount}/${campaign.maxExecutions || 'ilimitado'})`
+        );
+        await RecurrenceService.scheduleNextExecution(campaign.id);
       }
+    } else {
+      // Campanha NÃO recorrente - sempre finaliza quando completa
+      logger.info(
+        `[RDS-VERIFY CAMPAIGN] Campanha ${campaign.id} não é recorrente - finalizando (${deliveredCount} entregues, ${failedCount} falharam)`
+      );
+      await campaign.update({
+        status: "FINALIZADA",
+        completedAt: moment()
+      });
     }
-  } else if (deliveredCount === contacts.length && !campaign.isRecurring) {
-    // Caso especial: se todas as mensagens foram entregues e não é recorrente, finalizar
-    logger.info(`[RDS-VERIFY CAMPAIGN] Campanha ${campaign.id} - todas as ${deliveredCount} mensagens foram entregues - finalizando`);
-    await campaign.update({
-      status: "FINALIZADA",
-      completedAt: moment()
-    });
   }
 
   const io = getIO();
@@ -1298,9 +1306,10 @@ async function handlePrepareContact(job) {
 }
 
 async function handleDispatchCampaign(job) {
+  const { data } = job;
+  const { campaignShippingId, campaignId }: DispatchCampaignData = data;
+  
   try {
-    const { data } = job;
-    const { campaignShippingId, campaignId }: DispatchCampaignData = data;
     const campaign = await getCampaign(campaignId);
 
     if (!campaign.whatsapp) {
@@ -1833,8 +1842,32 @@ async function handleDispatchCampaign(job) {
     );
   } catch (err: any) {
     Sentry.captureException(err);
-    logger.error(err.message);
+    logger.error(`Erro ao enviar campanha: Campanha=${data.campaignId};Erro=${err.message}`);
     console.log(err.stack);
+    
+    // ✅ SOLUÇÃO 2: Registrar falha no CampaignShipping
+    try {
+      const failedShipping = await CampaignShipping.findByPk(data.campaignShippingId);
+      if (failedShipping && !failedShipping.deliveredAt && !failedShipping.failedAt) {
+        await failedShipping.update({
+          failedAt: moment(),
+          errorMessage: err.message ? err.message.substring(0, 500) : "Erro desconhecido ao enviar mensagem"
+        });
+        logger.info(`[CAMPAIGN-ERROR] Falha registrada para CampaignShipping ${data.campaignShippingId}`);
+      }
+    } catch (updateError) {
+      logger.error(`[CAMPAIGN-ERROR] Erro ao registrar falha: ${updateError.message}`);
+    }
+    
+    // Ainda assim verifica e finaliza a campanha
+    try {
+      const failedCampaign = await getCampaign(data.campaignId);
+      if (failedCampaign) {
+        await verifyAndFinalizeCampaign(failedCampaign);
+      }
+    } catch (verifyError) {
+      logger.error(`[CAMPAIGN-ERROR] Erro ao verificar campanha após falha: ${verifyError.message}`);
+    }
   }
 }
 

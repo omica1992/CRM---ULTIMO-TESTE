@@ -51,6 +51,12 @@ class CampaignShipping extends Model<CampaignShipping> {
   @Column
   deliveredAt: Date;
 
+  @Column
+  failedAt: Date;
+
+  @Column
+  errorMessage: string;
+
   @CreatedAt
   createdAt: Date;
 

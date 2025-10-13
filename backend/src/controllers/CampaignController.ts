@@ -19,6 +19,9 @@ import Ticket from "../models/Ticket";
 import Contact from "../models/Contact";
 import ContactList from "../models/ContactList";
 import ContactListItem from "../models/ContactListItem";
+import Whatsapp from "../models/Whatsapp";
+import User from "../models/User";
+import Queue from "../models/Queue";
 
 import AppError from "../errors/AppError";
 import { CancelService } from "../services/CampaignService/CancelService";
@@ -254,6 +257,16 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       await RecurrenceService.scheduleNextExecution(campaign.id);
     }
 
+    // ✅ Recarregar com relacionamentos para exibição correta no frontend
+    await campaign.reload({
+      include: [
+        { model: ContactList },
+        { model: Whatsapp, attributes: ["id", "name", "color"] },
+        { model: User, attributes: ["id", "name"] },
+        { model: Queue, attributes: ["id", "name", "color"] }
+      ]
+    });
+
     const io = getIO();
     io.of(String(companyId))
       .emit(`company-${companyId}-campaign`, {
@@ -423,6 +436,16 @@ export const update = async (req: Request, res: Response): Promise<Response> => 
       await RecurrenceService.scheduleNextExecution(campaign.id);
     }
 
+    // ✅ Recarregar com relacionamentos para exibição correta no frontend
+    await campaign.reload({
+      include: [
+        { model: ContactList },
+        { model: Whatsapp, attributes: ["id", "name", "color"] },
+        { model: User, attributes: ["id", "name"] },
+        { model: Queue, attributes: ["id", "name", "color"] }
+      ]
+    });
+
     const io = getIO();
     io.of(String(companyId))
       .emit(`company-${companyId}-campaign`, {
@@ -584,6 +607,16 @@ export const stopRecurrence = async (req: Request, res: Response): Promise<Respo
       isRecurring: false,
       nextScheduledAt: null,
       status: campaign.status === 'PROGRAMADA' ? 'FINALIZADA' : campaign.status
+    });
+
+    // ✅ Recarregar com relacionamentos para exibição correta no frontend
+    await campaign.reload({
+      include: [
+        { model: ContactList },
+        { model: Whatsapp, attributes: ["id", "name", "color"] },
+        { model: User, attributes: ["id", "name"] },
+        { model: Queue, attributes: ["id", "name", "color"] }
+      ]
     });
 
     const io = getIO();
