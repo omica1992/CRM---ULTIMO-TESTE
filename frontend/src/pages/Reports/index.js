@@ -126,7 +126,7 @@ const Reports = () => {
   const [selectedStatus, setSelectedStatus] = useState([]);
   const [selectedContact, setSelectedContact] = useState(null);
 
-  // const [tagIds, setTagIds] = useState([]);
+  const [tagIds, setTagIds] = useState([]);
   const [queueIds, setQueueIds] = useState([]);
   const [userIds, setUserIds] = useState([]);
   const [options, setOptions] = useState([]);
@@ -137,6 +137,8 @@ const Reports = () => {
   const [onlyRated, setOnlyRated] = useState(false);
   const [totalTickets, setTotalTickets] = useState(0);
   const [tickets, setTickets] = useState([]);
+  const [empresa, setEmpresa] = useState("");
+  const [cpf, setCpf] = useState("");
 
   const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
   const [ticketOpen, setTicketOpen] = useState(null);
@@ -162,10 +164,10 @@ const Reports = () => {
     return () => clearTimeout(delayDebounceFn);
   }, [searchParam]);
 
-  // const handleSelectedTags = (selecteds) => {
-  //   const tags = selecteds.map((t) => t.id);
-  //   setTagIds(tags);
-  // };
+  const handleSelectedTags = (selecteds) => {
+    const tags = selecteds.map((t) => t.id);
+    setTagIds(tags);
+  };
 
   const exportarGridParaExcel = async () => {
     setLoading(true); // Define o estado de loading como true durante o carregamento
@@ -175,16 +177,17 @@ const Reports = () => {
         searchParam,
         contactId: selectedContactId,
         whatsappId: JSON.stringify(selectedWhatsapp),
-        // tags: JSON.stringify(tagIds),
+        tags: JSON.stringify(tagIds),
         users: JSON.stringify(userIds),
         queueIds: JSON.stringify(queueIds),
         status: JSON.stringify(selectedStatus),
-        // tags: tagIds,
         dateFrom,
         dateTo,
-        page: 1, // Passa o número da página para a API
-        pageSize: 9999999, // Passa o tamanho da página para a API
+        page: 1,
+        pageSize: 9999999,
         onlyRated: onlyRated ? "true" : "false",
+        empresa: empresa || "",
+        cpf: cpf || "",
       });
 
       const ticketsData = data.tickets.map((ticket) => {
@@ -457,23 +460,24 @@ const Reports = () => {
   };
 
   const handleFilter = async (pageNumber) => {
-    setLoading(true); // Define o estado de loading como true durante o carregamento
+    setLoading(true);
     console.log(onlyRated);
     try {
       const data = await getReport({
         searchParam,
         contactId: selectedContactId,
         whatsappId: JSON.stringify(selectedWhatsapp),
-        // tags: JSON.stringify(tagIds),
+        tags: JSON.stringify(tagIds),
         users: JSON.stringify(userIds),
         queueIds: JSON.stringify(queueIds),
         status: JSON.stringify(selectedStatus),
-        // tags: tagIds,
         dateFrom,
         dateTo,
-        page: pageNumber, // Passa o número da página para a API
-        pageSize: pageSize, // Passa o tamanho da página para a API
+        page: pageNumber,
+        pageSize: pageSize,
         onlyRated: onlyRated ? "true" : "false",
+        empresa: empresa || "",
+        cpf: cpf || "",
       });
 
       setTotalTickets(data.totalTickets.total);
@@ -647,13 +651,35 @@ const Reports = () => {
             <Grid item xs={12} md={3} xl={3}>
               <UsersFilter onFiltered={handleSelectedUsers} />
             </Grid>
-            {/* <Grid item xs={12} md={4} xl={4}>
+            <Grid item xs={12} md={3} xl={3}>
               <TagsFilter onFiltered={handleSelectedTags} />
-            </Grid> */}
+            </Grid>
             <Grid item xs={12} md={3} xl={3} style={{ marginTop: "-13px" }}>
               <QueueSelectCustom
                 selectedQueueIds={queueIds}
                 onChange={(values) => setQueueIds(values)}
+              />
+            </Grid>
+            <Grid item xs={12} md={3} xl={3}>
+              <TextField
+                label="Empresa"
+                value={empresa}
+                variant="outlined"
+                fullWidth
+                size="small"
+                onChange={(e) => setEmpresa(e.target.value)}
+                placeholder="Filtrar por empresa"
+              />
+            </Grid>
+            <Grid item xs={12} md={3} xl={3}>
+              <TextField
+                label="CPF"
+                value={cpf}
+                variant="outlined"
+                fullWidth
+                size="small"
+                onChange={(e) => setCpf(e.target.value)}
+                placeholder="Filtrar por CPF"
               />
             </Grid>
 
