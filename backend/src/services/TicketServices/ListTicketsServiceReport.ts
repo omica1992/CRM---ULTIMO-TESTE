@@ -21,6 +21,8 @@ export interface Params {
   users: number[];
   userId: string;
   onlyRated: string;
+  empresa?: string;
+  cpf?: string;
 }
 
 export default async function ListTicketsServiceReport(
@@ -168,6 +170,22 @@ export default async function ListTicketsServiceReport(
 
   if (params.contactId !== undefined && params.contactId !== "") {
     where += ` and t."contactId" in (${params.contactId})`;
+  }
+
+  if (params.tags && params.tags.length > 0) {
+    where += ` and EXISTS (
+      SELECT 1 FROM "ContactTags" ct 
+      WHERE ct."contactId" = c.id 
+      AND ct."tagId" IN (${params.tags.join(",")})
+    )`;
+  }
+
+  if (params.empresa !== undefined && params.empresa !== "") {
+    where += ` and LOWER(c."empresa") LIKE LOWER('%${params.empresa}%')`;
+  }
+
+  if (params.cpf !== undefined && params.cpf !== "") {
+    where += ` and c."cpf" LIKE '%${params.cpf}%'`;
   }
 
   if (params.onlyRated === "true") {

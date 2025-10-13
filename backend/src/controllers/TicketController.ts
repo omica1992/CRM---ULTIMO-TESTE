@@ -54,6 +54,8 @@ type IndexQueryReport = {
   page: string;
   pageSize: string;
   onlyRated: string;
+  empresa: string;
+  cpf: string;
 };
 
 interface TicketData {
@@ -158,7 +160,9 @@ export const report = async (
     users: userIdsStringified,
     page: pageNumber,
     pageSize,
-    onlyRated
+    onlyRated,
+    empresa,
+    cpf
   } = req.query as IndexQueryReport;
 
   const userId = req.user.id;
@@ -203,7 +207,9 @@ export const report = async (
       userId,
       contactId,
       whatsappId: whatsappIds,
-      onlyRated: onlyRated
+      onlyRated: onlyRated,
+      empresa,
+      cpf
     },
     +pageNumber,
 
