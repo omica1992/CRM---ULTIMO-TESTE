@@ -237,8 +237,18 @@ export const ActionsWebhookService = async (
   idTicket?: number,
   numberPhrase: "" | { number: string; name: string; email: string } = "",
   inputResponded: boolean = false,
-  msg?: proto.IWebMessageInfo
+  msg?: proto.IWebMessageInfo,
+  recursionDepth: number = 0
 ): Promise<string> => {
+
+  // Proteção contra recursão infinita
+  const MAX_RECURSION_DEPTH = 10;
+  if (recursionDepth >= MAX_RECURSION_DEPTH) {
+    logger.error(`[RECURSION ERROR] Profundidade máxima de recursão atingida (${MAX_RECURSION_DEPTH}) para ticket ${idTicket} no fluxo ${idFlowDb}`);
+    return "max_recursion_depth_reached";
+  }
+
+  logger.info(`[FLOW EXECUTION] Iniciando ActionsWebhookService - Ticket: ${idTicket}, Flow: ${idFlowDb}, Recursion Depth: ${recursionDepth}`);
 
 
   console.log("details", details);
@@ -1747,10 +1757,21 @@ export const ActionsWebhookService = async (
           });
         }
 
-        logger.info(`[TICKET FLOW] Executando switchFlow para ticket ${ticket.id} - Novo fluxo: ${data?.name || 'N/A'}`);
+        logger.info(`[TICKET FLOW] Executando switchFlow para ticket ${ticket.id} - Novo fluxo: ${data?.name || 'N/A'} - Recursion Depth: ${recursionDepth}`);
+
+        // Proteção: resetar estado do fluxo antes de trocar
+        await ticket.update({
+          flowWebhook: false,
+          lastFlowId: null,
+          hashFlowId: null,
+          flowStopped: null,
+          dataWebhook: null
+        });
+
+        logger.info(`[TICKET FLOW] Estado do ticket ${ticket.id} resetado antes de switchFlow`);
 
         isSwitchFlow = true;
-        switchFlow(data, companyId, ticket);
+        await switchFlow(data, companyId, ticket, recursionDepth + 1);
         break;
       };
 
@@ -1821,7 +1842,8 @@ export const ActionsWebhookService = async (
               companyId: companyId
             }
           })
-          flowBuilderQueue(ticket, msg, wbot, whatsapp, companyId, contact, null);
+          // Chamada com recursionDepth para prevenir loop infinito
+          await flowBuilderQueue(ticket, msg, wbot, whatsapp, companyId, contact, null, recursionDepth + 1);
           break;
         } else if (isRandomizer) {
           isRandomizer = false;
@@ -1978,7 +2000,13 @@ export const ActionsWebhookService = async (
   }
 };
 
-const switchFlow = async (data: any, companyId: number, ticket: Ticket) => {
+const switchFlow = async (data: any, companyId: number, ticket: Ticket, recursionDepth: number = 0) => {
+  // Proteção contra recursão infinita
+  if (recursionDepth >= 10) {
+    logger.error(`[RECURSION ERROR] switchFlow atingiu profundidade máxima para ticket ${ticket.id}`);
+    return;
+  }
+
   const wbot = await getWbot(ticket?.whatsappId);
   const whatsapp = await ShowWhatsAppService(wbot.id!, companyId);
   const contact = await Contact.findOne({
@@ -1988,9 +2016,9 @@ const switchFlow = async (data: any, companyId: number, ticket: Ticket) => {
     }
   })
 
-  logger.info(`[TICKET FLOW] Executando switchFlow para ticket ${ticket.id} - WhatsappId: ${wbot.id}, CompanyId: ${companyId}`);
+  logger.info(`[TICKET FLOW] Executando switchFlow para ticket ${ticket.id} - WhatsappId: ${wbot.id}, CompanyId: ${companyId}, Recursion Depth: ${recursionDepth}`);
 
-  await flowBuilderQueue(ticket, data, wbot, whatsapp, companyId, contact, null);
+  await flowBuilderQueue(ticket, data, wbot, whatsapp, companyId, contact, null, recursionDepth + 1);
 };
 
 const constructJsonLine = (line: string, json: any) => {

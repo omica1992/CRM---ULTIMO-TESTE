@@ -15,8 +15,15 @@ const flowBuilderQueue = async (
   whatsapp: Whatsapp,
   companyId: number,
   contact: Contact,
-  isFirstMsg: Ticket
+  isFirstMsg: Ticket,
+  recursionDepth: number = 0
 ) => {
+  // Proteção contra recursão infinita
+  if (recursionDepth >= 10) {
+    console.error(`[RECURSION ERROR] flowBuilderQueue atingiu profundidade máxima para ticket ${ticket.id}`);
+    return;
+  }
+
   const body = getBodyMessage(msg);
 
   // Verificar se existe fluxo interrompido válido
@@ -47,6 +54,8 @@ const flowBuilderQueue = async (
     const nodes: INodes[] = flow.flow["nodes"];
     const connections: IConnections[] = flow.flow["connections"];
 
+    console.log(`[flowBuilderQueue] Chamando ActionsWebhookService - Ticket: ${ticket.id}, Flow: ${ticket.flowStopped}, Recursion Depth: ${recursionDepth}`);
+
     await ActionsWebhookService(
       whatsapp.id,
       parseInt(ticket.flowStopped),
@@ -59,7 +68,10 @@ const flowBuilderQueue = async (
       "",
       body,
       ticket.id,
-      mountDataContact
+      mountDataContact,
+      false,
+      undefined,
+      recursionDepth + 1
     );
     
     console.log(`Fluxo interrompido ${ticket.flowStopped} executado com sucesso`);

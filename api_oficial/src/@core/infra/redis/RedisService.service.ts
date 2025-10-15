@@ -19,6 +19,10 @@ export class RedisService {
     await this.client.set(key, value);
   }
 
+  async setex(key: string, seconds: number, value: string): Promise<void> {
+    await this.client.setex(key, seconds, value);
+  }
+
   async get(key: string): Promise<string | null> {
     return await this.client.get(key);
   }

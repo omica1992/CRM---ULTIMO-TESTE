@@ -53,21 +53,28 @@ export class WebhookService {
         auth_token_crm,
       } = whats;
 
+      this.logger.log(`[FORWARD WEBHOOK] Verificando webhooks configurados...`);
+      this.logger.log(`[FORWARD WEBHOOK] n8n: ${!!n8n_webhook_url ? 'SIM' : 'NÃO'}, chatwoot: ${!!chatwoot_webhook_url ? 'SIM' : 'NÃO'}, typebot: ${!!typebot_webhook_url ? 'SIM' : 'NÃO'}, crm: ${!!crm_webhook_url ? 'SIM' : 'NÃO'}`);
+
       try {
         if (!!n8n_webhook_url) {
-          this.sendToWebhook(n8n_webhook_url, auth_token_n8n, body);
+          this.logger.log(`[FORWARD WEBHOOK] Enviando para n8n: ${n8n_webhook_url}`);
+          await this.sendToWebhook(n8n_webhook_url, auth_token_n8n, body);
         }
 
         if (!!chatwoot_webhook_url) {
-          this.sendToWebhook(chatwoot_webhook_url, auth_token_chatwoot, body);
+          this.logger.log(`[FORWARD WEBHOOK] Enviando para chatwoot: ${chatwoot_webhook_url}`);
+          await this.sendToWebhook(chatwoot_webhook_url, auth_token_chatwoot, body);
         }
 
         if (!!typebot_webhook_url) {
-          this.sendToWebhook(typebot_webhook_url, auth_token_typebot, body);
+          this.logger.log(`[FORWARD WEBHOOK] Enviando para typebot: ${typebot_webhook_url}`);
+          await this.sendToWebhook(typebot_webhook_url, auth_token_typebot, body);
         }
 
         if (!!crm_webhook_url) {
-          this.sendToWebhook(crm_webhook_url, auth_token_crm, body);
+          this.logger.log(`[FORWARD WEBHOOK] Enviando para CRM: ${crm_webhook_url}`);
+          await this.sendToWebhook(crm_webhook_url, auth_token_crm, body);
         }
       } catch (error: any) {
         this.logger.error(
@@ -115,12 +122,16 @@ export class WebhookService {
   }
 
   async webhookCompanyConexao(companyId: number, conexaoId: number, data: any) {
+    const startTime = Date.now();
+    this.logger.log(`[WEBHOOK START] CompanyId: ${companyId}, ConexaoId: ${conexaoId}`);
+    
     try {
       const company = await this.whatsAppService.prisma.company.findUnique({
         where: { id: companyId },
       });
 
       if (!company) throw new Error('Empresa não encontrada');
+      this.logger.log(`[WEBHOOK] Empresa encontrada: ${company.id}`);
 
       const whats = await this.whatsAppService.prisma.whatsappOficial.findFirst(
         {
@@ -130,8 +141,42 @@ export class WebhookService {
       );
 
       if (!whats) throw new Error('Configuração não encontrada');
+      this.logger.log(`[WEBHOOK] Configuração encontrada: ${whats.id}`);
 
       const body: IWebhookWhatsApp = data?.body || data;
+
+      // Proteção contra reprocessamento de mensagens duplicadas
+      this.logger.log(`[WEBHOOK] Body object: ${body.object}`);
+      
+      if (body.object == 'whatsapp_business_account' && body.entry) {
+        this.logger.log(`[WEBHOOK] Processando ${body.entry.length} entries`);
+        
+        for (const entry of body.entry) {
+          for (const change of entry.changes) {
+            if (change.field == 'messages' && change.value?.messages) {
+              this.logger.log(`[WEBHOOK] Processando ${change.value.messages.length} mensagens`);
+              
+              for (const message of change.value.messages) {
+                const messageKey = `webhook:processed:${companyId}:${message.id}`;
+                this.logger.log(`[WEBHOOK CHECK] Verificando duplicata para mensagem ${message.id}`);
+                
+                const alreadyProcessed = await this.redis.get(messageKey);
+                
+                if (alreadyProcessed) {
+                  this.logger.warn(
+                    `[WEBHOOK DUPLICATE] Mensagem ${message.id} já foi processada. Ignorando para evitar loop.`,
+                  );
+                  return true;
+                }
+                
+                // Marcar como processada por 5 minutos
+                this.logger.log(`[WEBHOOK MARK] Marcando mensagem ${message.id} como processada`);
+                await this.redis.setex(messageKey, 300, 'true');
+              }
+            }
+          }
+        }
+      }
 
       if (body.object == 'whatsapp_business_account') {
         const { entry } = body;
@@ -142,8 +187,9 @@ export class WebhookService {
               const { value } = change;
 
               if (value?.statuses != null) {
-                this.logger.log('Webhook recebido:', { body, companyId });
+                this.logger.log(`[WEBHOOK STATUS] Processando ${value.statuses.length} status updates`);
                 for (const status of value.statuses) {
+                  this.logger.log(`[WEBHOOK STATUS] Status para mensagem ${status.id}`);
                   this.socket.readMessage({
                     companyId: company.idEmpresaMult100,
                     messageId: status.id,
@@ -152,22 +198,28 @@ export class WebhookService {
                 }
               } else {
                 const contact = value.contacts[0];
+                this.logger.log(`[WEBHOOK MESSAGE] Processando ${value.messages.length} mensagens do contato ${contact.profile.name}`);
 
                 for (const message of value.messages) {
+                  this.logger.log(`[WEBHOOK MESSAGE] Tipo: ${message.type}, ID: ${message.id}`);
+                  
                   if (this.messagesPermitidas.some((m) => m == message.type)) {
-                    this.logger.log('Webhook recebido:', { body, companyId });
+                    this.logger.log(`[WEBHOOK MESSAGE PROCESSING] Tipo de mensagem permitido: ${message.type}`);
 
                     if (!!whats.use_rabbitmq) {
                       const exchange = companyId;
                       const queue = `${whats.phone_number}`.replace('+', '');
                       const routingKey = whats.rabbitmq_routing_key;
 
+                      this.logger.log(`[WEBHOOK RABBITMQ] Enviando para RabbitMQ: exchange=${exchange}, queue=${queue}`);
                       await this.rabbit.sendToRabbitMQ(whats, body);
                       this.logger.log(
-                        `Enviado para o RabbitMQ com sucesso. Vinculando fila '${queue}' à exchange '${exchange}' ${!!routingKey ? `com routing key '${routingKey}` : ''} '...`,
+                        `[WEBHOOK RABBITMQ SUCCESS] Enviado para o RabbitMQ. Fila '${queue}' vinculada à exchange '${exchange}' ${!!routingKey ? `com routing key '${routingKey}` : ''}`,
                       );
                     }
 
+                    this.logger.log(`[WEBHOOK REDIS] Salvando mensagem no Redis`);
+                    
                     const messages = await this.redis.get(
                       `messages:${companyId}:${conexaoId}`,
                     );
@@ -183,15 +235,17 @@ export class WebhookService {
                         `messages:${companyId}:${conexaoId}`,
                         JSON.stringify([messagesStored]),
                       );
+                      this.logger.log(`[WEBHOOK REDIS] Mensagem adicionada ao array existente`);
                     } else {
                       await this.redis.set(
                         `messages:${companyId}:${conexaoId}`,
                         JSON.stringify([body]),
                       );
+                      this.logger.log(`[WEBHOOK REDIS] Novo array de mensagens criado`);
                     }
 
                     this.logger.log(
-                      'Enviando mensagem para o servidor do websocket',
+                      '[WEBHOOK SOCKET] Enviando mensagem para o servidor do websocket',
                     );
 
                     let file;
@@ -292,10 +346,24 @@ export class WebhookService {
                       fromNumber: message.from,
                     };
 
+                    this.logger.log(`[WEBHOOK SOCKET] Enviando para socket - CompanyId: ${data.companyId}, From: ${data.fromNumber}`);
                     this.socket.sendMessage(data);
+                    this.logger.log(`[WEBHOOK SOCKET SUCCESS] Mensagem enviada para socket`);
 
-                    await this.forwardToWebhook(whats, body);
-                    this.logger.log('Enviado para o Webhook com sucesso.');
+                    // Encaminhar para webhooks externos apenas se não for um reprocessamento
+                    this.logger.log(`[WEBHOOK FORWARD] Iniciando encaminhamento para webhooks externos`);
+                    try {
+                      await this.forwardToWebhook(whats, body);
+                      this.logger.log('[WEBHOOK FORWARD SUCCESS] Enviado para webhooks externos com sucesso.');
+                    } catch (error: any) {
+                      this.logger.error(
+                        `[WEBHOOK FORWARD ERROR] Erro ao encaminhar webhook: ${error.message}`,
+                      );
+                      if (error.stack) {
+                        this.logger.error(`[WEBHOOK FORWARD ERROR STACK] ${error.stack}`);
+                      }
+                      // Não propagar erro para não bloquear processamento
+                    }
                   }
                 }
               }
@@ -303,16 +371,28 @@ export class WebhookService {
           }
         }
 
+        const duration = Date.now() - startTime;
+        this.logger.log(`[WEBHOOK END] Processamento concluído em ${duration}ms`);
         return true;
       } else {
-        this.logger.error(`Evento não tratado: ${JSON.stringify(body)}`);
+        this.logger.error(`[WEBHOOK ERROR] Evento não tratado: ${JSON.stringify(body)}`);
       }
 
       return true;
     } catch (error: any) {
+      const duration = Date.now() - startTime;
       this.logger.error(
-        `Erro no POST /webhook/:companyId/:conexaoId - ${error.message}`,
+        `[WEBHOOK ERROR] Erro no POST /webhook/:companyId/:conexaoId após ${duration}ms - ${error.message}`,
       );
+      
+      if (error.stack) {
+        // Mostrar apenas as primeiras 10 linhas do stack para não poluir
+        const stackLines = error.stack.split('\n').slice(0, 10).join('\n');
+        this.logger.error(`[WEBHOOK ERROR STACK]\n${stackLines}`);
+      }
+      
+      this.logger.error(`[WEBHOOK ERROR CONTEXT] CompanyId: ${companyId}, ConexaoId: ${conexaoId}`);
+      
       throw new AppError(error.message, HttpStatus.BAD_REQUEST);
     }
   }
