@@ -7,92 +7,142 @@ import {
 } from 'src/@core/interfaces/IWebsocket.interface';
 
 @Injectable()
-export class SocketService {
-  private socket: Socket;
+export class SocketService implements OnModuleDestroy {
+  private sockets: Map<number, Socket> = new Map();
   private url: string;
-  id: number;
 
   private logger: Logger = new Logger(`${SocketService.name}`);
 
-  constructor() {}
+  constructor() {
+    this.url = process.env.URL_BACKEND_MULT100;
+    if (!this.url) {
+      this.logger.error('URL_BACKEND_MULT100 não configurada no .env');
+    }
+  }
 
-  connect(id: number) {
+  onModuleDestroy() {
+    // Fechar todas as conexões ao desligar o módulo
+    this.sockets.forEach((socket, companyId) => {
+      this.logger.log(`Fechando conexão com empresa ${companyId}`);
+      socket.close();
+    });
+    this.sockets.clear();
+  }
+
+  private getOrCreateSocket(companyId: number): Socket {
+    // Verificar se já existe conexão ativa
+    let socket = this.sockets.get(companyId);
+
+    if (socket && socket.connected) {
+      this.logger.log(`[SOCKET] Reutilizando conexão existente para empresa ${companyId}`);
+      return socket;
+    }
+
+    // Criar nova conexão
+    this.logger.log(`[SOCKET] Criando nova conexão para empresa ${companyId}`);
+    
     try {
-      this.url = process.env.URL_BACKEND_MULT100;
+      if (!this.url) {
+        throw new Error('URL_BACKEND_MULT100 não configurada');
+      }
 
-      if (!this.url) throw new Error('Nenhuma configuração do url do backend');
-
-      this.id = id;
-
-      this.socket = io(`${this.url}/${id}`, {
+      socket = io(`${this.url}/${companyId}`, {
         query: {
           token: `Bearer ${process.env.TOKEN_ADMIN || ''}`,
         },
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
       });
 
-      this.setupSocketEvents();
+      this.setupSocketEvents(socket, companyId);
+      this.sockets.set(companyId, socket);
+
+      return socket;
     } catch (error: any) {
       this.logger.error(
-        `Erro ao conectar com o websocket da API Mult100 - ${error.message}`,
+        `[SOCKET ERROR] Erro ao conectar empresa ${companyId}: ${error.message}`,
       );
+      throw error;
     }
   }
 
   sendMessage(data: IReceivedWhatsppOficial) {
-    this.logger.warn(`Conectando ao websocket da empresa ${data.companyId}`);
-
-    this.connect(data.companyId);
-
-    this.logger.warn(
-      `Enviando mensagem para o websocket para a empresa ${data.companyId}`,
-    );
-
-    this.socket.emit('receivedMessageWhatsAppOficial', data);
-
-    setTimeout(() => {
-      this.logger.warn(
-        `Fechando conexão do websocket para a empresa ${data.companyId}`,
+    try {
+      this.logger.log(
+        `[SOCKET SEND] Enviando mensagem para empresa ${data.companyId}`,
       );
 
-      this.socket.close();
-    }, 1500);
+      const socket = this.getOrCreateSocket(data.companyId);
+      socket.emit('receivedMessageWhatsAppOficial', data);
+
+      this.logger.log(
+        `[SOCKET SEND SUCCESS] Mensagem enviada para empresa ${data.companyId}`,
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `[SOCKET SEND ERROR] Erro ao enviar mensagem para empresa ${data.companyId}: ${error?.message}`,
+      );
+    }
   }
 
   readMessage(data: IReceivedWhatsppOficialRead) {
-    this.logger.warn(`Conectando ao websocket da empresa ${data.companyId}`);
-
-    this.connect(data.companyId);
-
-    this.logger.warn(
-      `Enviando mensagem para o websocket para a empresa ${data.companyId}`,
-    );
-
-    this.socket.emit('readMessageWhatsAppOficial', data);
-
-    setTimeout(() => {
-      this.logger.warn(
-        `Fechando conexão do websocket para a empresa ${data.companyId}`,
+    try {
+      this.logger.log(
+        `[SOCKET READ] Enviando status de leitura para empresa ${data.companyId}`,
       );
 
-      this.socket.close();
-    }, 1500);
+      const socket = this.getOrCreateSocket(data.companyId);
+      socket.emit('readMessageWhatsAppOficial', data);
+
+      this.logger.log(
+        `[SOCKET READ SUCCESS] Status de leitura enviado para empresa ${data.companyId}`,
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `[SOCKET READ ERROR] Erro ao enviar status de leitura para empresa ${data.companyId}: ${error?.message}`,
+      );
+    }
   }
 
-  private setupSocketEvents(): void {
-    this.socket.on('connect', () => {
+  private setupSocketEvents(socket: Socket, companyId: number): void {
+    socket.on('connect', () => {
       this.logger.log(
-        `Conectado ao websocket do servidor ${this.url}/${this.id}`,
+        `[SOCKET CONNECTED] Empresa ${companyId} conectada ao servidor ${this.url}/${companyId}`,
       );
     });
 
-    this.socket.on('connect_error', (error) => {
-      this.logger.error(`Erro de conexão: ${error}`);
-    });
-
-    this.socket.on('disconnect', () => {
+    socket.on('connect_error', (error) => {
       this.logger.error(
-        `Desconectado do websocket do servidor ${this.url}/${this.id}`,
+        `[SOCKET ERROR] Erro de conexão empresa ${companyId}: ${error}`,
       );
+    });
+
+    socket.on('disconnect', (reason) => {
+      this.logger.warn(
+        `[SOCKET DISCONNECTED] Empresa ${companyId} desconectada. Razão: ${reason}`,
+      );
+      
+      // Remover do cache se desconexão não foi intencional
+      if (reason !== 'io client disconnect') {
+        this.logger.log(
+          `[SOCKET] Removendo conexão da empresa ${companyId} do cache`,
+        );
+        this.sockets.delete(companyId);
+      }
+    });
+
+    socket.on('reconnect', (attemptNumber) => {
+      this.logger.log(
+        `[SOCKET RECONNECTED] Empresa ${companyId} reconectada após ${attemptNumber} tentativas`,
+      );
+    });
+
+    socket.on('reconnect_failed', () => {
+      this.logger.error(
+        `[SOCKET RECONNECT FAILED] Falha ao reconectar empresa ${companyId}`,
+      );
+      this.sockets.delete(companyId);
     });
   }
 }
