@@ -220,28 +220,74 @@ export class WebhookService {
 
                     this.logger.log(`[WEBHOOK REDIS] Salvando mensagem no Redis`);
                     
-                    const messages = await this.redis.get(
-                      `messages:${companyId}:${conexaoId}`,
-                    );
+                    try {
+                      const messages = await this.redis.get(
+                        `messages:${companyId}:${conexaoId}`,
+                      );
 
-                    if (!!messages) {
-                      const messagesStored: Array<any> = JSON.parse(
-                        messages,
-                      ) as Array<any>;
+                      let messagesStored: Array<any> = [];
 
+                      if (!!messages) {
+                        try {
+                          messagesStored = JSON.parse(messages) as Array<any>;
+                          // Garantir que é array
+                          if (!Array.isArray(messagesStored)) {
+                            messagesStored = [];
+                          }
+                        } catch (parseError: any) {
+                          this.logger.error(`[WEBHOOK REDIS] Erro ao parsear mensagens existentes: ${parseError?.message || 'Unknown error'}`);
+                          messagesStored = [];
+                        }
+                      }
+
+                      // Adicionar nova mensagem
                       messagesStored.push(body);
 
-                      await this.redis.set(
-                        `messages:${companyId}:${conexaoId}`,
-                        JSON.stringify([messagesStored]),
-                      );
-                      this.logger.log(`[WEBHOOK REDIS] Mensagem adicionada ao array existente`);
-                    } else {
-                      await this.redis.set(
-                        `messages:${companyId}:${conexaoId}`,
-                        JSON.stringify([body]),
-                      );
-                      this.logger.log(`[WEBHOOK REDIS] Novo array de mensagens criado`);
+                      // Limitar a 50 mensagens para evitar crescimento infinito
+                      if (messagesStored.length > 50) {
+                        messagesStored = messagesStored.slice(-50);
+                        this.logger.log(`[WEBHOOK REDIS] Array limitado a 50 mensagens`);
+                      }
+
+                      // Serializar com tratamento de erro
+                      try {
+                        const serialized = JSON.stringify(messagesStored);
+                        await this.redis.set(
+                          `messages:${companyId}:${conexaoId}`,
+                          serialized,
+                        );
+                        this.logger.log(`[WEBHOOK REDIS] ${messagesStored.length} mensagens salvas no Redis`);
+                      } catch (stringifyError: any) {
+                        this.logger.error(`[WEBHOOK REDIS] Erro ao serializar JSON: ${stringifyError?.message || 'Unknown error'}`);
+                        // Tentar salvar apenas a mensagem atual sem histórico
+                        const simplifiedBody = {
+                          object: body.object,
+                          entry: body.entry?.map(e => ({
+                            id: e.id,
+                            changes: e.changes?.map(c => ({
+                              field: c.field,
+                              value: {
+                                messaging_product: c.value?.messaging_product,
+                                metadata: c.value?.metadata,
+                                messages: c.value?.messages?.map(m => ({
+                                  id: m.id,
+                                  type: m.type,
+                                  timestamp: m.timestamp,
+                                  from: m.from
+                                }))
+                              }
+                            }))
+                          }))
+                        };
+                        await this.redis.set(
+                          `messages:${companyId}:${conexaoId}`,
+                          JSON.stringify([simplifiedBody]),
+                        );
+                        this.logger.log(`[WEBHOOK REDIS] Salva versão simplificada devido a erro de serialização`);
+                      }
+                    } catch (redisError: any) {
+                      this.logger.error(`[WEBHOOK REDIS ERROR] Erro ao salvar no Redis: ${redisError?.message || 'Unknown error'}`);
+                      // Não propagar erro - continuar processamento mesmo se Redis falhar
                     }
 
                     this.logger.log(
