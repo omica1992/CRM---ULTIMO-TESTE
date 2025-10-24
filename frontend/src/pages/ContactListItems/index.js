@@ -170,15 +170,22 @@ const ContactListItems = () => {
       }
 
       if (data.action === "reload") {
+        dispatch({ type: "RESET" });
         dispatch({ type: "LOAD_CONTACTS", payload: data.records });
       }
     }
+    
+    // Evento genérico de contatos
     socket.on(`company-${companyId}-ContactListItem`, onCompanyContactLists);
+    
+    // Evento específico desta lista (usado na importação)
+    socket.on(`company-${companyId}-ContactListItem-${contactListId}`, onCompanyContactLists);
 
     return () => {
       socket.off(`company-${companyId}-ContactListItem`, onCompanyContactLists);
+      socket.off(`company-${companyId}-ContactListItem-${contactListId}`, onCompanyContactLists);
     };
-  }, [contactListId]);
+  }, [contactListId, user.companyId, socket]);
 
   const handleSearch = (event) => {
     setSearchParam(event.target.value.toLowerCase());
@@ -215,11 +222,12 @@ const ContactListItems = () => {
     try {
       const formData = new FormData();
       formData.append("file", fileUploadRef.current.files[0]);
-      await api.request({
+      const { data } = await api.request({
         url: `contact-lists/${contactListId}/upload`,
         method: "POST",
         data: formData,
       });
+      toast.success(`${data.length} contato(s) importado(s) com sucesso!`);
     } catch (err) {
       toastError(err);
     }
