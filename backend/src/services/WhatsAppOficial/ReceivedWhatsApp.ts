@@ -26,6 +26,7 @@ import { FlowBuilderModel } from "../../models/FlowBuilder";
 import { ActionsWebhookService } from "../WebhookService/ActionsWebhookService";
 import cacheLayer from "../../libs/cache";
 import { isNil } from "lodash";
+import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
 
 const mimeToExtension: { [key: string]: string } = {
     'audio/aac': 'aac',
@@ -255,12 +256,36 @@ export class ReceibedWhatsAppService {
 
             const whatsapp = await ShowWhatsAppService(conexao.id, companyId);
 
+            // ✅ USAR CreateOrUpdateContactService para manter consistência com Baileys
             let contact = await Contact.findOne({ where: { number: fromNumber, companyId } });
 
-
-
             if (!contact) {
-                contact = await Contact.create({ name: nameContact, number: fromNumber, companyId, whatsappId: whatsapp.id });
+                // Preparar dados do contato com todos os campos necessários
+                const contactData = {
+                    name: nameContact || fromNumber,
+                    number: fromNumber,
+                    profilePicUrl: "",
+                    isGroup: false,
+                    email: "",
+                    empresa: "",
+                    cpf: "",
+                    birthDate: null,
+                    channel: "whatsapp_oficial",
+                    companyId,
+                    extraInfo: [],
+                    remoteJid: `${fromNumber}@s.whatsapp.net`,
+                    lid: null,
+                    whatsappId: whatsapp.id,
+                    wbot: null // API Oficial não tem wbot
+                };
+
+                contact = await CreateOrUpdateContactService(contactData);
+                logger.info(`[WhatsApp Oficial] Novo contato criado: ${contact.id} - ${fromNumber}`);
+            } else {
+                // Atualizar contato se necessário
+                if (!contact.channel || contact.channel !== "whatsapp_oficial") {
+                    await contact.update({ channel: "whatsapp_oficial", whatsappId: whatsapp.id });
+                }
             }
 
             let fileName;

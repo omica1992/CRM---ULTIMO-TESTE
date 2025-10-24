@@ -43,21 +43,48 @@ const CheckContactNumber = async (
   userId?: number,
   whatsapp?: Whatsapp | null
 ): Promise<IOnWhatsapp> => {
-  const whatsappList =
-    whatsapp || (await GetDefaultWhatsApp(companyId, userId));
-
-  const wbot = getWbot(whatsappList.id);
-
-  if (isGroup) {
-    const meta = await wbot.groupMetadata(number);
-    return { jid: meta.id, exists: true, lid: null };
+  // Para API Oficial, não tenta obter wbot da sessão em memória
+  // pois a API Oficial não mantém sessão Baileys
+  if (!whatsapp) {
+    try {
+      const whatsappList = await GetDefaultWhatsApp(companyId, userId);
+      whatsapp = whatsappList;
+    } catch (error) {
+      // Se não encontrar conexão padrão, tenta qualquer conexão CONNECTED para API Oficial
+      const anyConnection = await Whatsapp.findOne({
+        where: { status: "CONNECTED", companyId }
+      });
+      if (anyConnection) {
+        whatsapp = anyConnection;
+      } else {
+        throw error;
+      }
+    }
   }
 
-  if (whatsappList.channel === "whatsapp_oficial") {
+  // Para API Oficial, retorna número formatado sem validação de sessão
+  if (whatsapp.channel === "whatsapp_oficial") {
     return { jid: toJid(number), exists: true, lid: null };
   }
 
-  return checker(number, wbot);
+  // Para Baileys, tenta obter a sessão wbot
+  try {
+    const wbot = getWbot(whatsapp.id);
+
+    if (isGroup) {
+      const meta = await wbot.groupMetadata(number);
+      return { jid: meta.id, exists: true, lid: null };
+    }
+
+    return checker(number, wbot);
+  } catch (error) {
+    // Se getWbot falhar e for API Oficial, retorna com validação mínima
+    if (whatsapp.channel === "whatsapp_oficial") {
+      logger.warn(`[CheckNumber] getWbot falhou para API Oficial, mas continuando: ${error.message}`);
+      return { jid: toJid(number), exists: true, lid: null };
+    }
+    throw error;
+  }
 };
 
 export default CheckContactNumber;
