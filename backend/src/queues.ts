@@ -299,13 +299,15 @@ async function handleSendScheduledMessage(job) {
         logger.info(`📋 [SCHEDULE-QUEUE] - Ticket ID: ${ticket.id}`);
         
         const cleanNumber = schedule.contact.number.replace(/[^\d]/g, "");
+        const formattedNumber = `+${cleanNumber}`; // ✅ Adicionar + para API Oficial
         logger.info(`📋 [SCHEDULE-QUEUE] - Número original: ${schedule.contact.number}`);
         logger.info(`📋 [SCHEDULE-QUEUE] - Número limpo: ${cleanNumber}`);
+        logger.info(`📋 [SCHEDULE-QUEUE] - Número formatado: ${formattedNumber}`);
         logger.info(`📋 [SCHEDULE-QUEUE] - Tamanho do número: ${cleanNumber.length}`);
         
         const payload = {
           messaging_product: "whatsapp",
-          to: cleanNumber,
+          to: formattedNumber,
           type: "template" as const,
           template: {
             name: schedule.templateMetaId,
@@ -401,9 +403,12 @@ async function handleSendScheduledMessage(job) {
         logger.info(`📋 [SCHEDULE-QUEUE] - Language: ${schedule.templateLanguage || "pt_BR"}`);
         logger.info(`📋 [SCHEDULE-QUEUE] - To: ${schedule.contact.number}`);
         
+        const cleanNumber = schedule.contact.number.replace(/[^\d]/g, "");
+        const formattedNumber = `+${cleanNumber}`; // ✅ Adicionar + para API Oficial
+        
         const payload = {
           messaging_product: "whatsapp",
-          to: schedule.contact.number.replace(/[^\d]/g, ""),
+          to: formattedNumber,
           type: "template" as const,
           template: {
             name: schedule.templateMetaId,
@@ -432,9 +437,12 @@ async function handleSendScheduledMessage(job) {
         logger.info(`💬 [SCHEDULE-QUEUE] - Body: ${schedule.body}`);
         logger.info(`💬 [SCHEDULE-QUEUE] - To: ${schedule.contact.number}`);
         
+        const cleanNumber = schedule.contact.number.replace(/[^\d]/g, "");
+        const formattedNumber = `+${cleanNumber}`; // ✅ Adicionar + para API Oficial
+        
         const payload = {
           messaging_product: "whatsapp",
-          to: schedule.contact.number.replace(/[^\d]/g, ""),
+          to: formattedNumber,
           type: "text" as const,
           text: {
             body: schedule.body
