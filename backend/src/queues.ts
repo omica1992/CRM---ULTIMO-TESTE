@@ -305,17 +305,19 @@ async function handleSendScheduledMessage(job) {
         logger.info(`📋 [SCHEDULE-QUEUE] - Número formatado: ${formattedNumber}`);
         logger.info(`📋 [SCHEDULE-QUEUE] - Tamanho do número: ${cleanNumber.length}`);
         
-        const payload = {
-          messaging_product: "whatsapp",
-          to: formattedNumber,
-          type: "template" as const,
-          template: {
-            name: schedule.templateMetaId,
-            language: {
-              code: schedule.templateLanguage || "pt_BR"
-            },
-            components: schedule.templateComponents || []
-          }
+        // ✅ Usar mesma estrutura da campanha
+        const templateData: IMetaMessageTemplate = {
+          name: schedule.templateMetaId,
+          language: {
+            code: schedule.templateLanguage || "pt_BR"
+          },
+          components: schedule.templateComponents || []
+        };
+
+        const payload: ISendMessageOficial = {
+          type: 'template',
+          body_template: templateData,
+          to: formattedNumber
         };
 
         logger.info(`📋 [SCHEDULE-QUEUE] Payload completo:`, JSON.stringify(payload, null, 2));
@@ -406,17 +408,19 @@ async function handleSendScheduledMessage(job) {
         const cleanNumber = schedule.contact.number.replace(/[^\d]/g, "");
         const formattedNumber = `+${cleanNumber}`; // ✅ Adicionar + para API Oficial
         
-        const payload = {
-          messaging_product: "whatsapp",
-          to: formattedNumber,
-          type: "template" as const,
-          template: {
-            name: schedule.templateMetaId,
-            language: {
-              code: schedule.templateLanguage || "pt_BR"
-            },
-            components: schedule.templateComponents || []
-          }
+        // ✅ Usar mesma estrutura da campanha
+        const templateData: IMetaMessageTemplate = {
+          name: schedule.templateMetaId,
+          language: {
+            code: schedule.templateLanguage || "pt_BR"
+          },
+          components: schedule.templateComponents || []
+        };
+
+        const payload: ISendMessageOficial = {
+          type: 'template',
+          body_template: templateData,
+          to: formattedNumber
         };
 
         logger.info(`📋 [SCHEDULE-QUEUE] Payload preparado:`, JSON.stringify(payload, null, 2));

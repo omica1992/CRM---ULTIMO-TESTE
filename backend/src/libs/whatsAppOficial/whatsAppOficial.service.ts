@@ -30,6 +30,7 @@ export const sendMessageWhatsAppOficial = async (
         formData.append('data', JSON.stringify(data));
 
         // Log da requisição
+        console.log('📋 [WHATSAPP-OFICIAL] Enviando mensagem:', JSON.stringify(data, null, 2));
         campaignLogger.apiRequest('POST', `/v1/send-message-whatsapp/${token.substring(0, 10)}...`, {
             to: data.to,
             type: data.type,
