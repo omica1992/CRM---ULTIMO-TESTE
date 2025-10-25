@@ -9,7 +9,8 @@ import {
   DataType,
   BelongsTo,
   ForeignKey,
-  Default
+  Default,
+  BelongsToMany
 } from "sequelize-typescript";
 import Company from "./Company";
 import Contact from "./Contact";
@@ -17,6 +18,7 @@ import Ticket from "./Ticket";
 import User from "./User";
 import Whatsapp from "./Whatsapp";
 import Queue from "./Queue";
+import ScheduleUser from "./ScheduleUser";
 
 @Table
 class Schedule extends Model<Schedule> {
@@ -135,6 +137,24 @@ class Schedule extends Model<Schedule> {
 
   @Column
   reminderStatus: string;
+
+  // ✅ Campos para templates da API Oficial
+  @Column
+  templateMetaId: string;
+
+  @Column
+  templateLanguage: string;
+
+  @Column(DataType.JSON)
+  templateComponents: any;
+
+  @Default(false)
+  @Column
+  isTemplate: boolean;
+
+  // Relacionamento many-to-many com usuários
+  @BelongsToMany(() => User, () => ScheduleUser)
+  users: User[];
 }
 
 export default Schedule;

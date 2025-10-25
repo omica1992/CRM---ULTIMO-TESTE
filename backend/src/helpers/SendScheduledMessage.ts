@@ -1,0 +1,203 @@
+import moment from "moment-timezone";
+import Contact from "../models/Contact";
+import Message from "../models/Message";
+import Schedule from "../models/Schedule";
+import Ticket from "../models/Ticket";
+import User from "../models/User";
+import Whatsapp from "../models/Whatsapp";
+import CreateOrUpdateContactService from "../services/ContactServices/CreateOrUpdateContactService";
+import FindOrCreateTicketService from "../services/TicketServices/FindOrCreateTicketService";
+import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
+import SendWhatsAppMedia from "../services/WbotServices/SendWhatsAppMedia";
+import { sendMessageWhatsAppOficial } from "../libs/whatsAppOficial/whatsAppOficial.service";
+import path from "path";
+import fs from "fs";
+import logger from "../utils/logger";
+
+interface SendScheduledMessageParams {
+  schedule: Schedule;
+  contact: Contact;
+  whatsapp: Whatsapp;
+  user?: User;
+}
+
+const SendScheduledMessage = async ({
+  schedule,
+  contact,
+  whatsapp,
+  user
+}: SendScheduledMessageParams): Promise<void> => {
+  try {
+    logger.info(`📅 [SCHEDULE] Iniciando envio - ID: ${schedule.id} | Contato: ${contact.name}`);
+
+    // Criar ou atualizar contato
+    const contactData = await CreateOrUpdateContactService({
+      name: contact.name,
+      number: contact.number,
+      email: contact.email,
+      profilePicUrl: contact.profilePicUrl,
+      companyId: schedule.companyId,
+      channel: whatsapp.channel || "whatsapp",
+      isGroup: false // Agendamentos são sempre para contatos individuais
+    });
+
+    // Buscar ou criar ticket
+    const ticket = await FindOrCreateTicketService(
+      contactData,
+      whatsapp,
+      0, // unreadMessages
+      schedule.companyId,
+      schedule.queueId,
+      user?.id || schedule.ticketUserId || schedule.userId,
+      undefined, // groupContact
+      whatsapp.channel || "whatsapp", // channel
+      false, // isImported
+      false, // isForward
+      {}, // settings
+      false, // isTransfered
+      false // isCampaign
+    );
+
+    logger.info(`🎫 [SCHEDULE] Ticket criado/encontrado - ID: ${ticket.id}`);
+
+    // Preparar corpo da mensagem
+    let messageBody = schedule.body;
+
+    // Se assinar está habilitado, adicionar assinatura do usuário
+    if (schedule.assinar && user) {
+      messageBody = `${messageBody}\n\n_Enviado por: ${user.name}_`;
+    }
+
+    // Enviar mensagem baseado no provider
+    const isOficial = whatsapp.provider === "oficial" || 
+                     whatsapp.provider === "beta" ||
+                     whatsapp.channel === "whatsapp-oficial" || 
+                     whatsapp.channel === "whatsapp_oficial";
+    
+    if (isOficial) {
+      // Envio via API Oficial
+      logger.info(`📱 [SCHEDULE] Enviando via API Oficial (Provider: ${whatsapp.provider}, Channel: ${whatsapp.channel})`);
+      
+      let payload: any;
+
+      // ✅ Verificar se é um template
+      if (schedule.isTemplate && schedule.templateMetaId) {
+        logger.info(`📋 [SCHEDULE] Enviando via TEMPLATE - MetaID: ${schedule.templateMetaId}`);
+        
+        payload = {
+          messaging_product: "whatsapp",
+          to: contact.number.replace(/[^\d]/g, ""),
+          type: "template" as const,
+          template: {
+            name: schedule.templateMetaId,
+            language: {
+              code: schedule.templateLanguage || "pt_BR"
+            },
+            components: schedule.templateComponents || []
+          }
+        };
+
+        logger.info(`✅ [SCHEDULE] Payload do template:`, JSON.stringify(payload, null, 2));
+      } else {
+        // Envio de texto livre
+        payload = {
+          messaging_product: "whatsapp",
+          to: contact.number.replace(/[^\d]/g, ""),
+          type: "text" as const,
+          text: {
+            body: messageBody
+          }
+        };
+      }
+
+      let mediaPath: string | null = null;
+
+      // Se tem mídia anexada (apenas para mensagens de texto, não templates)
+      if (!schedule.isTemplate && schedule.mediaPath && schedule.mediaName) {
+        const fullMediaPath = path.resolve("public", schedule.mediaPath);
+        if (fs.existsSync(fullMediaPath)) {
+          logger.info(`📎 [SCHEDULE] Enviando mídia: ${schedule.mediaName}`);
+          mediaPath = fullMediaPath;
+          // Ajustar payload para incluir mídia
+          // A função sendMessageWhatsAppOficial vai lidar com o upload
+        }
+      }
+
+      await sendMessageWhatsAppOficial(
+        mediaPath,
+        whatsapp.token || whatsapp.send_token || whatsapp.tokenMeta,
+        payload
+      );
+
+    } else {
+      // Envio via Baileys (WhatsApp não oficial)
+      logger.info(`📱 [SCHEDULE] Enviando via Baileys`);
+
+      if (schedule.mediaPath && schedule.mediaName) {
+        // Enviar com mídia
+        const mediaPath = path.resolve("public", schedule.mediaPath);
+        if (fs.existsSync(mediaPath)) {
+          logger.info(`📎 [SCHEDULE] Enviando mídia: ${schedule.mediaName}`);
+          await SendWhatsAppMedia({
+            media: {
+              filename: schedule.mediaName,
+              path: mediaPath
+            } as any,
+            ticket,
+            body: messageBody
+          });
+        } else {
+          logger.warn(`⚠️ [SCHEDULE] Arquivo de mídia não encontrado: ${mediaPath}`);
+          // Enviar apenas texto se mídia não existir
+          await SendWhatsAppMessage({
+            body: messageBody,
+            ticket
+          });
+        }
+      } else {
+        // Enviar apenas texto
+        await SendWhatsAppMessage({
+          body: messageBody,
+          ticket
+        });
+      }
+    }
+
+    // Atualizar status do ticket baseado na configuração
+    if (schedule.openTicket === "disabled" || schedule.statusTicket === "closed") {
+      await ticket.update({
+        status: "closed",
+        closedAt: new Date()
+      });
+      logger.info(`🔒 [SCHEDULE] Ticket fechado automaticamente`);
+    } else if (schedule.statusTicket === "open") {
+      await ticket.update({
+        status: "open"
+      });
+      logger.info(`🔓 [SCHEDULE] Ticket mantido/aberto`);
+    }
+
+    logger.info(`✅ [SCHEDULE] Mensagem enviada com sucesso - Schedule ID: ${schedule.id}`);
+
+  } catch (error: any) {
+    logger.error(`❌ [SCHEDULE] Erro ao enviar mensagem - Schedule ID: ${schedule.id}`);
+    logger.error(`❌ [SCHEDULE] Erro detalhado:`, error);
+    logger.error(`❌ [SCHEDULE] Stack trace:`, error.stack);
+    logger.error(`❌ [SCHEDULE] Message:`, error.message);
+    
+    // Log dos dados do schedule para debug
+    logger.error(`❌ [SCHEDULE] Dados do schedule:`, {
+      id: schedule.id,
+      contactId: schedule.contactId,
+      whatsappId: schedule.whatsappId,
+      isTemplate: schedule.isTemplate,
+      templateMetaId: schedule.templateMetaId,
+      provider: whatsapp.provider,
+      channel: whatsapp.channel
+    });
+    
+    throw error;
+  }
+};
+
+export default SendScheduledMessage;

@@ -79,7 +79,8 @@ const ListService = async ({
     include: [
       { model: Contact, as: "contact", attributes: ["id", "name", "companyId", "urlPicture"] },
       { model: User, as: "user", attributes: ["id", "name"] },
-      { model: Whatsapp, as: "whatsapp", attributes: ["id", "name", "channel", "color"] }
+      { model: Whatsapp, as: "whatsapp", attributes: ["id", "name", "channel", "color"] },
+      { model: User, as: "users", attributes: ["id", "name", "email"] } // ✅ Incluir usuários relacionados
     ]
   });
 

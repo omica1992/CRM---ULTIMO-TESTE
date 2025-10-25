@@ -221,6 +221,7 @@ async function handleSendScheduledMessage(job) {
     data: { schedule }
   } = job;
   let scheduleRecord: Schedule | null = null;
+  let whatsapp: any = null; // ✅ Declarar fora do try para estar disponível no catch
 
   try {
     scheduleRecord = await Schedule.findByPk(schedule.id);
@@ -230,13 +231,21 @@ async function handleSendScheduledMessage(job) {
   }
 
   try {
-    let whatsapp;
+    logger.info(`📤 [SCHEDULE-QUEUE] Iniciando envio - Schedule ID: ${schedule.id}`);
+    logger.info(`📤 [SCHEDULE-QUEUE] - Contact: ${schedule.contact?.name} (${schedule.contact?.number})`);
+    logger.info(`📤 [SCHEDULE-QUEUE] - WhatsApp ID: ${schedule.whatsappId}`);
+    logger.info(`📤 [SCHEDULE-QUEUE] - Is Template: ${schedule.isTemplate}`);
 
     if (!isNil(schedule.whatsappId)) {
       whatsapp = await Whatsapp.findByPk(schedule.whatsappId);
+      logger.info(`📤 [SCHEDULE-QUEUE] WhatsApp encontrado: ${whatsapp?.name} (Provider: ${whatsapp?.provider})`);
     }
 
-    if (!whatsapp) whatsapp = await GetDefaultWhatsApp(schedule.companyId);
+    if (!whatsapp) {
+      logger.info(`📤 [SCHEDULE-QUEUE] WhatsApp não encontrado, buscando default...`);
+      whatsapp = await GetDefaultWhatsApp(schedule.companyId);
+      logger.info(`📤 [SCHEDULE-QUEUE] WhatsApp default: ${whatsapp?.name}`);
+    }
 
     // const settings = await CompaniesSettings.findOne({
     //   where: {
@@ -327,16 +336,88 @@ async function handleSendScheduledMessage(job) {
       //   })
       // }
     } else {
-      await SendMessage(
-        whatsapp,
-        {
-          number: schedule.contact.number,
-          body: `\u200e ${schedule.body}`,
-          mediaPath: filePath,
-          companyId: schedule.companyId
-        },
-        schedule.contact.isGroup
-      );
+      logger.info(`📤 [SCHEDULE-QUEUE] Modo: Sem abrir ticket`);
+      
+      // ✅ Verificar se é um template da API Oficial
+      const isOficial = whatsapp.provider === "oficial" || 
+                       whatsapp.provider === "beta" ||
+                       whatsapp.channel === "whatsapp-oficial" || 
+                       whatsapp.channel === "whatsapp_oficial";
+      
+      if (schedule.isTemplate && schedule.templateMetaId && isOficial) {
+        logger.info(`📋 [SCHEDULE-QUEUE] DETECTADO TEMPLATE - Enviando via API Oficial`);
+        logger.info(`📋 [SCHEDULE-QUEUE] - Template Meta ID: ${schedule.templateMetaId}`);
+        logger.info(`📋 [SCHEDULE-QUEUE] - Language: ${schedule.templateLanguage || "pt_BR"}`);
+        logger.info(`📋 [SCHEDULE-QUEUE] - To: ${schedule.contact.number}`);
+        
+        const payload = {
+          messaging_product: "whatsapp",
+          to: schedule.contact.number.replace(/[^\d]/g, ""),
+          type: "template" as const,
+          template: {
+            name: schedule.templateMetaId,
+            language: {
+              code: schedule.templateLanguage || "pt_BR"
+            },
+            components: schedule.templateComponents || []
+          }
+        };
+
+        logger.info(`📋 [SCHEDULE-QUEUE] Payload preparado:`, JSON.stringify(payload, null, 2));
+        logger.info(`📋 [SCHEDULE-QUEUE] Chamando sendMessageWhatsAppOficial...`);
+
+        await sendMessageWhatsAppOficial(
+          null,
+          whatsapp.token || whatsapp.send_token || whatsapp.tokenMeta,
+          payload
+        );
+        
+        logger.info(`✅ [SCHEDULE-QUEUE] Template enviado com sucesso`);
+      } else if (isOficial) {
+        // ✅ Texto livre na API Oficial (não é template)
+        logger.info(`💬 [SCHEDULE-QUEUE] TEXTO LIVRE VIA API OFICIAL`);
+        logger.info(`💬 [SCHEDULE-QUEUE] - Provider: ${whatsapp.provider}`);
+        logger.info(`💬 [SCHEDULE-QUEUE] - Channel: ${whatsapp.channel}`);
+        logger.info(`💬 [SCHEDULE-QUEUE] - Body: ${schedule.body}`);
+        logger.info(`💬 [SCHEDULE-QUEUE] - To: ${schedule.contact.number}`);
+        
+        const payload = {
+          messaging_product: "whatsapp",
+          to: schedule.contact.number.replace(/[^\d]/g, ""),
+          type: "text" as const,
+          text: {
+            body: schedule.body
+          }
+        };
+
+        logger.info(`💬 [SCHEDULE-QUEUE] Payload preparado:`, JSON.stringify(payload, null, 2));
+
+        await sendMessageWhatsAppOficial(
+          filePath, // mídia se houver
+          whatsapp.token || whatsapp.send_token || whatsapp.tokenMeta,
+          payload
+        );
+        
+        logger.info(`✅ [SCHEDULE-QUEUE] Texto livre enviado via API Oficial`);
+      } else {
+        // Envio via Baileys
+        logger.info(`💬 [SCHEDULE-QUEUE] TEXTO LIVRE VIA BAILEYS`);
+        logger.info(`💬 [SCHEDULE-QUEUE] - Provider: ${whatsapp.provider}`);
+        logger.info(`💬 [SCHEDULE-QUEUE] - Body length: ${schedule.body?.length}`);
+        
+        await SendMessage(
+          whatsapp,
+          {
+            number: schedule.contact.number,
+            body: `\u200e ${schedule.body}`,
+            mediaPath: filePath,
+            companyId: schedule.companyId
+          },
+          schedule.contact.isGroup
+        );
+        
+        logger.info(`✅ [SCHEDULE-QUEUE] Mensagem enviada via Baileys`);
+      }
     }
 
     if (
@@ -436,7 +517,56 @@ async function handleSendScheduledMessage(job) {
     await scheduleRecord?.update({
       status: "ERRO"
     });
-    logger.error("SendScheduledMessage -> SendMessage: error", e.message);
+    
+    // Logs detalhados com verificações de segurança
+    logger.error(`❌ [SCHEDULE-QUEUE] ========================================`);
+    logger.error(`❌ [SCHEDULE-QUEUE] ERRO AO ENVIAR MENSAGEM`);
+    logger.error(`❌ [SCHEDULE-QUEUE] Schedule ID: ${schedule?.id || 'N/A'}`);
+    logger.error(`❌ [SCHEDULE-QUEUE] ========================================`);
+    
+    // Serializar erro de forma segura
+    if (e) {
+      logger.error(`❌ [SCHEDULE-QUEUE] Erro Type: ${typeof e}`);
+      logger.error(`❌ [SCHEDULE-QUEUE] Erro Name: ${e.name || 'N/A'}`);
+      logger.error(`❌ [SCHEDULE-QUEUE] Erro Message: ${e.message || 'Sem mensagem'}`);
+      
+      if (e.stack) {
+        logger.error(`❌ [SCHEDULE-QUEUE] Stack Trace:`);
+        logger.error(e.stack);
+      }
+      
+      // Tentar stringify o erro completo
+      try {
+        logger.error(`❌ [SCHEDULE-QUEUE] Erro Completo (JSON): ${JSON.stringify(e, null, 2)}`);
+      } catch (jsonErr) {
+        logger.error(`❌ [SCHEDULE-QUEUE] Não foi possível serializar erro como JSON`);
+      }
+      
+      // Mostrar propriedades do erro
+      logger.error(`❌ [SCHEDULE-QUEUE] Propriedades do erro:`, Object.keys(e));
+    } else {
+      logger.error(`❌ [SCHEDULE-QUEUE] Erro é null/undefined!`);
+    }
+    
+    logger.error(`❌ [SCHEDULE-QUEUE] ----------------------------------------`);
+    logger.error(`❌ [SCHEDULE-QUEUE] DADOS DO SCHEDULE:`);
+    logger.error(`❌ [SCHEDULE-QUEUE] - ID: ${schedule?.id}`);
+    logger.error(`❌ [SCHEDULE-QUEUE] - Contact ID: ${schedule?.contactId}`);
+    logger.error(`❌ [SCHEDULE-QUEUE] - Contact Name: ${schedule?.contact?.name}`);
+    logger.error(`❌ [SCHEDULE-QUEUE] - Contact Number: ${schedule?.contact?.number}`);
+    logger.error(`❌ [SCHEDULE-QUEUE] - WhatsApp ID: ${schedule?.whatsappId}`);
+    logger.error(`❌ [SCHEDULE-QUEUE] - Is Template: ${schedule?.isTemplate}`);
+    logger.error(`❌ [SCHEDULE-QUEUE] - Template Meta ID: ${schedule?.templateMetaId}`);
+    logger.error(`❌ [SCHEDULE-QUEUE] - Body Length: ${schedule?.body?.length || 0}`);
+    logger.error(`❌ [SCHEDULE-QUEUE] - Media Path: ${schedule?.mediaPath || 'N/A'}`);
+    logger.error(`❌ [SCHEDULE-QUEUE] ----------------------------------------`);
+    logger.error(`❌ [SCHEDULE-QUEUE] DADOS DO WHATSAPP:`);
+    logger.error(`❌ [SCHEDULE-QUEUE] - WhatsApp ID: ${whatsapp?.id}`);
+    logger.error(`❌ [SCHEDULE-QUEUE] - Provider: ${whatsapp?.provider}`);
+    logger.error(`❌ [SCHEDULE-QUEUE] - Channel: ${whatsapp?.channel}`);
+    logger.error(`❌ [SCHEDULE-QUEUE] - Status: ${whatsapp?.status}`);
+    logger.error(`❌ [SCHEDULE-QUEUE] ========================================`);
+    
     throw e;
   }
 }

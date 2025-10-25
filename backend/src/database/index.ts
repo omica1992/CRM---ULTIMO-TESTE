@@ -17,6 +17,7 @@ import Help from "../models/Help";
 import TicketTraking from "../models/TicketTraking";
 import UserRating from "../models/UserRating";
 import Schedule from "../models/Schedule";
+import ScheduleUser from "../models/ScheduleUser";
 import Tag from "../models/Tag";
 import TicketTag from "../models/TicketTag";
 import ContactList from "../models/ContactList";
@@ -85,6 +86,7 @@ const models = [
   TicketTraking,
   UserRating,
   Schedule,
+  ScheduleUser,
   Tag,
   TicketTag,
   ContactList,

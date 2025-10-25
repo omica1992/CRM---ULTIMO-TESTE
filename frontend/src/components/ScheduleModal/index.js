@@ -111,15 +111,10 @@ const ScheduleModal = ({
     reminderMessage: "",
   };
 
-  const initialContact = {
-    id: "",
-    name: "",
-    channel: "",
-  };
-
   const [schedule, setSchedule] = useState(initialState);
-  const [currentContact, setCurrentContact] = useState(initialContact);
-  const [contacts, setContacts] = useState([initialContact]);
+  const [currentContact, setCurrentContact] = useState(null); // Iniciar com null
+  const [selectedContacts, setSelectedContacts] = useState([]); // ✅ Múltiplos contatos
+  const [contacts, setContacts] = useState([]); // Iniciar com array vazio
   const [intervalo, setIntervalo] = useState(1);
   const [tipoDias, setTipoDias] = useState(4);
   const [attachment, setAttachment] = useState(null);
@@ -128,7 +123,7 @@ const ScheduleModal = ({
   const messageInputRef = useRef();
   const [channelFilter, setChannelFilter] = useState("whatsapp");
   const [whatsapps, setWhatsapps] = useState([]);
-  const [selectedWhatsapps, setSelectedWhatsapps] = useState([]);
+  const [selectedWhatsapps, setSelectedWhatsapps] = useState(""); // ✅ String vazia ao invés de array
   const [loading, setLoading] = useState(false);
   const [queues, setQueues] = useState([]);
   const [allQueues, setAllQueues] = useState([]);
@@ -143,6 +138,8 @@ const ScheduleModal = ({
   const [loadingQuickMessages, setLoadingQuickMessages] = useState(false);
   const [selectedQuickMessage, setSelectedQuickMessage] = useState("");
   const [quickMessageMedia, setQuickMessageMedia] = useState(null);
+  // ✅ Estado para template
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
 
   useEffect(() => {
     return () => {
@@ -174,18 +171,34 @@ const ScheduleModal = ({
       console.log("🔍 Buscando quickMessages com params:", {
         companyId: user?.companyId,
         userId: user?.id,
-        isOficial: "false"
+        isOficial: "true" // ✅ Incluir templates da API Oficial
       });
 
       const { data } = await api.get("/quick-messages/list", {
         params: {
           companyId: user?.companyId,
           userId: user?.id,
-          isOficial: "false"
+          isOficial: "true" // ✅ Buscar TODOS (mensagens normais + templates)
         }
       });
 
-      console.log("📋 Resposta da API quickMessages:", data);
+      console.log("📋 Resposta da API quickMessages (com templates):", data);
+      console.log("📋 Total de quickMessages:", data?.length || 0);
+      
+      // Log detalhado de cada quickMessage
+      if (data && data.length > 0) {
+        data.forEach((qm, index) => {
+          console.log(`📋 QuickMessage ${index + 1}:`, {
+            id: qm.id,
+            shortcode: qm.shortcode,
+            isOficial: qm.isOficial,
+            metaID: qm.metaID,
+            language: qm.language,
+            hasComponents: !!qm.components
+          });
+        });
+      }
+      
       setQuickMessages(data || []);
     } catch (err) {
       console.error("❌ Erro ao buscar respostas rápidas:", err);
@@ -248,17 +261,67 @@ const ScheduleModal = ({
     }
   };
 
+  // ✅ Carregar usuários ao abrir o modal
+  useEffect(() => {
+    if (open && isAdmin) {
+      const fetchUsers = async () => {
+        setLoading(true);
+        try {
+          const { data } = await api.get("/users/");
+          console.log("📋 Usuários carregados:", data.users?.length || 0, data.users);
+          setOptions(data.users);
+          setLoading(false);
+        } catch (err) {
+          console.error("❌ Erro ao carregar usuários:", err);
+          setLoading(false);
+          toastError(err);
+        }
+      };
+      fetchUsers();
+    }
+  }, [open, isAdmin]);
+
+  // ✅ Carregar WhatsApps ao abrir o modal
+  useEffect(() => {
+    if (open) {
+      console.log("🔄 Modal aberto - carregando WhatsApps iniciais");
+      api
+        .get(`/whatsapp`, {
+          params: { channel: "whatsapp" },
+        })
+        .then(({ data }) => {
+          console.log("📱 WhatsApps iniciais carregados:", data.length, data);
+          // Filtrar apenas conexões conectadas
+          const connectedWhatsapps = data.filter(w => w.status === "CONNECTED" || w.status === "OPENING");
+          console.log("✅ WhatsApps conectados:", connectedWhatsapps.length, connectedWhatsapps);
+          
+          const mappedWhatsapps = connectedWhatsapps.map((whatsapp) => ({
+            ...whatsapp,
+            selected: false,
+          }));
+          setWhatsapps(mappedWhatsapps);
+          if (mappedWhatsapps.length === 1) {
+            setSelectedWhatsapps(mappedWhatsapps[0].id);
+          }
+        })
+        .catch((err) => {
+          console.error("❌ Erro ao carregar WhatsApps iniciais:", err);
+        });
+    }
+  }, [open]);
+
+  // ✅ Filtrar usuários conforme digitação (opcional)
   useEffect(() => {
     if (searchParam.length < 3) {
-      setLoading(false);
-      setSelectedQueue("");
       return;
     }
     const delayDebounceFn = setTimeout(() => {
       setLoading(true);
       const fetchUsers = async () => {
         try {
-          const { data } = await api.get("/users/");
+          const { data } = await api.get("/users/", {
+            params: { searchParam }
+          });
           setOptions(data.users);
           setLoading(false);
         } catch (err) {
@@ -273,22 +336,33 @@ const ScheduleModal = ({
   }, [searchParam]);
 
   useEffect(() => {
-    api
-      .get(`/whatsapp/filter`, {
-        params: { session: 0, channel: channelFilter },
-      })
-      .then(({ data }) => {
-        const mappedWhatsapps = data.map((whatsapp) => ({
-          ...whatsapp,
-          selected: false,
-        }));
+    if (selectedContacts.length > 0 || currentContact) {
+      console.log("🔄 Carregando WhatsApps - channelFilter:", channelFilter);
+      api
+        .get(`/whatsapp`, {
+          params: { channel: channelFilter },
+        })
+        .then(({ data }) => {
+          console.log("📱 WhatsApps carregados:", data.length, data);
+          // Filtrar apenas conexões conectadas
+          const connectedWhatsapps = data.filter(w => w.status === "CONNECTED" || w.status === "OPENING");
+          console.log("✅ WhatsApps conectados filtrados:", connectedWhatsapps.length);
+          
+          const mappedWhatsapps = connectedWhatsapps.map((whatsapp) => ({
+            ...whatsapp,
+            selected: false,
+          }));
 
-        setWhatsapps(mappedWhatsapps);
-        if (mappedWhatsapps.length && mappedWhatsapps?.length === 1) {
-          setSelectedWhatsapps(mappedWhatsapps[0].id);
-        }
-      });
-  }, [currentContact, channelFilter]);
+          setWhatsapps(mappedWhatsapps);
+          if (mappedWhatsapps.length && mappedWhatsapps?.length === 1) {
+            setSelectedWhatsapps(mappedWhatsapps[0].id);
+          }
+        })
+        .catch((err) => {
+          console.error("❌ Erro ao carregar WhatsApps:", err);
+        });
+    }
+  }, [currentContact, selectedContacts, channelFilter]);
 
   useEffect(() => {
     if (contactId && contacts.length) {
@@ -317,7 +391,7 @@ const ScheduleModal = ({
           }));
 
           if (isArray(customList)) {
-            setContacts([{ id: "", name: "", channel: "" }, ...customList]);
+            setContacts(customList); // ✅ Removido objeto vazio que permitia adicionar contatos
           }
 
           // ✅ MELHORIA: Lógica de inicialização aprimorada
@@ -336,6 +410,7 @@ const ScheduleModal = ({
               const foundContact = customList.find((c) => c.id.toString() === contactId.toString());
               if (foundContact) {
                 setCurrentContact(foundContact);
+                setSelectedContacts([foundContact]); // ✅ Também para múltiplos
                 setChannelFilter(foundContact.channel || "whatsapp");
                 console.log("✅ Contato auto-selecionado:", foundContact.name);
               }
@@ -363,7 +438,7 @@ const ScheduleModal = ({
             setSelectedWhatsapps(data.whatsapp.id);
           }
 
-          if (!isAdmin && data.ticketUser) {
+          if (data.ticketUser) {
             setSelectedUser(data.ticketUser);
           }
 
@@ -379,7 +454,11 @@ const ScheduleModal = ({
             setTipoDias(data.tipoDias);
           }
 
-          setCurrentContact(data.contact);
+          // ✅ Carregar contato em ambos estados (compatibilidade)
+          if (data.contact) {
+            setCurrentContact(data.contact);
+            setSelectedContacts([data.contact]); // Para exibir no Autocomplete múltiplo
+          }
         })();
       } catch (err) {
         toastError(err);
@@ -396,10 +475,15 @@ const ScheduleModal = ({
     setAttachment(null);
     setSchedule(initialState);
     // ✅ MELHORIA: Reset do contato atual ao fechar
-    setCurrentContact(initialContact);
+    setCurrentContact(null);
+    setSelectedContacts([]); // ✅ Reset contatos múltiplos
+    // ✅ Reset de usuário selecionado
+    setSelectedUser(null);
+    setSelectedQueue("");
     // Reset do dropdown de quickMessages
     setSelectedQuickMessage("");
     setQuickMessageMedia(null);
+    setSelectedTemplate(null); // ✅ Reset template
     // ✅ Reset dos campos de lembrete
     setSchedule(prevState => ({
       ...prevState,
@@ -453,44 +537,89 @@ const ScheduleModal = ({
           </Typography>
         </>
       );
-    } else {
-      return `${i18n.t("newTicketModal.add")} ${option.name}`;
     }
   };
 
   const handleSaveSchedule = async (values) => {
-    const scheduleData = {
-      ...values,
-      userId: user.id,
-      whatsappId: selectedWhatsapps,
-      ticketUserId: selectedUser?.id || null,
-      queueId: selectedQueue || null,
-      intervalo: intervalo || 1,
-      tipoDias: tipoDias || 4,
-      // ✅ Incluir dados do lembrete
-      reminderDate: values.reminderDate || null,
-      // Enviar null quando vazio, backend fará fallback para body
-      reminderMessage: values.reminderMessage && values.reminderMessage.trim() !== "" ? values.reminderMessage : null,
-    };
-
     try {
-      if (scheduleId) {
-        await api.put(`/schedules/${scheduleId}`, scheduleData);
-        if (attachment != null) {
-          const formData = new FormData();
-          formData.append("file", attachment);
-          await api.post(`/schedules/${scheduleId}/media-upload`, formData);
-        }
-      } else {
-        const { data } = await api.post("/schedules", scheduleData);
-        if (attachment != null) {
-          const formData = new FormData();
-          formData.append("file", attachment);
-          await api.post(`/schedules/${data.id}/media-upload`, formData);
-        }
-      }
+      // ✅ Se múltiplos contatos, criar um agendamento para cada
+      if (selectedContacts.length > 1) {
+        console.log(`📅 Criando ${selectedContacts.length} agendamentos...`);
+        
+        for (const contact of selectedContacts) {
+          const scheduleData = {
+            ...values,
+            userId: user.id,
+            contactId: contact.id,
+            whatsappId: selectedWhatsapps,
+            ticketUserId: selectedUser?.id || null,
+            queueId: selectedQueue || null,
+            intervalo: intervalo || 1,
+            tipoDias: tipoDias || 4,
+            reminderDate: values.reminderDate || null,
+            reminderMessage: values.reminderMessage && values.reminderMessage.trim() !== "" ? values.reminderMessage : null,
+            // ✅ Incluir dados do template se selecionado
+            templateMetaId: selectedTemplate?.metaId || null,
+            templateLanguage: selectedTemplate?.language || null,
+            templateComponents: selectedTemplate?.components || null,
+            isTemplate: selectedTemplate ? true : false
+          };
 
-      toast.success(i18n.t("scheduleModal.success"));
+          console.log("💾 [SAVE] Salvando agendamento:", scheduleData);
+          console.log("💾 [SAVE] Selected Template:", selectedTemplate);
+          console.log("💾 [SAVE] Is Template:", scheduleData.isTemplate);
+
+          const { data } = await api.post("/schedules", scheduleData);
+          
+          if (attachment != null) {
+            const formData = new FormData();
+            formData.append("file", attachment);
+            await api.post(`/schedules/${data.id}/media-upload`, formData);
+          }
+        }
+        
+        toast.success(`${selectedContacts.length} agendamentos criados com sucesso!`);
+      } else {
+        // ✅ Lógica original para um contato ou edição
+        const scheduleData = {
+          ...values,
+          userId: user.id,
+          whatsappId: selectedWhatsapps,
+          ticketUserId: selectedUser?.id || null,
+          queueId: selectedQueue || null,
+          intervalo: intervalo || 1,
+          tipoDias: tipoDias || 4,
+          reminderDate: values.reminderDate || null,
+          reminderMessage: values.reminderMessage && values.reminderMessage.trim() !== "" ? values.reminderMessage : null,
+          // ✅ Incluir dados do template se selecionado
+          templateMetaId: selectedTemplate?.metaId || null,
+          templateLanguage: selectedTemplate?.language || null,
+          templateComponents: selectedTemplate?.components || null,
+          isTemplate: selectedTemplate ? true : false
+        };
+
+        console.log("💾 [SAVE-SINGLE] Salvando agendamento único:", scheduleData);
+        console.log("💾 [SAVE-SINGLE] Selected Template:", selectedTemplate);
+        console.log("💾 [SAVE-SINGLE] Is Template:", scheduleData.isTemplate);
+
+        if (scheduleId) {
+          await api.put(`/schedules/${scheduleId}`, scheduleData);
+          if (attachment != null) {
+            const formData = new FormData();
+            formData.append("file", attachment);
+            await api.post(`/schedules/${scheduleId}/media-upload`, formData);
+          }
+        } else {
+          const { data } = await api.post("/schedules", scheduleData);
+          if (attachment != null) {
+            const formData = new FormData();
+            formData.append("file", attachment);
+            await api.post(`/schedules/${data.id}/media-upload`, formData);
+          }
+        }
+
+        toast.success(i18n.t("scheduleModal.success"));
+      }
 
       if (typeof reload == "function") {
         reload();
@@ -506,7 +635,9 @@ const ScheduleModal = ({
       toastError(err);
     }
 
-    setCurrentContact(initialContact);
+    setCurrentContact(null);
+    setSelectedContacts([]);
+    setSelectedTemplate(null); // ✅ Reset template após salvar
     setSchedule(initialState);
     // ✅ Reset dos campos de lembrete após salvar
     setSchedule(prevState => ({
@@ -542,11 +673,38 @@ const ScheduleModal = ({
       console.log("🔍 Mensagem encontrada:", selectedMessage);
 
       if (selectedMessage) {
-        console.log("✅ Preenchendo campo body com:", selectedMessage.message);
-        setFieldValue("body", selectedMessage.message || "");
+        console.log("📝 Mensagem selecionada completa:", selectedMessage);
+        console.log("📝 isOficial:", selectedMessage.isOficial, "tipo:", typeof selectedMessage.isOficial);
+        console.log("📝 metaID:", selectedMessage.metaID, "tipo:", typeof selectedMessage.metaID);
+        
+        // ✅ Verificar se é um template da API Oficial
+        if (selectedMessage.isOficial && selectedMessage.metaID) {
+          console.log("📋 ✅ Template da API Oficial selecionado:", selectedMessage.metaID);
+          
+          // Salvar dados do template
+          setSelectedTemplate({
+            metaId: selectedMessage.metaID,
+            language: selectedMessage.language || "pt_BR",
+            components: selectedMessage.components || []
+          });
+
+          // Preencher campo body com o texto do template (preview)
+          setFieldValue("body", selectedMessage.message || "");
+          
+          console.log("✅ Template configurado:", {
+            metaId: selectedMessage.metaID,
+            language: selectedMessage.language,
+            components: selectedMessage.components
+          });
+        } else {
+          // Mensagem normal (não template)
+          console.log("✅ Preenchendo campo body com:", selectedMessage.message);
+          setFieldValue("body", selectedMessage.message || "");
+          setSelectedTemplate(null); // Limpar template se não for oficial
+        }
 
         // Se a mensagem tem mídia, baixar e definir como attachment
-        if (selectedMessage.mediaPath) {
+        if (selectedMessage.mediaPath && !selectedMessage.isOficial) {
           console.log("📎 Mensagem com mídia:", selectedMessage.mediaPath);
 
           try {
@@ -580,9 +738,10 @@ const ScheduleModal = ({
         console.log("❌ Mensagem não encontrada para ID:", selectedId);
       }
     } else {
-      // Limpar mídia quando nenhuma quickMessage está selecionada
+      // Limpar quando nenhuma quickMessage está selecionada
       setQuickMessageMedia(null);
       setAttachment(null);
+      setSelectedTemplate(null);
       if (attachmentFile.current) {
         attachmentFile.current.value = null;
       }
@@ -665,26 +824,53 @@ const ScheduleModal = ({
                       <FormControl variant="outlined" fullWidth>
                         <Autocomplete
                           fullWidth
-                          value={currentContact}
+                          multiple
+                          size="small"
+                          value={selectedContacts}
                           options={contacts}
-                          onChange={(e, contact) => {
-                            const contactId = contact ? contact.id : "";
-                            setSchedule({ ...schedule, contactId });
-                            setCurrentContact(contact ? contact : initialContact);
-                            setChannelFilter(
-                              contact ? contact.channel : "whatsapp"
-                            );
+                          style={{ marginTop: "8px" }}
+                          onChange={(e, newValue) => {
+                            console.log("📞 Contatos selecionados:", newValue);
+                            setSelectedContacts(newValue || []);
+                            // Atualizar channelFilter com o primeiro contato
+                            if (newValue && newValue.length > 0) {
+                              setChannelFilter(newValue[0].channel || "whatsapp");
+                              // Manter compatibilidade com código existente
+                              setCurrentContact(newValue[0]);
+                              setSchedule({ ...schedule, contactId: newValue[0].id });
+                            } else {
+                              setChannelFilter("whatsapp");
+                              setCurrentContact(null);
+                              setSchedule({ ...schedule, contactId: "" });
+                            }
                           }}
-                          getOptionLabel={(option) => option.name}
-                          renderOption={renderOption}
+                          getOptionLabel={(option) => option?.name || ""}
                           getOptionSelected={(option, value) => {
-                            return value.id === option.id;
+                            return option?.id === value?.id;
                           }}
+                          renderTags={(value, getTagProps) =>
+                            value.map((option, index) => (
+                              <Chip
+                                key={option.id}
+                                variant="outlined"
+                                style={{
+                                  backgroundColor: "#bfbfbf",
+                                  textShadow: "1px 1px 1px #000",
+                                  color: "white",
+                                }}
+                                label={option.name}
+                                {...getTagProps({ index })}
+                                size="small"
+                              />
+                            ))
+                          }
+                          renderOption={renderOption}
                           renderInput={(params) => (
                             <TextField
                               {...params}
                               variant="outlined"
-                              placeholder="Contato"
+                              placeholder="Selecione os contatos"
+                              label="Contatos"
                             />
                           )}
                         />
@@ -808,7 +994,7 @@ const ScheduleModal = ({
                       </Field>
                     </FormControl>
                   </Grid>
-                  <Grid item xs={12} md={12} xl={3}>
+                  <Grid item xs={12} md={6} xl={3}>
                     <FormControl
                       variant="outlined"
                       margin="dense"
@@ -839,18 +1025,17 @@ const ScheduleModal = ({
                 </Grid>
                 <Grid spacing={1} container>
                   <Grid item xs={12} md={6} xl={4}>
-                    <Autocomplete
-                      style={{ marginTop: "8px" }}
-                      variant="outlined"
-                      margin="dense"
-                      className={classes.formControl}
-                      getOptionLabel={(option) => `${option.name}`}
-                      value={isAdmin ? selectedUser : user}
-                      size="small"
-                      onChange={(e, newValue) => {
-                        if (isAdmin) {
+                    {isAdmin ? (
+                      <Autocomplete
+                        style={{ marginTop: "8px" }}
+                        className={classes.formControl}
+                        size="small"
+                        options={options}
+                        value={selectedUser}
+                        onChange={(e, newValue) => {
                           setSelectedUser(newValue);
-                          if (newValue != null && Array.isArray(newValue.queues)) {
+                          // Lógica de queues baseada no usuário selecionado
+                          if (newValue?.queues && Array.isArray(newValue.queues)) {
                             if (newValue.queues.length === 1) {
                               setSelectedQueue(newValue.queues[0].id);
                             }
@@ -859,43 +1044,52 @@ const ScheduleModal = ({
                             setQueues(allQueues);
                             setSelectedQueue("");
                           }
-                        }
-                      }}
-                      options={isAdmin ? options : [user]}
-                      filterOptions={filterOptions}
-                      freeSolo={isAdmin}
-                      fullWidth
-                      disabled={values.openTicket === "disabled" || !isAdmin}
-                      autoHighlight
-                      noOptionsText={i18n.t("transferTicketModal.noOptions")}
-                      loading={loading}
-                      renderOption={(option) => (
-                        <span>
-                          {" "}
-                          <UserStatusIcon user={option} /> {option.name}
-                        </span>
-                      )}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label={i18n.t("transferTicketModal.fieldLabel")}
-                          variant="outlined"
-                          onChange={isAdmin ? (e) => setSearchParam(e.target.value) : undefined} // Só busca se for admin
-                          InputProps={{
-                            ...params.InputProps,
-                            endAdornment: (
-                              <React.Fragment>
-                                {loading ? (
-                                  <CircularProgress color="inherit" size={20} />
-                                ) : null}
-                                {params.InputProps.endAdornment}
-                              </React.Fragment>
-                            ),
-                            readOnly: !isAdmin, // Modo somente leitura se não for admin
-                          }}
-                        />
-                      )}
-                    />
+                        }}
+                        getOptionLabel={(option) => option?.name || ""}
+                        getOptionSelected={(option, value) => option?.id === value?.id}
+                        filterOptions={filterOptions}
+                        fullWidth
+                        disabled={values.openTicket === "disabled"}
+                        noOptionsText={i18n.t("transferTicketModal.noOptions")}
+                        loading={loading}
+                        renderOption={(option) => (
+                          <span>
+                            {" "}
+                            <UserStatusIcon user={option} /> {option.name}
+                          </span>
+                        )}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label={i18n.t("transferTicketModal.fieldLabel")}
+                            variant="outlined"
+                            placeholder={i18n.t("transferTicketModal.fieldLabel")}
+                            onChange={(e) => setSearchParam(e.target.value)}
+                            InputProps={{
+                              ...params.InputProps,
+                              endAdornment: (
+                                <React.Fragment>
+                                  {loading ? (
+                                    <CircularProgress color="inherit" size={20} />
+                                  ) : null}
+                                  {params.InputProps.endAdornment}
+                                </React.Fragment>
+                              ),
+                            }}
+                          />
+                        )}
+                      />
+                    ) : (
+                      <TextField
+                        style={{ marginTop: "8px" }}
+                        fullWidth
+                        label="Usuário"
+                        variant="outlined"
+                        value={user.name}
+                        disabled
+                        size="small"
+                      />
+                    )}
                   </Grid>
 
                   <Grid item xs={12} md={6} xl={6}>
@@ -976,11 +1170,12 @@ const ScheduleModal = ({
                   </Grid>
                 </Grid>
                 <br />
-                <Grid container spacing={1}>
-                  {/* Seção de Lembrete */}
+                {/* Seção de Lembrete */}
                   <h3>Lembrete (Opcional)</h3>
                   <p>Defina uma data e mensagem de lembrete que será enviada antes do agendamento principal</p>
                   <br />
+                <Grid container spacing={1}>
+                  
                   <Grid container spacing={1}>
                     <Grid item xs={12} md={6} xl={6}>
                       <Field

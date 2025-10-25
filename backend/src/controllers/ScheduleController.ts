@@ -43,6 +43,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     contactId,
     userId,
     ticketUserId,
+    userIds, // ✅ Novo campo para múltiplos usuários
     queueId,
     openTicket,
     statusTicket,
@@ -66,6 +67,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     companyId,
     userId,
     ticketUserId,
+    userIds, // ✅ Incluir múltiplos usuários
     queueId,
     openTicket,
     statusTicket,

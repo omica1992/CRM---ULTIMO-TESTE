@@ -2,6 +2,7 @@ import * as Yup from "yup";
 
 import AppError from "../../errors/AppError";
 import Schedule from "../../models/Schedule";
+import ScheduleUser from "../../models/ScheduleUser";
 import ShowService from "./ShowService";
 
 interface ScheduleData {
@@ -14,6 +15,7 @@ interface ScheduleData {
   ticketId?: number;
   userId?: number;
   ticketUserId?: number | string;
+  userIds?: number[]; // ✅ Novo campo para múltiplos usuários
   queueId?: number | string;
   openTicket?: string;
   statusTicket?: string;
@@ -26,6 +28,11 @@ interface ScheduleData {
   // ✅ Campos de lembrete
   reminderDate?: string;
   reminderMessage?: string;
+  // ✅ Campos de template da API Oficial
+  templateMetaId?: string;
+  templateLanguage?: string;
+  templateComponents?: any;
+  isTemplate?: boolean;
 }
 
 interface Request {
@@ -57,6 +64,7 @@ const UpdateUserService = async ({
     ticketId,
     userId,
     ticketUserId,
+    userIds, // ✅ Novo campo
     queueId,
     openTicket,
     statusTicket,
@@ -68,7 +76,12 @@ const UpdateUserService = async ({
     assinar,
     // ✅ Campos de lembrete
     reminderDate,
-    reminderMessage
+    reminderMessage,
+    // ✅ Campos de template
+    templateMetaId,
+    templateLanguage,
+    templateComponents,
+    isTemplate
   } = scheduleData;
 
   try {
@@ -97,10 +110,41 @@ const UpdateUserService = async ({
     // ✅ Incluir campos de lembrete
     reminderDate: reminderDate || null,
     reminderMessage: (reminderDate ? (reminderMessage || body) : null),
-    reminderStatus: reminderDate ? 'PENDENTE' : null
+    reminderStatus: reminderDate ? 'PENDENTE' : null,
+    // ✅ Incluir campos de template
+    templateMetaId: templateMetaId || null,
+    templateLanguage: templateLanguage || null,
+    templateComponents: templateComponents || null,
+    isTemplate: isTemplate || false
   });
 
-  await schedule.reload();
+  // ✅ Atualizar relacionamentos com múltiplos usuários
+  if (userIds !== undefined) {
+    // Remover relacionamentos existentes
+    await ScheduleUser.destroy({
+      where: { scheduleId: schedule.id }
+    });
+
+    // Criar novos relacionamentos
+    if (userIds.length > 0) {
+      const scheduleUserPromises = userIds.map(userId => 
+        ScheduleUser.create({
+          scheduleId: schedule.id,
+          userId: userId
+        })
+      );
+      await Promise.all(scheduleUserPromises);
+    }
+  }
+
+  await schedule.reload({
+    include: [
+      {
+        association: "users",
+        attributes: ["id", "name", "email"]
+      }
+    ]
+  });
   return schedule;
 };
 

@@ -28,6 +28,8 @@ import Whatsapp from "./Whatsapp";
 import Chatbot from "./Chatbot";
 import Chat from "./Chat";
 import ChatUser from "./ChatUser";
+import Schedule from "./Schedule";
+import ScheduleUser from "./ScheduleUser";
 import ContactWallet from "./ContactWallet";
 
 @Table
@@ -140,6 +142,9 @@ class User extends Model<User> {
 
   @HasMany(() => ContactWallet)
   contactWallets: ContactWallet[];
+
+  @BelongsToMany(() => Schedule, () => ScheduleUser)
+  schedules: Schedule[];
 
   @BeforeUpdate
   @BeforeCreate
