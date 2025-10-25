@@ -56,9 +56,24 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     assinar = false,
     // ✅ Campos de lembrete
     reminderDate,
-    reminderMessage
+    reminderMessage,
+    // ✅ Campos de template da API Oficial
+    templateMetaId,
+    templateLanguage,
+    templateComponents,
+    isTemplate
   } = req.body;
   const { companyId } = req.user;
+
+  // ✅ Log para debug de templates
+  if (isTemplate) {
+    console.log("📋 [CONTROLLER] Template detectado:", {
+      isTemplate,
+      templateMetaId,
+      templateLanguage,
+      hasComponents: !!templateComponents
+    });
+  }
 
   const schedule = await CreateService({
     body,
@@ -80,7 +95,12 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     assinar,
     // ✅ Incluir campos de lembrete
     reminderDate,
-    reminderMessage
+    reminderMessage,
+    // ✅ Incluir campos de template
+    templateMetaId,
+    templateLanguage,
+    templateComponents,
+    isTemplate
   });
 
   const io = getIO();
