@@ -298,9 +298,14 @@ async function handleSendScheduledMessage(job) {
         logger.info(`📋 [SCHEDULE-QUEUE] - Template Meta ID: ${schedule.templateMetaId}`);
         logger.info(`📋 [SCHEDULE-QUEUE] - Ticket ID: ${ticket.id}`);
         
+        const cleanNumber = schedule.contact.number.replace(/[^\d]/g, "");
+        logger.info(`📋 [SCHEDULE-QUEUE] - Número original: ${schedule.contact.number}`);
+        logger.info(`📋 [SCHEDULE-QUEUE] - Número limpo: ${cleanNumber}`);
+        logger.info(`📋 [SCHEDULE-QUEUE] - Tamanho do número: ${cleanNumber.length}`);
+        
         const payload = {
           messaging_product: "whatsapp",
-          to: schedule.contact.number.replace(/[^\d]/g, ""),
+          to: cleanNumber,
           type: "template" as const,
           template: {
             name: schedule.templateMetaId,
@@ -310,6 +315,8 @@ async function handleSendScheduledMessage(job) {
             components: schedule.templateComponents || []
           }
         };
+
+        logger.info(`📋 [SCHEDULE-QUEUE] Payload completo:`, JSON.stringify(payload, null, 2));
 
         await sendMessageWhatsAppOficial(
           null,
