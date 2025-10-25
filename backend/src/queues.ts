@@ -1650,7 +1650,25 @@ async function handleDispatchCampaign(job) {
           }
         }
 
-        const bodyToSave = campaignShipping.message.concat('||||', JSON.stringify(buttonsToSave));
+        // ✅ Criar um corpo de mensagem melhor para salvar no banco
+        let bodyToSave = campaignShipping.message || '';
+        
+        // Se não tem mensagem, usar o texto do template
+        if (!bodyToSave || bodyToSave.trim() === '') {
+          // Tentar extrair texto dos componentes do template
+          const bodyComponent = template.components?.find(c => c.type === 'BODY');
+          if (bodyComponent && bodyComponent.text) {
+            bodyToSave = bodyComponent.text;
+          } else {
+            // Fallback: usar nome do template
+            bodyToSave = `📋 Template: ${template.shortcode}`;
+          }
+        }
+        
+        // Adicionar informação sobre botões se houver
+        if (buttonsToSave && buttonsToSave.length > 0) {
+          bodyToSave = bodyToSave.concat('||||', JSON.stringify(buttonsToSave));
+        }
 
         // Envia template via API Meta
         await SendWhatsAppOficialMessage({
