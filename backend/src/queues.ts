@@ -284,26 +284,70 @@ async function handleSendScheduledMessage(job) {
 
       ticket = await ShowTicketService(ticket.id, schedule.companyId);
 
-      let bodyMessage;
+      // ✅ Verificar se é API Oficial (com ou sem ticket)
+      const isOficial = whatsapp.provider === "oficial" || 
+                       whatsapp.provider === "beta" ||
+                       whatsapp.channel === "whatsapp-oficial" || 
+                       whatsapp.channel === "whatsapp_oficial";
 
-      // @ts-ignore: Unreachable code error
-      if (schedule.assinar && !isNil(schedule.userId)) {
-        bodyMessage = `*${schedule?.user?.name}:*\n${schedule.body.trim()}`;
+      let sentMessage;
+
+      // ✅ Se for template da API Oficial
+      if (schedule.isTemplate && schedule.templateMetaId && isOficial) {
+        logger.info(`📋 [SCHEDULE-QUEUE] TEMPLATE (com ticket) - Enviando via API Oficial`);
+        logger.info(`📋 [SCHEDULE-QUEUE] - Template Meta ID: ${schedule.templateMetaId}`);
+        logger.info(`📋 [SCHEDULE-QUEUE] - Ticket ID: ${ticket.id}`);
+        
+        const payload = {
+          messaging_product: "whatsapp",
+          to: schedule.contact.number.replace(/[^\d]/g, ""),
+          type: "template" as const,
+          template: {
+            name: schedule.templateMetaId,
+            language: {
+              code: schedule.templateLanguage || "pt_BR"
+            },
+            components: schedule.templateComponents || []
+          }
+        };
+
+        await sendMessageWhatsAppOficial(
+          null,
+          whatsapp.token || whatsapp.send_token || whatsapp.tokenMeta,
+          payload
+        );
+        
+        logger.info(`✅ [SCHEDULE-QUEUE] Template enviado (com ticket)`);
+        
+        // Criar mensagem fake para o verifyMessage
+        sentMessage = {
+          key: { id: `TEMPLATE_${Date.now()}` },
+          message: { conversation: schedule.body }
+        };
       } else {
-        bodyMessage = schedule.body.trim();
-      }
-      const sentMessage = await SendMessage(
-        whatsapp,
-        {
-          number: schedule.contact.number,
-          body: `\u200e ${formatBody(bodyMessage, ticket)}`,
-          mediaPath: filePath,
-          companyId: schedule.companyId
-        },
-        schedule.contact.isGroup
-      );
+        // ✅ Envio normal (Baileys ou API Oficial texto livre)
+        let bodyMessage;
 
-      if (schedule.mediaPath) {
+        // @ts-ignore: Unreachable code error
+        if (schedule.assinar && !isNil(schedule.userId)) {
+          bodyMessage = `*${schedule?.user?.name}:*\n${schedule.body.trim()}`;
+        } else {
+          bodyMessage = schedule.body.trim();
+        }
+        
+        sentMessage = await SendMessage(
+          whatsapp,
+          {
+            number: schedule.contact.number,
+            body: `\u200e ${formatBody(bodyMessage, ticket)}`,
+            mediaPath: filePath,
+            companyId: schedule.companyId
+          },
+          schedule.contact.isGroup
+        );
+      }
+
+      if (schedule.mediaPath && !schedule.isTemplate) {
         await verifyMediaMessage(
           sentMessage,
           ticket,
@@ -313,7 +357,7 @@ async function handleSendScheduledMessage(job) {
           false,
           whatsapp
         );
-      } else {
+      } else if (!schedule.isTemplate) {
         await verifyMessage(
           sentMessage,
           ticket,
