@@ -306,12 +306,43 @@ async function handleSendScheduledMessage(job) {
         logger.info(`📋 [SCHEDULE-QUEUE] - Tamanho do número: ${cleanNumber.length}`);
         
         // ✅ Usar mesma estrutura da campanha
+        // ⚠️ Limpar components - remover campos extras (id, createdAt, etc)
+        const cleanComponents = (schedule.templateComponents || []).map((comp: any) => {
+          const cleanComp: any = {
+            type: comp.type
+          };
+          
+          // Adicionar sub_type e index se for botão
+          if (comp.sub_type) cleanComp.sub_type = comp.sub_type;
+          if (comp.index !== undefined) cleanComp.index = comp.index;
+          
+          // Limpar parameters também
+          if (Array.isArray(comp.parameters)) {
+            cleanComp.parameters = comp.parameters.map((param: any) => {
+              // Manter apenas campos válidos do parameter
+              const cleanParam: any = { type: param.type };
+              
+              if (param.text !== undefined) cleanParam.text = param.text;
+              if (param.coupon_code !== undefined) cleanParam.coupon_code = param.coupon_code;
+              if (param.image !== undefined) cleanParam.image = param.image;
+              if (param.video !== undefined) cleanParam.video = param.video;
+              if (param.document !== undefined) cleanParam.document = param.document;
+              
+              return cleanParam;
+            });
+          } else {
+            cleanComp.parameters = [];
+          }
+          
+          return cleanComp;
+        });
+
         const templateData: IMetaMessageTemplate = {
           name: schedule.templateMetaId,
           language: {
             code: schedule.templateLanguage || "pt_BR"
           },
-          components: schedule.templateComponents || []
+          components: cleanComponents
         };
 
         const payload: ISendMessageOficial = {
@@ -409,12 +440,43 @@ async function handleSendScheduledMessage(job) {
         const formattedNumber = `+${cleanNumber}`; // ✅ Adicionar + para API Oficial
         
         // ✅ Usar mesma estrutura da campanha
+        // ⚠️ Limpar components - remover campos extras (id, createdAt, etc)
+        const cleanComponents = (schedule.templateComponents || []).map((comp: any) => {
+          const cleanComp: any = {
+            type: comp.type
+          };
+          
+          // Adicionar sub_type e index se for botão
+          if (comp.sub_type) cleanComp.sub_type = comp.sub_type;
+          if (comp.index !== undefined) cleanComp.index = comp.index;
+          
+          // Limpar parameters também
+          if (Array.isArray(comp.parameters)) {
+            cleanComp.parameters = comp.parameters.map((param: any) => {
+              // Manter apenas campos válidos do parameter
+              const cleanParam: any = { type: param.type };
+              
+              if (param.text !== undefined) cleanParam.text = param.text;
+              if (param.coupon_code !== undefined) cleanParam.coupon_code = param.coupon_code;
+              if (param.image !== undefined) cleanParam.image = param.image;
+              if (param.video !== undefined) cleanParam.video = param.video;
+              if (param.document !== undefined) cleanParam.document = param.document;
+              
+              return cleanParam;
+            });
+          } else {
+            cleanComp.parameters = [];
+          }
+          
+          return cleanComp;
+        });
+
         const templateData: IMetaMessageTemplate = {
           name: schedule.templateMetaId,
           language: {
             code: schedule.templateLanguage || "pt_BR"
           },
-          components: schedule.templateComponents || []
+          components: cleanComponents
         };
 
         const payload: ISendMessageOficial = {
