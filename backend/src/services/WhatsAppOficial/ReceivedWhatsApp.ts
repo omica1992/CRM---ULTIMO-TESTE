@@ -242,6 +242,8 @@ export class ReceibedWhatsAppService {
     constructor() { }
 
     async getMessage(data: IReceivedWhatsppOficial) {
+        let campaignExecuted = false;
+        
         try {
             const { message, fromNumber, nameContact, token } = data;
 
@@ -405,11 +407,13 @@ export class ReceibedWhatsAppService {
 
             // ✅ VERIFICAÇÃO DE CAMPANHAS E FLUXOS (mesma lógica do wbotMessageListener)
             if (!ticket.imported && !ticket.isGroup && ticket.isBot !== false) {
+                logger.info(`[WHATSAPP OFICIAL - FLOW] 🔍 Iniciando verificação de campanhas para ticket ${ticket.id}`);
+                
                 // Verificar se ticket.integrationId existe antes de continuar
                 if (!ticket.integrationId) {
-                    logger.info("[WHATSAPP OFICIAL] Ticket sem integração, pulando verificação de campanhas");
+                    logger.info(`[WHATSAPP OFICIAL - FLOW] ⚠️ Ticket ${ticket.id} sem integração, pulando verificação de campanhas`);
                 } else {
-                    console.log("[WHATSAPP OFICIAL] Verificando campanhas de fluxo...");
+                    logger.info(`[WHATSAPP OFICIAL - FLOW] 🔎 Ticket ${ticket.id} possui integrationId, verificando campanhas...`);
 
                     const contactForCampaign = await ShowContactService(
                         ticket.contactId,
@@ -435,7 +439,9 @@ export class ReceibedWhatsAppService {
                             }
                         } as any;
 
-                        const campaignExecuted = await flowbuilderIntegration(
+                        logger.info(`[WHATSAPP OFICIAL - FLOW] 🚀 Chamando flowbuilderIntegration para ticket ${ticket.id}`);
+                        
+                        campaignExecuted = await flowbuilderIntegration(
                             simulatedMsgForFlow, // usar mensagem simulada
                             null, // wbot é null pois não temos conexão wbot
                             companyId,
@@ -447,8 +453,10 @@ export class ReceibedWhatsAppService {
                         );
 
                         if (campaignExecuted) {
-                            console.log("[WHATSAPP OFICIAL] ✅ Campanha executada, parando outros fluxos");
+                            logger.info(`[WHATSAPP OFICIAL - FLOW] ✅ Campanha executada com sucesso para ticket ${ticket.id}, parando outros fluxos`);
                             return;
+                        } else {
+                            logger.info(`[WHATSAPP OFICIAL - FLOW] ℹ️ Nenhuma campanha executada para ticket ${ticket.id} (mensagem: "${message.text || 'vazia'}")`);
                         }
                     } catch (error) {
                         console.error("[WHATSAPP OFICIAL] Erro ao verificar campanhas:", error);
@@ -630,10 +638,13 @@ export class ReceibedWhatsAppService {
 
             // ✅ VERIFICAÇÃO FINAL DE CAMPANHAS (após outros processamentos)
             if (
+                !campaignExecuted && // ✅ Só verificar se campanha NÃO foi executada antes
                 !ticket.imported &&
                 !ticket.isGroup &&
                 ticket.status === "pending"
             ) {
+                logger.info(`[WHATSAPP OFICIAL - FLOW] ⏱️ Agendando verificação final de campanhas para ticket ${ticket.id} (setTimeout 1s)`);
+                
                 // Aguardar um pouco para garantir que outros processamentos terminaram
                 setTimeout(async () => {
                     try {
@@ -643,6 +654,8 @@ export class ReceibedWhatsAppService {
 
                         // Só verificar se não entrou em fluxo
                         if (!ticket.flowWebhook || !ticket.lastFlowId) {
+                            logger.info(`[WHATSAPP OFICIAL - FLOW] 🔄 Verificação final: ticket ${ticket.id} não está em fluxo, tentando iniciar`);
+                            
                             const contactForCampaign = await ShowContactService(
                                 ticket.contactId,
                                 ticket.companyId
@@ -651,17 +664,18 @@ export class ReceibedWhatsAppService {
                             // Verificar se existe integrationId antes de prosseguir
                             try {
                                 if (!whatsapp.integrationId) {
-                                    logger.info("[WHATSAPP OFICIAL] whatsapp.integrationId não está definido para a conexão WhatsApp ID: " + whatsapp.id);
+                                    logger.info(`[WHATSAPP OFICIAL - FLOW] ⚠️ whatsapp.integrationId não definido para conexão ${whatsapp.id}, encerrando verificação final`);
                                     return; // Encerrar execução se não houver integrationId
                                 }
+                                
+                                logger.info(`[WHATSAPP OFICIAL - FLOW] 🔎 Conexão ${whatsapp.id} possui integrationId, buscando integrações...`);
 
                                 const queueIntegrations = await ShowQueueIntegrationService(
                                     whatsapp.integrationId,
                                     companyId
                                 );
 
-                                // DEBUG - Verificar tipo de integração para diagnóstico
-                                logger.info(`[WHATSAPP OFICIAL] Iniciando flowbuilder para ticket ${ticket.id}, integração tipo: ${queueIntegrations?.type || 'indefinido'}`);
+                                logger.info(`[WHATSAPP OFICIAL - FLOW] 🚀 Chamando flowbuilderIntegration (verificação final) para ticket ${ticket.id}, integração tipo: ${queueIntegrations?.type || 'indefinido'}`);
 
                                 // ✅ VERIFICAÇÃO FINAL APENAS SE NECESSÁRIO
                                 const simulatedMsgForFlow2 = {
@@ -676,7 +690,7 @@ export class ReceibedWhatsAppService {
                                     }
                                 } as any;
 
-                                await flowbuilderIntegration(
+                                const finalCampaignExecuted = await flowbuilderIntegration(
                                     simulatedMsgForFlow2, // usar mensagem simulada
                                     null, // wbot é null
                                     companyId,
@@ -687,16 +701,23 @@ export class ReceibedWhatsAppService {
                                     null
                                 );
 
-                                // DEBUG - Verificar se flowbuilder foi executado com sucesso
-                                logger.info(`[WHATSAPP OFICIAL] flowbuilderIntegration executado para ticket ${ticket.id}`);
+                                if (finalCampaignExecuted) {
+                                    logger.info(`[WHATSAPP OFICIAL - FLOW] ✅ Campanha executada na verificação final para ticket ${ticket.id}`);
+                                } else {
+                                    logger.info(`[WHATSAPP OFICIAL - FLOW] ℹ️ Nenhuma campanha executada na verificação final para ticket ${ticket.id}`);
+                                }
                             } catch (error) {
-                                console.error("[WHATSAPP OFICIAL] Erro ao verificar campanhas:", error);
+                                logger.error(`[WHATSAPP OFICIAL - FLOW] ❌ Erro ao verificar campanhas (verificação final) para ticket ${ticket.id}:`, error);
                             }
+                        } else {
+                            logger.info(`[WHATSAPP OFICIAL - FLOW] ⏭️ Ticket ${ticket.id} já está em fluxo (flowWebhook=${ticket.flowWebhook}, lastFlowId=${ticket.lastFlowId}), pulando verificação final`);
                         }
                     } catch (error) {
-                        console.error("[WHATSAPP OFICIAL] Erro ao verificar campanhas:", error);
+                        logger.error(`[WHATSAPP OFICIAL - FLOW] ❌ Erro geral na verificação final para ticket ${ticket.id}:`, error);
                     }
                 }, 1000); // Aguardar 1 segundo para garantir que outros processamentos terminaram
+            } else {
+                logger.info(`[WHATSAPP OFICIAL - FLOW] ⏭️ Pulando verificação final para ticket ${ticket.id} - Razão: ${campaignExecuted ? 'campanha já executada' : ticket.imported ? 'ticket importado' : ticket.isGroup ? 'é grupo' : ticket.status !== 'pending' ? `status=${ticket.status}` : 'desconhecida'}`);
             }
 
         } catch (error) {
