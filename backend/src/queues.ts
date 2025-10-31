@@ -142,6 +142,7 @@ async function handleVerifyReminders(job) {
   try {
     const { count, rows: schedules } = await Schedule.findAndCountAll({
       where: {
+        status: "ENVIADA",
         reminderStatus: "PENDENTE",
         reminderSentAt: null,
         reminderDate: {
@@ -151,7 +152,13 @@ async function handleVerifyReminders(job) {
       },
       include: [
         { model: Contact, as: "contact" },
-        { model: User, as: "user", attributes: ["name"] }
+        { model: User, as: "user", attributes: ["name"] },
+        { 
+          model: QuickMessage, 
+          as: "template",
+          required: false,
+          include: [{ model: QuickMessageComponent, as: "components" }]
+        }
       ],
       distinct: true,
       subQuery: false
@@ -190,7 +197,13 @@ async function handleVerifySchedules(job) {
       },
       include: [
         { model: Contact, as: "contact" },
-        { model: User, as: "user", attributes: ["name"] }
+        { model: User, as: "user", attributes: ["name"] },
+        { 
+          model: QuickMessage, 
+          as: "template",
+          required: false,
+          include: [{ model: QuickMessageComponent, as: "components" }]
+        }
       ],
       distinct: true,
       subQuery: false
@@ -222,6 +235,11 @@ async function handleSendScheduledMessage(job) {
   } = job;
   let scheduleRecord: Schedule | null = null;
   let whatsapp: any = null; // ✅ Declarar fora do try para estar disponível no catch
+
+  // ✅ Template já vem carregado do handleVerifySchedules
+  if (schedule.template) {
+    logger.info(`✅ [SCHEDULE-QUEUE] Template já carregado: ${schedule.template.shortcode}`);
+  }
 
   try {
     scheduleRecord = await Schedule.findByPk(schedule.id);
@@ -337,10 +355,15 @@ async function handleSendScheduledMessage(job) {
           return cleanComp;
         });
 
+        // ✅ Buscar shortcode do template (igual à campanha)
+        if (!schedule.template) {
+          throw new Error(`Template ${schedule.templateMetaId} não encontrado`);
+        }
+
         const templateData: IMetaMessageTemplate = {
-          name: schedule.templateMetaId,
+          name: schedule.template.shortcode, // ✅ Igual à campanha
           language: {
-            code: schedule.templateLanguage || "pt_BR"
+            code: schedule.templateLanguage || schedule.template.language || "pt_BR"
           },
           components: cleanComponents
         };
@@ -471,10 +494,15 @@ async function handleSendScheduledMessage(job) {
           return cleanComp;
         });
 
+        // ✅ Buscar shortcode do template (igual à campanha)
+        if (!schedule.template) {
+          throw new Error(`Template ${schedule.templateMetaId} não encontrado`);
+        }
+
         const templateData: IMetaMessageTemplate = {
-          name: schedule.templateMetaId,
+          name: schedule.template.shortcode, // ✅ Igual à campanha
           language: {
-            code: schedule.templateLanguage || "pt_BR"
+            code: schedule.templateLanguage || schedule.template.language || "pt_BR"
           },
           components: cleanComponents
         };

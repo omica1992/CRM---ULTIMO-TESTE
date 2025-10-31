@@ -558,8 +558,8 @@ const ScheduleModal = ({
             tipoDias: tipoDias || 4,
             reminderDate: values.reminderDate || null,
             reminderMessage: values.reminderMessage && values.reminderMessage.trim() !== "" ? values.reminderMessage : null,
-            // ✅ Incluir dados do template se selecionado
-            templateMetaId: selectedTemplate?.metaId || null,
+            // ✅ Incluir dados do template se selecionado (igual campanha)
+            templateMetaId: selectedTemplate?.templateId || null, // ID da QuickMessage
             templateLanguage: selectedTemplate?.language || null,
             templateComponents: selectedTemplate?.components || null,
             isTemplate: selectedTemplate ? true : false
@@ -591,8 +591,8 @@ const ScheduleModal = ({
           tipoDias: tipoDias || 4,
           reminderDate: values.reminderDate || null,
           reminderMessage: values.reminderMessage && values.reminderMessage.trim() !== "" ? values.reminderMessage : null,
-          // ✅ Incluir dados do template se selecionado
-          templateMetaId: selectedTemplate?.metaId || null,
+          // ✅ Incluir dados do template se selecionado (igual campanha)
+          templateMetaId: selectedTemplate?.templateId || null, // ID da QuickMessage
           templateLanguage: selectedTemplate?.language || null,
           templateComponents: selectedTemplate?.components || null,
           isTemplate: selectedTemplate ? true : false
@@ -681,9 +681,9 @@ const ScheduleModal = ({
         if (selectedMessage.isOficial && selectedMessage.metaID) {
           console.log("📋 ✅ Template da API Oficial selecionado:", selectedMessage.metaID);
           
-          // Salvar dados do template
+          // Salvar dados do template  
           setSelectedTemplate({
-            metaId: selectedMessage.metaID,
+            templateId: selectedMessage.id, // ✅ ID da QuickMessage (igual campanha)
             language: selectedMessage.language || "pt_BR",
             components: selectedMessage.components || []
           });

@@ -10,7 +10,10 @@ module.exports = {
     if (!tableInfo.templateMetaId) {
       promises.push(
         queryInterface.addColumn("Schedules", "templateMetaId", {
-          type: DataTypes.STRING,
+          type: DataTypes.INTEGER,
+          references: { model: "QuickMessages", key: "id" },
+          onUpdate: "CASCADE",
+          onDelete: "SET NULL",
           allowNull: true,
           defaultValue: null
         })

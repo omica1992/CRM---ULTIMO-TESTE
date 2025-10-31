@@ -19,6 +19,7 @@ import User from "./User";
 import Whatsapp from "./Whatsapp";
 import Queue from "./Queue";
 import ScheduleUser from "./ScheduleUser";
+import QuickMessage from "./QuickMessage";
 
 @Table
 class Schedule extends Model<Schedule> {
@@ -139,8 +140,9 @@ class Schedule extends Model<Schedule> {
   reminderStatus: string;
 
   // ✅ Campos para templates da API Oficial
+  @ForeignKey(() => QuickMessage)
   @Column
-  templateMetaId: string;
+  templateMetaId: number; // ID do template (QuickMessage)
 
   @Column
   templateLanguage: string;
@@ -151,6 +153,9 @@ class Schedule extends Model<Schedule> {
   @Default(false)
   @Column
   isTemplate: boolean;
+
+  @BelongsTo(() => QuickMessage, "templateMetaId")
+  template: QuickMessage;
 
   // Relacionamento many-to-many com usuários
   @BelongsToMany(() => User, () => ScheduleUser)

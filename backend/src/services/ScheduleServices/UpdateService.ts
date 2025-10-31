@@ -29,7 +29,7 @@ interface ScheduleData {
   reminderDate?: string;
   reminderMessage?: string;
   // ✅ Campos de template da API Oficial
-  templateMetaId?: string;
+  templateMetaId?: number; // ID da QuickMessage (igual campanha)
   templateLanguage?: string;
   templateComponents?: any;
   isTemplate?: boolean;
