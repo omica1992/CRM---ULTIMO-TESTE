@@ -27,6 +27,9 @@ import { ActionsWebhookService } from "../WebhookService/ActionsWebhookService";
 import cacheLayer from "../../libs/cache";
 import { isNil } from "lodash";
 import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
+import VerifyCurrentSchedule from "../CompanyService/VerifyCurrentSchedule";
+import formatBody from "../../helpers/Mustache";
+import SendWhatsAppOficialMessage from "./SendWhatsAppOficialMessage";
 
 const mimeToExtension: { [key: string]: string } = {
     'audio/aac': 'aac',
@@ -340,6 +343,94 @@ export class ReceibedWhatsAppService {
             await ticket.update({ lastMessage: message.type === "contacts" ? "Contato" : !!message?.text ? message?.text : '', unreadMessages: ticket.unreadMessages + 1 })
 
             await verifyMessageOficial(message, ticket, contact, companyId, fileName, fromNumber, data, quoteMessageId);
+
+            // ✅ TRATATIVA PARA HORÁRIO DE EXPEDIENTE DA EMPRESA/CONEXÃO
+            let currentSchedule;
+
+            if (settings.scheduleType === "company") {
+                currentSchedule = await VerifyCurrentSchedule(companyId, 0, 0);
+            } else if (settings.scheduleType === "connection") {
+                currentSchedule = await VerifyCurrentSchedule(companyId, 0, whatsapp.id);
+            }
+
+            // Verifica se está fora do expediente (company ou connection)
+            if (
+                settings.scheduleType &&
+                (settings.scheduleType === "company" || settings.scheduleType === "connection") &&
+                !isNil(currentSchedule) &&
+                (!currentSchedule || currentSchedule.inActivity === false) &&
+                (!ticket.isGroup || whatsapp.groupAsTicket === "enabled") &&
+                !["open", "group"].includes(ticket.status)
+            ) {
+                logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Ticket ${ticket.id} fora de expediente (${settings.scheduleType})`);
+
+                // Verificar limite de uso do bot
+                if (
+                    whatsapp.maxUseBotQueues &&
+                    whatsapp.maxUseBotQueues !== 0 &&
+                    ticket.amountUsedBotQueues >= whatsapp.maxUseBotQueues
+                ) {
+                    logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Ticket ${ticket.id} atingiu limite de uso do bot`);
+                    return;
+                }
+
+                // Controle de tempo de reenvio
+                if (whatsapp.timeUseBotQueues && whatsapp.timeUseBotQueues !== "0") {
+                    if (ticket.isOutOfHour === false && ticketTraking.chatbotAt !== null) {
+                        await ticketTraking.update({ chatbotAt: null });
+                        await ticket.update({ amountUsedBotQueues: 0 });
+                    }
+
+                    const dataLimite = new Date();
+                    const Agora = new Date();
+
+                    if (ticketTraking.chatbotAt !== null) {
+                        dataLimite.setMinutes(
+                            ticketTraking.chatbotAt.getMinutes() + Number(whatsapp.timeUseBotQueues)
+                        );
+
+                        if (
+                            ticketTraking.chatbotAt !== null &&
+                            Agora < dataLimite &&
+                            whatsapp.timeUseBotQueues !== "0" &&
+                            ticket.amountUsedBotQueues !== 0
+                        ) {
+                            logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Ticket ${ticket.id} ainda em período de espera`);
+                            return;
+                        }
+                    }
+
+                    await ticketTraking.update({ chatbotAt: null });
+                }
+
+                // Enviar mensagem de fora de expediente
+                if (whatsapp.outOfHoursMessage !== "" && !ticket.imported) {
+                    logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Enviando mensagem de fora de expediente para ticket ${ticket.id}`);
+                    const body = formatBody(`${whatsapp.outOfHoursMessage}`, ticket);
+
+                    await SendWhatsAppOficialMessage({
+                        body,
+                        ticket,
+                        quotedMsg: null,
+                        type: 'text',
+                        media: null,
+                        vCard: null
+                    });
+                }
+
+                // Atualizar ticket
+                await ticket.update({
+                    amountUsedBotQueues: ticket.amountUsedBotQueues + 1,
+                    isOutOfHour: true
+                });
+
+                await ticketTraking.update({
+                    chatbotAt: moment().toDate()
+                });
+
+                logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Processamento concluído para ticket ${ticket.id}`);
+                return;
+            }
 
             logger.info(`[WHATSAPP OFICIAL - DEBUG] *** CHEGOU NA VERIFICAÇÃO DE FILA - ticket ${ticket.id} ***`);
             logger.info(`[WHATSAPP OFICIAL - DEBUG] Verificando condições para verifyQueue - ticket ${ticket.id}:`);
