@@ -179,8 +179,12 @@ async function handleVerifyReminders(job) {
     }
   } catch (e: any) {
     Sentry.captureException(e);
-    logger.error("SendReminder -> Verify: error", e.message);
-    throw e;
+    logger.error("SendReminder -> Verify: ERRO DETALHADO:");
+    logger.error(`Mensagem: ${e.message}`);
+    logger.error(`Nome: ${e.name}`);
+    logger.error(`Stack: ${e.stack}`);
+    console.error("ERRO COMPLETO:", e);
+    // Não faz throw para não crashar o job scheduler
   }
 }
 
@@ -224,8 +228,12 @@ async function handleVerifySchedules(job) {
     }
   } catch (e: any) {
     Sentry.captureException(e);
-    logger.error("SendScheduledMessage -> Verify: error", e.message);
-    throw e;
+    logger.error("SendScheduledMessage -> Verify: ERRO DETALHADO:");
+    logger.error(`Mensagem: ${e.message}`);
+    logger.error(`Nome: ${e.name}`);
+    logger.error(`Stack: ${e.stack}`);
+    console.error("ERRO COMPLETO:", e);
+    // Não faz throw para não crashar o job scheduler
   }
 }
 
