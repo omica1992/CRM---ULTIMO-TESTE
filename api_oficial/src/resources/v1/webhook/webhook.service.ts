@@ -143,7 +143,18 @@ export class WebhookService {
       if (!whats) throw new Error('Configuração não encontrada');
       this.logger.log(`[WEBHOOK] Configuração encontrada: ${whats.id}`);
 
+      this.logger.log(`[WEBHOOK DEBUG] Data recebido:`, JSON.stringify(data).substring(0, 200));
       const body: IWebhookWhatsApp = data?.body || data;
+      this.logger.log(`[WEBHOOK DEBUG] Body parseado:`, JSON.stringify(body).substring(0, 200));
+
+      // Validar estrutura do webhook
+      if (!body || !body.object) {
+        throw new AppError('Estrutura do webhook inválida: objeto não encontrado', HttpStatus.BAD_REQUEST);
+      }
+      
+      if (body.object === 'whatsapp_business_account' && !body.entry) {
+        throw new AppError('Estrutura do webhook inválida: entry não encontrado', HttpStatus.BAD_REQUEST);
+      }
 
       // Proteção contra reprocessamento de mensagens duplicadas
       this.logger.log(`[WEBHOOK] Body object: ${body.object}`);
@@ -178,8 +189,9 @@ export class WebhookService {
         }
       }
 
-      if (body.object == 'whatsapp_business_account') {
+      if (body.object == 'whatsapp_business_account' && body.entry) {
         const { entry } = body;
+        this.logger.log(`[WEBHOOK] Processando mensagens e status para ${entry.length} entries`);
 
         for (const e of entry) {
           for (const change of e.changes) {
@@ -197,8 +209,9 @@ export class WebhookService {
                   });
                 }
               } else {
-                const contact = value.contacts[0];
-                this.logger.log(`[WEBHOOK MESSAGE] Processando ${value.messages.length} mensagens do contato ${contact.profile.name}`);
+                const contact = value.contacts?.[0];
+                const contactName = contact?.profile?.name || contact?.wa_id || 'Desconhecido';
+                this.logger.log(`[WEBHOOK MESSAGE] Processando ${value.messages.length} mensagens do contato ${contactName}`);
 
                 for (const message of value.messages) {
                   this.logger.log(`[WEBHOOK MESSAGE] Tipo: ${message.type}, ID: ${message.id}`);

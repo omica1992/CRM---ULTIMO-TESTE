@@ -341,6 +341,10 @@ export class ReceibedWhatsAppService {
 
             await verifyMessageOficial(message, ticket, contact, companyId, fileName, fromNumber, data, quoteMessageId);
 
+            logger.info(`[WHATSAPP OFICIAL - DEBUG] *** CHEGOU NA VERIFICAÇÃO DE FILA - ticket ${ticket.id} ***`);
+            logger.info(`[WHATSAPP OFICIAL - DEBUG] Verificando condições para verifyQueue - ticket ${ticket.id}:`);
+            logger.info(`[WHATSAPP OFICIAL - DEBUG] - imported: ${ticket.imported}, queue: ${!!ticket.queue}, isGroup: ${ticket.isGroup}, userId: ${ticket.userId}, queues.length: ${whatsapp?.queues?.length}, useIntegration: ${ticket.useIntegration}`);
+            
             if (
                 !ticket.imported &&
                 !ticket.queue &&
@@ -350,7 +354,9 @@ export class ReceibedWhatsAppService {
                 !ticket.useIntegration
             ) {
                 // console.log("antes do verifyqueue")
+                logger.info(`[WHATSAPP OFICIAL - DEBUG] Chamando verifyQueueOficial para ticket ${ticket.id}`);
                 await verifyQueueOficial(message, ticket, settings, ticketTraking);
+                logger.info(`[WHATSAPP OFICIAL - DEBUG] verifyQueueOficial concluído para ticket ${ticket.id}`);
 
                 if (ticketTraking.chatbotAt === null) {
                     await ticketTraking.update({

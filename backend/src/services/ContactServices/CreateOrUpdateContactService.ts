@@ -220,7 +220,7 @@ const CreateOrUpdateContactService = async ({
       }
       if (
         !fs.existsSync(fileName) ||
-        (contact.profilePicUrl === "" && channel === "whatsapp")
+        (contact.profilePicUrl === "" && ["whatsapp", "whatsapp_oficial"].includes(channel))
       ) {
         try {
           const targetJid = contact.remoteJid || fallbackRemoteJid;
@@ -243,7 +243,7 @@ const CreateOrUpdateContactService = async ({
       //     `[RDS-LID] Contato atualizado: id=${contact.id}, number=${contact.number}, jid=${contact.remoteJid}, lid=${contact.lid}`
       //   );
       // }
-    } else if (["whatsapp"].includes(channel)) {
+    } else if (["whatsapp", "whatsapp_oficial"].includes(channel)) {
       const settings = await CompaniesSettings.findOne({
         where: { companyId }
       });

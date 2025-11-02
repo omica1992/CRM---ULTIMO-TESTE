@@ -8,6 +8,7 @@ import { sendMessageWhatsAppOficial } from "../../libs/whatsAppOficial/whatsAppO
 import { IMetaMessageTemplate, IMetaMessageinteractive, IReturnMessageMeta, ISendMessageOficial } from "../../libs/whatsAppOficial/IWhatsAppOficial.interfaces";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import formatBody from "../../helpers/Mustache";
+import logger from "../../utils/logger";
 
 interface Request {
   body: string;
@@ -187,7 +188,9 @@ const SendWhatsAppOficialMessage = async ({
       originalName: !!media ? media.filename : null
     };
 
+    logger.info(`[WHATSAPP OFICIAL - SAVE] Salvando mensagem no banco - Ticket: ${ticket.id}`);
     await CreateMessageService({ messageData, companyId: ticket.companyId });
+    logger.info(`[WHATSAPP OFICIAL - SAVE] Mensagem salva com sucesso - Ticket: ${ticket.id}`);
 
     // const io = getIO();
 

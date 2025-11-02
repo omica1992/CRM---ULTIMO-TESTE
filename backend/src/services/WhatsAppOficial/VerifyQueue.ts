@@ -19,6 +19,8 @@ import Queue from "../../models/Queue";
 import VerifyCurrentSchedule from "../CompanyService/VerifyCurrentSchedule";
 import CreateLogTicketService from "../TicketServices/CreateLogTicketService";
 import { IMetaMessageinteractive, IMetaMessageinteractiveActionSections, IMetaMessageinteractiveActionSectionsRows } from "../../libs/whatsAppOficial/IWhatsAppOficial.interfaces";
+import ShowQueueIntegrationService from "../QueueIntegrationServices/ShowQueueIntegrationService";
+import { handleMessageIntegration } from "../WbotServices/wbotMessageListener";
 
 
 const verifyQueueOficial = async (
@@ -29,7 +31,14 @@ const verifyQueueOficial = async (
 ) => {
     const companyId = ticket.companyId;
     // console.log("GETTING WHATSAPP VERIFY QUEUE", ticket.whatsappId, wbot.id)
-    const { queues, greetingMessage, maxUseBotQueues, timeUseBotQueues } = await ShowWhatsAppService(ticket.whatsappId!, companyId);
+    const whatsappData = await ShowWhatsAppService(ticket.whatsappId!, companyId);
+    const { queues, greetingMessage, maxUseBotQueues, timeUseBotQueues } = whatsappData;
+    
+    // Buscar integrationId da conexão se existir
+    const whatsappIntegrationId = (whatsappData as any).integrationId || null;
+    if (whatsappIntegrationId) {
+        logger.info(`[VERIFY QUEUE OFICIAL] Conexão WhatsApp ${ticket.whatsappId} tem integrationId ${whatsappIntegrationId}`);
+    }
 
     let chatbot = false;
 
@@ -114,6 +123,43 @@ const verifyQueueOficial = async (
 
             return;
         } else {
+            // Verificar se fila ou conexão tem integração
+            const integrationIdToUse = queues[0].integrationId || whatsappIntegrationId;
+            
+            if (!ticket.isGroup && !isNil(integrationIdToUse)) {
+                logger.info(`[VERIFY QUEUE OFICIAL] Fila única usando integrationId ${integrationIdToUse} ${queues[0].integrationId ? '(da fila)' : '(da conexão)'}`);
+                try {
+                    const integrations = await ShowQueueIntegrationService(integrationIdToUse, companyId);
+                    
+                    const simulatedMsg = {
+                        key: {
+                            fromMe: false,
+                            remoteJid: `${ticket.contact.number}@s.whatsapp.net`,
+                            id: msg.idMessage || `ofc-${Date.now()}`
+                        },
+                        message: {
+                            conversation: msg.text || "",
+                            timestamp: msg.timestamp || Math.floor(Date.now() / 1000)
+                        }
+                    } as any;
+
+                    await handleMessageIntegration(
+                        simulatedMsg,
+                        null,
+                        companyId,
+                        integrations,
+                        ticket
+                    );
+
+                    await ticket.update({
+                        useIntegration: true,
+                        integrationId: integrationIdToUse
+                    });
+                } catch (error) {
+                    logger.error(`[VERIFY QUEUE OFICIAL] Erro na integração:`, error);
+                }
+            }
+            
             await UpdateTicketService({
                 ticketData: { queueId: queues[0].id, status: ticket.status === "lgpd" ? "pending" : ticket.status },
                 ticketId: ticket.id,
@@ -257,6 +303,42 @@ const verifyQueueOficial = async (
                 companyId
             });
             // }
+            // Verificar se fila escolhida ou conexão tem integração
+            const integrationIdToUse = choosenQueue.integrationId || whatsappIntegrationId;
+            
+            if (!ticket.isGroup && !isNil(integrationIdToUse)) {
+                logger.info(`[VERIFY QUEUE OFICIAL] Fila escolhida (botText) usando integrationId ${integrationIdToUse} ${choosenQueue.integrationId ? '(da fila)' : '(da conexão)'}`);
+                try {
+                    const integrations = await ShowQueueIntegrationService(integrationIdToUse, companyId);
+                    
+                    const simulatedMsg = {
+                        key: {
+                            fromMe: false,
+                            remoteJid: `${ticket.contact.number}@s.whatsapp.net`,
+                            id: msg.idMessage || `ofc-${Date.now()}`
+                        },
+                        message: {
+                            conversation: msg.text || "",
+                            timestamp: msg.timestamp || Math.floor(Date.now() / 1000)
+                        }
+                    } as any;
+
+                    await handleMessageIntegration(
+                        simulatedMsg,
+                        null,
+                        companyId,
+                        integrations,
+                        ticket
+                    );
+
+                    await ticket.update({
+                        useIntegration: true,
+                        integrationId: integrationIdToUse
+                    });
+                } catch (error) {
+                    logger.error(`[VERIFY QUEUE OFICIAL] Erro na integração (botText):`, error);
+                }
+            }
 
             if (choosenQueue.chatbots.length > 0 && !ticket.isGroup) {
                 let buttonsData: IMetaMessageinteractive;
@@ -619,6 +701,43 @@ const verifyQueueOficial = async (
                 ticketId: ticket.id,
                 companyId
             });
+            
+            // Verificar se fila escolhida ou conexão tem integração
+            const integrationIdToUse = choosenQueue.integrationId || whatsappIntegrationId;
+            
+            if (!ticket.isGroup && !isNil(integrationIdToUse)) {
+                logger.info(`[VERIFY QUEUE OFICIAL] Fila escolhida (botButton) usando integrationId ${integrationIdToUse} ${choosenQueue.integrationId ? '(da fila)' : '(da conexão)'}`);
+                try {
+                    const integrations = await ShowQueueIntegrationService(integrationIdToUse, companyId);
+                    
+                    const simulatedMsg = {
+                        key: {
+                            fromMe: false,
+                            remoteJid: `${ticket.contact.number}@s.whatsapp.net`,
+                            id: msg.idMessage || `ofc-${Date.now()}`
+                        },
+                        message: {
+                            conversation: msg.text || "",
+                            timestamp: msg.timestamp || Math.floor(Date.now() / 1000)
+                        }
+                    } as any;
+
+                    await handleMessageIntegration(
+                        simulatedMsg,
+                        null,
+                        companyId,
+                        integrations,
+                        ticket
+                    );
+
+                    await ticket.update({
+                        useIntegration: true,
+                        integrationId: integrationIdToUse
+                    });
+                } catch (error) {
+                    logger.error(`[VERIFY QUEUE OFICIAL] Erro na integração (botButton):`, error);
+                }
+            }
             // }
 
             if (choosenQueue.chatbots.length > 0 && !ticket.isGroup) {

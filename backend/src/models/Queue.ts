@@ -28,7 +28,7 @@ import Files from "./Files";
 import Prompt from "./Prompt";
 import ContactWallet from "./ContactWallet";
 
-@Table
+@Table({ tableName: "Queues" })
 class Queue extends Model<Queue> {
   @PrimaryKey
   @AutoIncrement
