@@ -308,7 +308,9 @@ const TicketActionButtonsCustom = ({
   };
 
   const handleClose = () => {
-    formRef.current.resetForm();
+    if (formRef.current) {
+      formRef.current.resetForm();
+    }
     setOpen(false);
   };
 

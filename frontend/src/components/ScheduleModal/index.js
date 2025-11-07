@@ -106,15 +106,17 @@ const ScheduleModal = ({
     enviarQuantasVezes: 1,
     tipoDias: 4,
     assinar: false,
-    // ✅ Novos campos para lembrete
+    // Novos campos para lembrete
     reminderDate: "",
     reminderMessage: "",
   };
 
   const [schedule, setSchedule] = useState(initialState);
   const [currentContact, setCurrentContact] = useState(null); // Iniciar com null
-  const [selectedContacts, setSelectedContacts] = useState([]); // ✅ Múltiplos contatos
+  const [selectedContacts, setSelectedContacts] = useState([]); // Múltiplos contatos
   const [contacts, setContacts] = useState([]); // Iniciar com array vazio
+  const [contactSearchInput, setContactSearchInput] = useState(""); // Input de busca
+  const [loadingContacts, setLoadingContacts] = useState(false); // Loading
   const [intervalo, setIntervalo] = useState(1);
   const [tipoDias, setTipoDias] = useState(4);
   const [attachment, setAttachment] = useState(null);
@@ -123,7 +125,7 @@ const ScheduleModal = ({
   const messageInputRef = useRef();
   const [channelFilter, setChannelFilter] = useState("whatsapp");
   const [whatsapps, setWhatsapps] = useState([]);
-  const [selectedWhatsapps, setSelectedWhatsapps] = useState(""); // ✅ String vazia ao invés de array
+  const [selectedWhatsapps, setSelectedWhatsapps] = useState(""); // String vazia ao invés de array
   const [loading, setLoading] = useState(false);
   const [queues, setQueues] = useState([]);
   const [allQueues, setAllQueues] = useState([]);
@@ -138,7 +140,7 @@ const ScheduleModal = ({
   const [loadingQuickMessages, setLoadingQuickMessages] = useState(false);
   const [selectedQuickMessage, setSelectedQuickMessage] = useState("");
   const [quickMessageMedia, setQuickMessageMedia] = useState(null);
-  // ✅ Estado para template
+  // Estado para template
   const [selectedTemplate, setSelectedTemplate] = useState(null);
 
   useEffect(() => {
@@ -168,27 +170,27 @@ const ScheduleModal = ({
   const fetchQuickMessages = async () => {
     setLoadingQuickMessages(true);
     try {
-      console.log("🔍 Buscando quickMessages com params:", {
+      console.log(" Buscando quickMessages com params:", {
         companyId: user?.companyId,
         userId: user?.id,
-        isOficial: "true" // ✅ Incluir templates da API Oficial
+        isOficial: "true" // Incluir templates da API Oficial
       });
 
       const { data } = await api.get("/quick-messages/list", {
         params: {
           companyId: user?.companyId,
           userId: user?.id,
-          isOficial: "true" // ✅ Buscar TODOS (mensagens normais + templates)
+          isOficial: "true" // Buscar TODOS (mensagens normais + templates)
         }
       });
 
-      console.log("📋 Resposta da API quickMessages (com templates):", data);
-      console.log("📋 Total de quickMessages:", data?.length || 0);
+      console.log(" Resposta da API quickMessages (com templates):", data);
+      console.log(" Total de quickMessages:", data?.length || 0);
       
       // Log detalhado de cada quickMessage
       if (data && data.length > 0) {
         data.forEach((qm, index) => {
-          console.log(`📋 QuickMessage ${index + 1}:`, {
+          console.log(` QuickMessage ${index + 1}:`, {
             id: qm.id,
             shortcode: qm.shortcode,
             isOficial: qm.isOficial,
@@ -201,7 +203,7 @@ const ScheduleModal = ({
       
       setQuickMessages(data || []);
     } catch (err) {
-      console.error("❌ Erro ao buscar respostas rápidas:", err);
+      console.error(" Erro ao buscar respostas rápidas:", err);
       toastError(err);
       setQuickMessages([]);
     } finally {
@@ -212,13 +214,13 @@ const ScheduleModal = ({
   // Função para baixar mídia da quickMessage
   const downloadQuickMessageMedia = async (mediaPath, mediaName, mediaType) => {
     try {
-      // console.log("📎 Baixando mídia da quickMessage:", { mediaPath, mediaName, mediaType });
+      // console.log(" Baixando mídia da quickMessage:", { mediaPath, mediaName, mediaType });
 
       // Construir URL correta usando a URL base do backend
       const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8080';
       const downloadUrl = `${backendUrl}/public/company${user?.companyId}/quickMessage/${mediaName}`;
 
-      // console.log("🔗 URL de download:", downloadUrl);
+      // console.log(" URL de download:", downloadUrl);
 
       const response = await fetch(downloadUrl, {
         method: 'GET',
@@ -236,10 +238,10 @@ const ScheduleModal = ({
         type: blob.type || getMediaTypeFromExtension(mediaName, mediaType)
       });
 
-      // console.log("✅ Mídia baixada com sucesso:", file);
+      // console.log(" Mídia baixada com sucesso:", file);
       return file;
     } catch (err) {
-      console.error("❌ Erro ao baixar mídia da quickMessage:", err);
+      console.error(" Erro ao baixar mídia da quickMessage:", err);
       toastError(err);
       return null;
     }
@@ -261,18 +263,18 @@ const ScheduleModal = ({
     }
   };
 
-  // ✅ Carregar usuários ao abrir o modal
+  // Carregar usuários ao abrir o modal
   useEffect(() => {
     if (open && isAdmin) {
       const fetchUsers = async () => {
         setLoading(true);
         try {
           const { data } = await api.get("/users/");
-          console.log("📋 Usuários carregados:", data.users?.length || 0, data.users);
+          console.log(" Usuários carregados:", data.users?.length || 0, data.users);
           setOptions(data.users);
           setLoading(false);
         } catch (err) {
-          console.error("❌ Erro ao carregar usuários:", err);
+          console.error(" Erro ao carregar usuários:", err);
           setLoading(false);
           toastError(err);
         }
@@ -281,19 +283,19 @@ const ScheduleModal = ({
     }
   }, [open, isAdmin]);
 
-  // ✅ Carregar WhatsApps ao abrir o modal
+  // Carregar WhatsApps ao abrir o modal
   useEffect(() => {
     if (open) {
-      console.log("🔄 Modal aberto - carregando WhatsApps iniciais");
+      console.log(" Modal aberto - carregando WhatsApps iniciais");
       api
         .get(`/whatsapp`, {
           params: { channel: "whatsapp" },
         })
         .then(({ data }) => {
-          console.log("📱 WhatsApps iniciais carregados:", data.length, data);
+          console.log(" WhatsApps iniciais carregados:", data.length, data);
           // Filtrar apenas conexões conectadas
           const connectedWhatsapps = data.filter(w => w.status === "CONNECTED" || w.status === "OPENING");
-          console.log("✅ WhatsApps conectados:", connectedWhatsapps.length, connectedWhatsapps);
+          console.log(" WhatsApps conectados:", connectedWhatsapps.length, connectedWhatsapps);
           
           const mappedWhatsapps = connectedWhatsapps.map((whatsapp) => ({
             ...whatsapp,
@@ -305,12 +307,12 @@ const ScheduleModal = ({
           }
         })
         .catch((err) => {
-          console.error("❌ Erro ao carregar WhatsApps iniciais:", err);
+          console.error(" Erro ao carregar WhatsApps iniciais:", err);
         });
     }
   }, [open]);
 
-  // ✅ Filtrar usuários conforme digitação (opcional)
+  // Filtrar usuários conforme digitação (opcional)
   useEffect(() => {
     if (searchParam.length < 3) {
       return;
@@ -337,16 +339,16 @@ const ScheduleModal = ({
 
   useEffect(() => {
     if (selectedContacts.length > 0 || currentContact) {
-      console.log("🔄 Carregando WhatsApps - channelFilter:", channelFilter);
+      console.log(" Carregando WhatsApps - channelFilter:", channelFilter);
       api
         .get(`/whatsapp`, {
           params: { channel: channelFilter },
         })
         .then(({ data }) => {
-          console.log("📱 WhatsApps carregados:", data.length, data);
+          console.log(" WhatsApps carregados:", data.length, data);
           // Filtrar apenas conexões conectadas
           const connectedWhatsapps = data.filter(w => w.status === "CONNECTED" || w.status === "OPENING");
-          console.log("✅ WhatsApps conectados filtrados:", connectedWhatsapps.length);
+          console.log(" WhatsApps conectados filtrados:", connectedWhatsapps.length);
           
           const mappedWhatsapps = connectedWhatsapps.map((whatsapp) => ({
             ...whatsapp,
@@ -359,7 +361,7 @@ const ScheduleModal = ({
           }
         })
         .catch((err) => {
-          console.error("❌ Erro ao carregar WhatsApps:", err);
+          console.error(" Erro ao carregar WhatsApps:", err);
         });
     }
   }, [currentContact, selectedContacts, channelFilter]);
@@ -373,15 +375,22 @@ const ScheduleModal = ({
     }
   }, [contactId, contacts]);
 
-  // ✅ MELHORIA: UseEffect otimizado com melhor lógica de inicialização
+  // 🔍 UseEffect com debounce para buscar contatos
   useEffect(() => {
     const { companyId } = user;
-    if (open) {
+    if (!open) return;
+
+    // Debounce de 500ms
+    const delayDebounceFn = setTimeout(async () => {
       try {
-        (async () => {
-          // Carregar lista de contatos
+        // Carregar contatos com base no input de busca (se fornecido contactId, busca sempre)
+        if (contactSearchInput.length >= 3 || contactId) {
+          setLoadingContacts(true);
           const { data: contactList } = await api.get("/contacts/list", {
-            params: { companyId: companyId },
+            params: { 
+              companyId: companyId,
+              searchParam: contactSearchInput || undefined
+            },
           });
 
           let customList = contactList.map((c) => ({
@@ -391,10 +400,30 @@ const ScheduleModal = ({
           }));
 
           if (isArray(customList)) {
-            setContacts(customList); // ✅ Removido objeto vazio que permitia adicionar contatos
+            setContacts(customList);
           }
+          setLoadingContacts(false);
+        } else if (!contactId && contactSearchInput.length === 0) {
+          // Se não tem busca e não tem contactId, limpa a lista
+          setContacts([]);
+        }
+      } catch (err) {
+        setLoadingContacts(false);
+        toastError(err);
+      }
+    }, 500); // Aguarda 500ms após parar de digitar
 
-          // ✅ MELHORIA: Lógica de inicialização aprimorada
+    return () => clearTimeout(delayDebounceFn);
+  }, [contactSearchInput, open, user, contactId]);
+
+  // MELHORIA: UseEffect otimizado com melhor lógica de inicialização
+  useEffect(() => {
+    const { companyId } = user;
+    if (open) {
+      try {
+        (async () => {
+
+          // MELHORIA: Lógica de inicialização aprimorada
           if (!scheduleId) {
             // Modal sendo aberto para criar novo agendamento
             const newScheduleState = {
@@ -404,18 +433,6 @@ const ScheduleModal = ({
             };
 
             setSchedule(newScheduleState);
-
-            // ✅ MELHORIA: Se contactId foi fornecido, definir contato atual
-            if (contactId && customList.length > 0) {
-              const foundContact = customList.find((c) => c.id.toString() === contactId.toString());
-              if (foundContact) {
-                setCurrentContact(foundContact);
-                setSelectedContacts([foundContact]); // ✅ Também para múltiplos
-                setChannelFilter(foundContact.channel || "whatsapp");
-                console.log("✅ Contato auto-selecionado:", foundContact.name);
-              }
-            }
-
             return;
           }
 
@@ -477,6 +494,8 @@ const ScheduleModal = ({
     // ✅ MELHORIA: Reset do contato atual ao fechar
     setCurrentContact(null);
     setSelectedContacts([]); // ✅ Reset contatos múltiplos
+    setContactSearchInput(""); // 🔍 Reset busca de contatos
+    setContacts([]); // 🔍 Limpar lista de contatos
     // ✅ Reset de usuário selecionado
     setSelectedUser(null);
     setSelectedQueue("");
@@ -828,6 +847,16 @@ const ScheduleModal = ({
                           size="small"
                           value={selectedContacts}
                           options={contacts}
+                          loading={loadingContacts}
+                          inputValue={contactSearchInput}
+                          onInputChange={(e, newInputValue) => {
+                            setContactSearchInput(newInputValue);
+                          }}
+                          noOptionsText={
+                            contactSearchInput.length < 3 && !contactId
+                              ? "Digite 3 caracteres para buscar..."
+                              : "Nenhum contato encontrado"
+                          }
                           style={{ marginTop: "8px" }}
                           onChange={(e, newValue) => {
                             console.log("📞 Contatos selecionados:", newValue);
