@@ -17,6 +17,7 @@ import { getWbot } from "../../libs/wbot";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
 import logger from "../../utils/logger";
 import { ENABLE_LID_DEBUG } from "../../config/debug";
+import Whatsapp from "../../models/Whatsapp";
 interface Request {
   media: Express.Multer.File;
   ticket: Ticket;
@@ -69,6 +70,26 @@ const nameFileDiscovery = (pathMedia: string) => {
 };
 
 export const typeSimulation = async (ticket: Ticket, presence: WAPresence) => {
+  // ✅ CORREÇÃO: Verificar se é API Oficial antes de usar wbot
+  const whatsapp = await Whatsapp.findByPk(ticket.whatsappId);
+  
+  if (!whatsapp) {
+    logger.warn(`[TYPE SIMULATION] Whatsapp não encontrado para ticket ${ticket.id}`);
+    return;
+  }
+
+  // ✅ API Oficial não suporta sendPresenceUpdate da mesma forma
+  const isOficial = whatsapp.provider === "oficial" || 
+                   whatsapp.provider === "beta" ||
+                   whatsapp.channel === "whatsapp-oficial" || 
+                   whatsapp.channel === "whatsapp_oficial";
+  
+  if (isOficial) {
+    logger.info(`[TYPE SIMULATION] Pulando simulação de digitação para API Oficial - Ticket ${ticket.id}`);
+    return; // API Oficial não precisa de typeSimulation
+  }
+
+  // Apenas para Baileys
   const wbot = await GetTicketWbot(ticket);
 
   let contact = await Contact.findOne({

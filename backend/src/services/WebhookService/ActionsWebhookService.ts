@@ -804,17 +804,6 @@ export const ActionsWebhookService = async (
             await intervalWhats("1");
             typeSimulation(ticket, "composing");
 
-            if (whatsapp.channel === "whatsapp_oficial") {
-              await SendWhatsAppOficialMessage({
-                body: question,
-                ticket: ticket,
-                quotedMsg: null,
-                type: 'text',
-                media: null,
-                vCard: null
-              });
-            }
-
             if (whatsapp.channel === "whatsapp") {
               await SendWhatsAppMessage({
                 body: question,
@@ -822,12 +811,13 @@ export const ActionsWebhookService = async (
                 quotedMsg: null
               });
             } else if (whatsapp.channel === "whatsapp_oficial") {
-              // ✅ CORREÇÃO: Usar SendWhatsAppOficialMessage para API Oficial
               await SendWhatsAppOficialMessage({
                 body: question,
                 ticket: ticket,
+                quotedMsg: null,
                 type: 'text',
-                media: null
+                media: null,
+                vCard: null
               });
             }
 
