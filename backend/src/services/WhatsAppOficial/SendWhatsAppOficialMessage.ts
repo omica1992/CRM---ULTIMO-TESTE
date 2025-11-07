@@ -65,6 +65,17 @@ const SendWhatsAppOficialMessage = async ({
   bodyToSave
 }: Request): Promise<IReturnMessageMeta> => {
 
+  // ✅ CORREÇÃO: Garantir que ticket.whatsapp está carregado
+  if (!ticket.whatsapp) {
+    const Whatsapp = (await import("../../models/Whatsapp")).default;
+    ticket.whatsapp = await Whatsapp.findByPk(ticket.whatsappId);
+    
+    if (!ticket.whatsapp) {
+      logger.error(`[SEND WHATSAPP OFICIAL] Whatsapp ${ticket.whatsappId} não encontrado para ticket ${ticket.id}`);
+      throw new AppError("ERR_WHATSAPP_NOT_FOUND");
+    }
+  }
+
   const pathMedia = !!media ? media.path : null;
   let options: ISendMessageOficial = {} as ISendMessageOficial;
   const typeMessage = !!media ? media.mimetype.split("/")[0] : null;

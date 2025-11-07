@@ -712,58 +712,66 @@ export class ReceibedWhatsAppService {
             // ✅ VERIFICAÇÃO DE INTEGRAÇÕES EXISTENTES
             // ✅ CONTINUAÇÃO DE FLUXO WEBHOOK EXISTENTE (sem campanha)
             if (ticket.flowWebhook && ticket.hashFlowId) {
-                console.log(
-                    `[FLOW WEBHOOK - OFICIAL] Processando fluxo webhook existente para ticket ${ticket.id}`
-                );
+                // ✅ CORREÇÃO: Ignorar hashFlowId de recovery (artificial)
+                const isRecoveryHash = ticket.hashFlowId.startsWith('recovery-');
+                
+                if (!isRecoveryHash) {
+                    console.log(
+                        `[FLOW WEBHOOK - OFICIAL] Processando fluxo webhook existente para ticket ${ticket.id}`
+                    );
 
-                try {
-                    const webhook = await WebhookModel.findOne({
-                        where: {
-                            company_id: ticket.companyId,
-                            hash_id: ticket.hashFlowId
-                        }
-                    });
-
-                    if (webhook && webhook.config["details"]) {
-                        const flow = await FlowBuilderModel.findOne({
+                    try {
+                        const webhook = await WebhookModel.findOne({
                             where: {
-                                id: webhook.config["details"].idFlow,
-                                company_id: companyId
+                                company_id: ticket.companyId,
+                                hash_id: ticket.hashFlowId
                             }
                         });
 
-                        if (flow) {
-                            const nodes: any[] = flow.flow["nodes"];
-                            const connections: any[] = flow.flow["connections"];
-                            const numberPhrase = { number: contact.number, name: contact.name, email: contact.email || "" };
+                        if (webhook && webhook.config["details"]) {
+                            const flow = await FlowBuilderModel.findOne({
+                                where: {
+                                    id: webhook.config["details"].idFlow,
+                                    company_id: companyId
+                                }
+                            });
 
-                            await ActionsWebhookService(
-                                whatsapp.id,
-                                webhook.config["details"].idFlow,
-                                ticket.companyId,
-                                nodes,
-                                connections,
-                                ticket.lastFlowId,
-                                ticket.dataWebhook,
-                                webhook.config["details"],
-                                ticket.hashFlowId,
-                                message.text || "",
-                                ticket.id,
-                                numberPhrase
-                            );
+                            if (flow) {
+                                const nodes: any[] = flow.flow["nodes"];
+                                const connections: any[] = flow.flow["connections"];
+                                const numberPhrase = { number: contact.number, name: contact.name, email: contact.email || "" };
 
-                            console.log("[FLOW WEBHOOK - OFICIAL] ✅ Fluxo webhook executado!");
-                            return; // Após processar o fluxo, sair para evitar cair em outras verificações
-                        } else {
-                            console.error(
-                                `[FLOW WEBHOOK - OFICIAL] ❌ Fluxo ${webhook.config["details"].idFlow} não encontrado`
-                            );
+                                await ActionsWebhookService(
+                                    whatsapp.id,
+                                    webhook.config["details"].idFlow,
+                                    ticket.companyId,
+                                    nodes,
+                                    connections,
+                                    ticket.lastFlowId,
+                                    ticket.dataWebhook,
+                                    webhook.config["details"],
+                                    ticket.hashFlowId,
+                                    message.text || "",
+                                    ticket.id,
+                                    numberPhrase
+                                );
+
+                                console.log("[FLOW WEBHOOK - OFICIAL] ✅ Fluxo webhook executado!");
+                                return; // Após processar o fluxo, sair para evitar cair em outras verificações
+                            } else {
+                                console.error(
+                                    `[FLOW WEBHOOK - OFICIAL] ❌ Fluxo ${webhook.config["details"].idFlow} não encontrado`
+                                );
+                            }
                         }
+                    } catch (error) {
+                        console.error("[FLOW WEBHOOK - OFICIAL] ❌ Erro ao processar fluxo webhook:", error);
                     }
-                } catch (error) {
-                    console.error("[FLOW WEBHOOK - OFICIAL] ❌ Erro ao processar fluxo webhook:", error);
                 }
-            } else if (ticket.flowWebhook && !ticket.hashFlowId && ticket.flowStopped) {
+            }
+            
+            // ✅ RECOVERY: Apenas quando NÃO tem hashFlowId válido
+            if (ticket.flowWebhook && !ticket.hashFlowId && ticket.flowStopped) {
                 // Fallback: continuar fluxo usando flowStopped quando hashFlowId estiver ausente
                 try {
                     const recoveredFlowId = parseInt(String(ticket.flowStopped));
