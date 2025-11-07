@@ -1835,7 +1835,13 @@ export const ActionsWebhookService = async (
           isContinue = true;
           pressKey = undefined;
         } else if (isSwitchFlow) {
-          const wbot = await getWbot(whatsapp.id);
+          // ✅ CORREÇÃO: Verificar se é API Oficial antes de chamar getWbot
+          const isOficial = whatsapp.provider === "oficial" || 
+                           whatsapp.provider === "beta" ||
+                           whatsapp.channel === "whatsapp-oficial" || 
+                           whatsapp.channel === "whatsapp_oficial";
+          
+          const wbot = isOficial ? null : await getWbot(whatsapp.id);
           const contact = await Contact.findOne({
             where: {
               id: ticket?.contactId,
@@ -2007,8 +2013,22 @@ const switchFlow = async (data: any, companyId: number, ticket: Ticket, recursio
     return;
   }
 
-  const wbot = await getWbot(ticket?.whatsappId);
-  const whatsapp = await ShowWhatsAppService(wbot.id!, companyId);
+  // ✅ CORREÇÃO: Carregar whatsapp primeiro para verificar se é API Oficial
+  const whatsapp = await Whatsapp.findByPk(ticket.whatsappId);
+  
+  if (!whatsapp) {
+    logger.error(`[SWITCH FLOW] Whatsapp não encontrado para ticket ${ticket.id}`);
+    return;
+  }
+
+  // ✅ Verificar se é API Oficial antes de chamar getWbot
+  const isOficial = whatsapp.provider === "oficial" || 
+                   whatsapp.provider === "beta" ||
+                   whatsapp.channel === "whatsapp-oficial" || 
+                   whatsapp.channel === "whatsapp_oficial";
+  
+  const wbot = isOficial ? null : await getWbot(ticket.whatsappId);
+  
   const contact = await Contact.findOne({
     where: {
       id: ticket?.contactId,
@@ -2016,7 +2036,7 @@ const switchFlow = async (data: any, companyId: number, ticket: Ticket, recursio
     }
   })
 
-  logger.info(`[TICKET FLOW] Executando switchFlow para ticket ${ticket.id} - WhatsappId: ${wbot.id}, CompanyId: ${companyId}, Recursion Depth: ${recursionDepth}`);
+  logger.info(`[TICKET FLOW] Executando switchFlow para ticket ${ticket.id} - WhatsappId: ${whatsapp.id}, CompanyId: ${companyId}, IsOficial: ${isOficial}, Recursion Depth: ${recursionDepth}`);
 
   await flowBuilderQueue(ticket, data, wbot, whatsapp, companyId, contact, null, recursionDepth + 1);
 };
