@@ -1811,25 +1811,44 @@ async function handleDispatchCampaign(job) {
           }
         }
 
-        // ✅ Criar um corpo de mensagem melhor para salvar no banco
-        let bodyToSave = campaignShipping.message || '';
+        // ✅ CORREÇÃO: Criar corpo da mensagem a partir do template
+        let bodyToSave = '';
         
-        // Se não tem mensagem, usar o texto do template
-        if (!bodyToSave || bodyToSave.trim() === '') {
-          // Tentar extrair texto dos componentes do template
-          const bodyComponent = template.components?.find(c => c.type === 'BODY');
-          if (bodyComponent && bodyComponent.text) {
-            bodyToSave = bodyComponent.text;
-          } else {
-            // Fallback: usar nome do template
-            bodyToSave = `📋 Template: ${template.shortcode}`;
+        // Prioridade 1: Tentar extrair do BODY do template
+        const bodyComponent = template.components?.find(c => c.type === 'BODY');
+        if (bodyComponent && bodyComponent.text) {
+          bodyToSave = bodyComponent.text;
+          logger.info(`[CAMPAIGN-SAVE] Usando texto do BODY do template: ${bodyToSave.substring(0, 50)}...`);
+        }
+        
+        // Prioridade 2: Usar mensagem da campanha
+        if (!bodyToSave && campaignShipping.message && campaignShipping.message.trim() !== '') {
+          bodyToSave = campaignShipping.message;
+          logger.info(`[CAMPAIGN-SAVE] Usando mensagem da campanha: ${bodyToSave.substring(0, 50)}...`);
+        }
+        
+        // Prioridade 3: Usar HEADER do template
+        if (!bodyToSave) {
+          const headerComponent = template.components?.find(c => c.type === 'HEADER');
+          if (headerComponent && headerComponent.text) {
+            bodyToSave = headerComponent.text;
+            logger.info(`[CAMPAIGN-SAVE] Usando texto do HEADER do template: ${bodyToSave.substring(0, 50)}...`);
           }
+        }
+        
+        // Fallback final: Nome do template
+        if (!bodyToSave || bodyToSave.trim() === '') {
+          bodyToSave = `📋 Template: ${template.shortcode}`;
+          logger.info(`[CAMPAIGN-SAVE] Usando fallback com nome do template: ${bodyToSave}`);
         }
         
         // Adicionar informação sobre botões se houver
         if (buttonsToSave && buttonsToSave.length > 0) {
           bodyToSave = bodyToSave.concat('||||', JSON.stringify(buttonsToSave));
+          logger.info(`[CAMPAIGN-SAVE] Botões adicionados ao body`);
         }
+        
+        logger.info(`[CAMPAIGN-SAVE] Body final a ser salvo: ${bodyToSave.substring(0, 100)}...`);
 
         // Envia template via API Meta
         await SendWhatsAppOficialMessage({
