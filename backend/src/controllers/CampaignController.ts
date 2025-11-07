@@ -4,6 +4,7 @@ import { getIO } from "../libs/socket";
 import { head } from "lodash";
 import fs from "fs";
 import path from "path";
+import { Op } from "sequelize";
 
 import ListService from "../services/CampaignService/ListService";
 import CreateService from "../services/CampaignService/CreateService";
@@ -13,6 +14,7 @@ import DeleteService from "../services/CampaignService/DeleteService";
 import FindService from "../services/CampaignService/FindService";
 
 import Campaign from "../models/Campaign";
+import CampaignShipping from "../models/CampaignShipping";
 
 import ContactTag from "../models/ContactTag";
 import Ticket from "../models/Ticket";
@@ -27,6 +29,8 @@ import AppError from "../errors/AppError";
 import { CancelService } from "../services/CampaignService/CancelService";
 import { RestartService } from "../services/CampaignService/RestartService";
 import RecurrenceService from "../services/CampaignService/RecurrenceService";
+import { campaignQueue } from "../queues";
+import logger from "../utils/logger";
 
 type IndexQuery = {
   searchParam: string;
@@ -474,9 +478,77 @@ export const cancel = async (
 ): Promise<Response> => {
   const { id } = req.params;
 
-  await CancelService(+id);
+  const result = await CancelService(+id);
 
-  return res.status(204).json({ message: "Cancelamento realizado" });
+  return res.status(200).json({ 
+    message: "Cancelamento realizado",
+    removedJobs: result.removedJobs,
+    activeJobs: result.activeJobs,
+    failedJobs: result.failedJobs,
+    totalPending: result.totalPending
+  });
+};
+
+// ✅ NOVO: Limpar fila de forma mais agressiva
+export const clearQueue = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { id } = req.params;
+  const { companyId } = req.user;
+
+  logger.info(`[CAMPAIGN-CLEAR-QUEUE] Limpando fila para campanha ${id}`);
+
+  const campaign = await Campaign.findByPk(+id);
+  
+  if (!campaign || campaign.companyId !== companyId) {
+    throw new AppError("Campanha não encontrada", 404);
+  }
+
+  // Buscar TODOS os jobs relacionados (mesmo sem deliveredAt)
+  const allRecords = await CampaignShipping.findAll({
+    where: {
+      campaignId: +id,
+      jobId: { [Op.not]: null }
+    }
+  });
+
+  logger.info(`[CAMPAIGN-CLEAR-QUEUE] Encontrados ${allRecords.length} registros com jobId`);
+
+  const promises = [];
+  let removedCount = 0;
+  let notFoundCount = 0;
+
+  for (let record of allRecords) {
+    const job = await campaignQueue.getJob(+record.jobId);
+    if (job) {
+      promises.push(
+        job.remove()
+          .then(() => {
+            removedCount++;
+            return record.update({ jobId: null });
+          })
+          .catch(err => {
+            logger.error(`[CAMPAIGN-CLEAR-QUEUE] Erro ao remover job ${record.jobId}: ${err.message}`);
+          })
+      );
+    } else {
+      notFoundCount++;
+      // Job não existe mais na fila, limpar jobId
+      promises.push(record.update({ jobId: null }));
+    }
+  }
+
+  await Promise.all(promises);
+
+  logger.info(`[CAMPAIGN-CLEAR-QUEUE] Limpeza concluída: ${removedCount} jobs removidos, ${notFoundCount} não encontrados`);
+
+  return res.status(200).json({
+    message: "Fila limpa com sucesso",
+    totalRecords: allRecords.length,
+    removedJobs: removedCount,
+    notFoundJobs: notFoundCount
+  });
 };
 
 export const restart = async (

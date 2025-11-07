@@ -1603,6 +1603,14 @@ async function handleDispatchCampaign(job) {
   try {
     const campaign = await getCampaign(campaignId);
 
+    // ✅ CORREÇÃO: Verificar status da campanha antes de enviar
+    if (!campaign || !['EM_ANDAMENTO', 'PROGRAMADA'].includes(campaign.status)) {
+      logger.warn(
+        `[CAMPAIGN-DISPATCH] Campanha ${campaignId} não está ativa (status: ${campaign?.status}). Cancelando envio do shipping ${campaignShippingId}`
+      );
+      return;
+    }
+
     if (!campaign.whatsapp) {
       logger.error(
         `campaignQueue -> DispatchCampaign -> error: whatsapp not found`
