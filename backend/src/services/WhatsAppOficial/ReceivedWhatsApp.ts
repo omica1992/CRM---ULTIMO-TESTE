@@ -30,6 +30,7 @@ import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateConta
 import VerifyCurrentSchedule from "../CompanyService/VerifyCurrentSchedule";
 import formatBody from "../../helpers/Mustache";
 import SendWhatsAppOficialMessage from "./SendWhatsAppOficialMessage";
+import flowBuilderQueue from "../WebhookService/flowBuilderQueue";
 
 const mimeToExtension: { [key: string]: string } = {
     'audio/aac': 'aac',
@@ -457,6 +458,122 @@ export class ReceibedWhatsAppService {
             }
 
             // ✅ IMPLEMENTAÇÃO DO SAYCHATBOT PARA API OFICIAL
+            
+            // 🔄 TRATATIVA 1: INPUT NODE (flowbuilder) - IGUAL AO BAILEYS
+            if (
+                (ticket.dataWebhook as any)?.waitingInput === true &&
+                (ticket.dataWebhook as any)?.inputVariableName
+            ) {
+                logger.info(`[WHATSAPP OFICIAL - INPUT NODE] Processando resposta para nó de input - ticket ${ticket.id}`);
+                try {
+                    const body = message.text || "";
+                    const inputVariableName = (ticket.dataWebhook as any).inputVariableName;
+                    const inputIdentifier = (ticket.dataWebhook as any).inputIdentifier || `${ticket.id}_${inputVariableName}`;
+
+                    // Salvar resposta nas variáveis globais
+                    global.flowVariables = global.flowVariables || {};
+                    global.flowVariables[inputVariableName] = body;
+                    global.flowVariables[inputIdentifier] = body;
+
+                    const nextNode = global.flowVariables[`${inputIdentifier}_next`];
+
+                    logger.info(`[WHATSAPP OFICIAL - INPUT NODE] Variável salva: ${inputVariableName} = "${body}"`);
+                    logger.info(`[WHATSAPP OFICIAL - INPUT NODE] Próximo nó: ${nextNode}`);
+
+                    // Atualizar ticket para remover estado de waiting
+                    await ticket.update({
+                        dataWebhook: {
+                            ...ticket.dataWebhook,
+                            waitingInput: false,
+                            inputProcessed: true,
+                            inputVariableName: null,
+                            inputIdentifier: null,
+                            lastInputValue: body
+                        }
+                    });
+
+                    // Continuar fluxo se houver próximo nó
+                    if (nextNode && ticket.flowStopped) {
+                        const flow = await FlowBuilderModel.findOne({
+                            where: { id: ticket.flowStopped, company_id: companyId }
+                        });
+
+                        if (flow) {
+                            const nodes: any[] = flow.flow["nodes"];
+                            const connections: any[] = flow.flow["connections"];
+
+                            const mountDataContact = {
+                                number: contact.number,
+                                name: contact.name,
+                                email: contact.email
+                            };
+
+                            logger.info(`[WHATSAPP OFICIAL - INPUT NODE] Continuando fluxo do nó ${nextNode}`);
+
+                            await ActionsWebhookService(
+                                whatsapp.id,
+                                parseInt(ticket.flowStopped),
+                                ticket.companyId,
+                                nodes,
+                                connections,
+                                nextNode,
+                                null,
+                                "",
+                                ticket.hashFlowId || "",
+                                null,
+                                ticket.id,
+                                mountDataContact,
+                                true // inputResponded true para node input
+                            );
+
+                            logger.info(`[WHATSAPP OFICIAL - INPUT NODE] ✅ Fluxo continuado com sucesso`);
+                            return;
+                        }
+                    }
+                } catch (error) {
+                    logger.error(`[WHATSAPP OFICIAL - INPUT NODE] ❌ Erro ao processar resposta do nó de input:`, error);
+                }
+            }
+
+            // 🔄 TRATATIVA 2: RETOMAR FLUXO INTERROMPIDO (flowBuilderQueue) - IGUAL AO BAILEYS
+            if (
+                ticket.flowStopped &&
+                ticket.flowWebhook &&
+                ticket.lastFlowId &&
+                !isNaN(parseInt(ticket.lastMessage))
+            ) {
+                logger.info(`[WHATSAPP OFICIAL - FLOW QUEUE] Retomando fluxo interrompido - ticket ${ticket.id}, flow ${ticket.flowStopped}`);
+                
+                try {
+                    // Criar mensagem simulada para compatibilidade com flowBuilderQueue
+                    const simulatedMsg = {
+                        key: {
+                            fromMe: false,
+                            remoteJid: `${fromNumber}@s.whatsapp.net`,
+                            id: message.idMessage
+                        },
+                        message: {
+                            conversation: message.text || "",
+                            timestamp: message.timestamp
+                        }
+                    } as any;
+
+                    await flowBuilderQueue(
+                        ticket,
+                        simulatedMsg,
+                        null, // wbot é null na API Oficial
+                        whatsapp,
+                        companyId,
+                        contact,
+                        null
+                    );
+
+                    logger.info(`[WHATSAPP OFICIAL - FLOW QUEUE] ✅ Fluxo interrompido retomado com sucesso`);
+                } catch (error) {
+                    logger.error(`[WHATSAPP OFICIAL - FLOW QUEUE] ❌ Erro ao retomar fluxo interrompido:`, error);
+                }
+            }
+
             if (
                 ticket.queue &&
                 ticket.queueId &&
@@ -538,25 +655,56 @@ export class ReceibedWhatsAppService {
 
                         logger.info(`[WHATSAPP OFICIAL - FLOW] 🚀 Chamando flowbuilderIntegration para ticket ${ticket.id}`);
                         
-                        campaignExecuted = await flowbuilderIntegration(
-                            simulatedMsgForFlow, // usar mensagem simulada
-                            null, // wbot é null pois não temos conexão wbot
-                            companyId,
-                            queueIntegrations,
-                            ticket,
-                            contactForCampaign,
-                            null,
-                            null
-                        );
+                        try {
+                            campaignExecuted = await flowbuilderIntegration(
+                                simulatedMsgForFlow,
+                                null,
+                                companyId,
+                                queueIntegrations,
+                                ticket,
+                                contactForCampaign,
+                                null,
+                                null
+                            );
 
-                        if (campaignExecuted) {
-                            logger.info(`[WHATSAPP OFICIAL - FLOW] ✅ Campanha executada com sucesso para ticket ${ticket.id}, parando outros fluxos`);
-                            return;
-                        } else {
-                            logger.info(`[WHATSAPP OFICIAL - FLOW] ℹ️ Nenhuma campanha executada para ticket ${ticket.id} (mensagem: "${message.text || 'vazia'}")`);
+                            if (campaignExecuted) {
+                                logger.info(`[WHATSAPP OFICIAL - FLOW] ✅ Campanha executada com sucesso para ticket ${ticket.id}, parando outros fluxos`);
+                                return;
+                            } else {
+                                logger.info(`[WHATSAPP OFICIAL - FLOW] ℹ️ Nenhuma campanha executada para ticket ${ticket.id} (mensagem: "${message.text || 'vazia'}")`);
+                            }
+                        } catch (flowError) {
+                            logger.error("[WHATSAPP OFICIAL - FLOW] ❌ Erro ao executar flowbuilderIntegration:", flowError);
+                            
+                            // ✅ LIMPAR ESTADO EM CASO DE ERRO (igual ao Baileys)
+                            try {
+                                await ticket.update({
+                                    flowWebhook: false,
+                                    isBot: false,
+                                    lastFlowId: null,
+                                    hashFlowId: null,
+                                    flowStopped: null
+                                });
+                                logger.info(`[WHATSAPP OFICIAL - FLOW] 🧹 Estado do ticket ${ticket.id} limpo após erro`);
+                            } catch (cleanupError) {
+                                logger.error(`[WHATSAPP OFICIAL - FLOW] ❌ Erro ao limpar estado do ticket:`, cleanupError);
+                            }
                         }
                     } catch (error) {
-                        console.error("[WHATSAPP OFICIAL] Erro ao verificar campanhas:", error);
+                        logger.error("[WHATSAPP OFICIAL] ❌ Erro ao verificar campanhas:", error);
+                        
+                        // ✅ LIMPAR ESTADO EM CASO DE ERRO GERAL
+                        try {
+                            await ticket.update({
+                                flowWebhook: false,
+                                isBot: false,
+                                lastFlowId: null,
+                                hashFlowId: null,
+                                flowStopped: null
+                            });
+                        } catch (cleanupError) {
+                            logger.error("[WHATSAPP OFICIAL] ❌ Erro ao limpar estado do ticket:", cleanupError);
+                        }
                     }
                 }
             }
