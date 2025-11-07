@@ -821,10 +821,13 @@ export const ActionsWebhookService = async (
                 ticket: ticket,
                 quotedMsg: null
               });
-            } else {
-              await SendMessage(whatsapp, {
-                number: numberClient,
-                body: question
+            } else if (whatsapp.channel === "whatsapp_oficial") {
+              // ✅ CORREÇÃO: Usar SendWhatsAppOficialMessage para API Oficial
+              await SendWhatsAppOficialMessage({
+                body: question,
+                ticket: ticket,
+                type: 'text',
+                media: null
               });
             }
 
