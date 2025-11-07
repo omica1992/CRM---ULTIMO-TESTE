@@ -569,6 +569,7 @@ export class ReceibedWhatsAppService {
                     );
 
                     logger.info(`[WHATSAPP OFICIAL - FLOW QUEUE] ✅ Fluxo interrompido retomado com sucesso`);
+                    return; // ✅ CORREÇÃO: Sair após processar fluxo para evitar duplicação
                 } catch (error) {
                     logger.error(`[WHATSAPP OFICIAL - FLOW QUEUE] ❌ Erro ao retomar fluxo interrompido:`, error);
                 }
