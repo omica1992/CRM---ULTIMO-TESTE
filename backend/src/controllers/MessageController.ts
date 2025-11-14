@@ -18,6 +18,8 @@ import ListMessagesService from "../services/MessageServices/ListMessagesService
 import ShowTicketService from "../services/TicketServices/ShowTicketService";
 import DeleteWhatsAppMessage from "../services/WbotServices/DeleteWhatsAppMessage";
 import SendWhatsAppMedia from "../services/WbotServices/SendWhatsAppMedia";
+import SendWhatsAppMediaImage from "../services/WbotServices/SendWhatsappMediaImage";
+import CheckApiOficial24hWindow from "../helpers/CheckApiOficial24hWindow";
 import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
 import CreateMessageService from "../services/MessageServices/CreateMessageService";
 
@@ -178,6 +180,37 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   if (!ticket.whatsappId) {
     throw new AppError("Este ticket não possui conexão vinculada, provavelmente foi excluída a conexão.", 400);
+  }
+
+  // ✅ VERIFICAÇÃO: Janela de 24h para API Oficial (não se aplica a mensagens privadas)
+  if (isPrivate === "false") {
+    const check24h = await CheckApiOficial24hWindow(ticket);
+    
+    if (check24h.isOficial) {
+      if (check24h.hasClientMessages) {
+        console.log(`[API OFICIAL - 24H CHECK] Ticket ${ticket.id}: Última mensagem do cliente há ${check24h.hoursSinceLastMessage?.toFixed(2)} horas`);
+      } else {
+        console.log(`[API OFICIAL - 24H CHECK] Ticket ${ticket.id}: Sem mensagens do cliente`);
+      }
+
+      if (!check24h.isWithin24h) {
+        if (!check24h.hasClientMessages) {
+          console.log(`[API OFICIAL - 24H CHECK] ❌ Bloqueando envio - Cliente nunca enviou mensagem`);
+          throw new AppError(
+            "Este contato ainda não iniciou uma conversa. Você só pode enviar templates aprovados. Use o botão 'Enviar Template' para iniciar a conversa.",
+            403
+          );
+        } else {
+          console.log(`[API OFICIAL - 24H CHECK] ❌ Bloqueando envio - Janela de 24h expirada`);
+          throw new AppError(
+            "A janela de 24 horas para enviar mensagens expirou. Você só pode enviar templates aprovados para este contato. Use o botão 'Enviar Template' para continuar a conversa.",
+            403
+          );
+        }
+      } else {
+        console.log(`[API OFICIAL - 24H CHECK] ✅ Permitindo envio - Dentro da janela de 24h`);
+      }
+    }
   }
 
   SetTicketMessagesAsRead(ticket);
