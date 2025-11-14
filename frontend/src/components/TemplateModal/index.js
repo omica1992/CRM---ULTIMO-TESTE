@@ -75,7 +75,13 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 const templateSchema = Yup.object().shape({
-    name: Yup.string().required("Nome é obrigatório"),
+    name: Yup.string()
+        .required("Nome é obrigatório")
+        .matches(
+            /^[a-z0-9_]+$/,
+            "Nome deve conter apenas letras minúsculas, números e underscore (_)"
+        )
+        .max(512, "Nome deve ter no máximo 512 caracteres"),
     category: Yup.string().required("Categoria é obrigatória"),
     language: Yup.string().required("Idioma é obrigatório"),
     components: Yup.array().min(1, "Pelo menos um componente é necessário")
@@ -236,14 +242,27 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                             <Grid container spacing={2}>
                                 <Grid item xs={12} sm={6}>
                                     <Field name="name">
-                                        {({ field }) => (
+                                        {({ field, form }) => (
                                             <TextField
                                                 {...field}
                                                 label="Nome do Template"
                                                 fullWidth
                                                 error={touched.name && !!errors.name}
-                                                helperText={touched.name && errors.name}
+                                                helperText={
+                                                    (touched.name && errors.name) || 
+                                                    "Apenas letras minúsculas, números e underscore (_)"
+                                                }
                                                 disabled={!!templateId}
+                                                onChange={(e) => {
+                                                    // Normalizar: converter para minúsculas e remover caracteres inválidos
+                                                    const normalized = e.target.value
+                                                        .toLowerCase()
+                                                        .replace(/[^a-z0-9_]/g, '');
+                                                    form.setFieldValue('name', normalized);
+                                                }}
+                                                inputProps={{
+                                                    maxLength: 512
+                                                }}
                                             />
                                         )}
                                     </Field>
