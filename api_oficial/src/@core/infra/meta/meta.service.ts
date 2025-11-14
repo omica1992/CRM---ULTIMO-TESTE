@@ -214,6 +214,8 @@ export class MetaService {
       };
 
       this.logger.log(`[META] Criando template: ${templateData.name}`);
+      this.logger.log(`[META] WABA ID: ${wabaId}`);
+      this.logger.log(`[META] Payload completo: ${JSON.stringify(templateData, null, 2)}`);
 
       const result = await fetch(`${this.urlMeta}/${wabaId}/message_templates`, {
         method: 'POST',
@@ -223,10 +225,19 @@ export class MetaService {
 
       if (result.status !== 200) {
         const resultError = await result.json();
-        this.logger.error(`[META] Erro ao criar template: ${JSON.stringify(resultError)}`);
-        throw new Error(
-          resultError.error?.message || 'Falha ao criar template',
-        );
+        this.logger.error(`[META] Status HTTP: ${result.status}`);
+        this.logger.error(`[META] Erro completo da Meta: ${JSON.stringify(resultError, null, 2)}`);
+        this.logger.error(`[META] Payload enviado: ${JSON.stringify(templateData, null, 2)}`);
+        
+        // ✅ Priorizar mensagem amigável da Meta (error_user_msg)
+        const errorMessage = resultError.error?.error_user_msg || 
+                            resultError.error?.error_user_title ||
+                            resultError.error?.message || 
+                            resultError.error?.error_data?.details || 
+                            'Falha ao criar template';
+        
+        this.logger.error(`[META] Mensagem de erro extraída: ${errorMessage}`);
+        throw new Error(errorMessage);
       }
 
       const response = await result.json();
@@ -234,7 +245,8 @@ export class MetaService {
       return response;
     } catch (error: any) {
       this.logger.error(`createTemplate - ${error.message}`);
-      throw Error(`Erro ao criar template: ${error.message}`);
+      // ✅ Propagar mensagem original sem adicionar prefixo
+      throw error;
     }
   }
 
@@ -255,10 +267,14 @@ export class MetaService {
 
       if (result.status !== 200) {
         const resultError = await result.json();
-        this.logger.error(`[META] Erro ao atualizar template: ${JSON.stringify(resultError)}`);
-        throw new Error(
-          resultError.error?.message || 'Falha ao atualizar template',
-        );
+        this.logger.error(`[META] Erro ao atualizar template: ${JSON.stringify(resultError, null, 2)}`);
+        
+        const errorMessage = resultError.error?.error_user_msg || 
+                            resultError.error?.error_user_title ||
+                            resultError.error?.message || 
+                            'Falha ao atualizar template';
+        
+        throw new Error(errorMessage);
       }
 
       const response = await result.json();
@@ -266,7 +282,7 @@ export class MetaService {
       return response;
     } catch (error: any) {
       this.logger.error(`updateTemplate - ${error.message}`);
-      throw Error(`Erro ao atualizar template: ${error.message}`);
+      throw error;
     }
   }
 
@@ -289,10 +305,14 @@ export class MetaService {
 
       if (result.status !== 200) {
         const resultError = await result.json();
-        this.logger.error(`[META] Erro ao deletar template: ${JSON.stringify(resultError)}`);
-        throw new Error(
-          resultError.error?.message || 'Falha ao deletar template',
-        );
+        this.logger.error(`[META] Erro ao deletar template: ${JSON.stringify(resultError, null, 2)}`);
+        
+        const errorMessage = resultError.error?.error_user_msg || 
+                            resultError.error?.error_user_title ||
+                            resultError.error?.message || 
+                            'Falha ao deletar template';
+        
+        throw new Error(errorMessage);
       }
 
       const response = await result.json();
@@ -300,7 +320,7 @@ export class MetaService {
       return response;
     } catch (error: any) {
       this.logger.error(`deleteTemplate - ${error.message}`);
-      throw Error(`Erro ao deletar template: ${error.message}`);
+      throw error;
     }
   }
 
@@ -318,15 +338,19 @@ export class MetaService {
 
       if (result.status !== 200) {
         const resultError = await result.json();
-        throw new Error(
-          resultError.error?.message || 'Falha ao buscar template',
-        );
+        
+        const errorMessage = resultError.error?.error_user_msg || 
+                            resultError.error?.error_user_title ||
+                            resultError.error?.message || 
+                            'Falha ao buscar template';
+        
+        throw new Error(errorMessage);
       }
 
       return await result.json();
     } catch (error: any) {
       this.logger.error(`getTemplateById - ${error.message}`);
-      throw Error('Erro ao buscar template');
+      throw error;
     }
   }
 

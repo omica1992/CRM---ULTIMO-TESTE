@@ -152,8 +152,15 @@ export class TemplatesWhatsappService {
   }
 
   private validateTemplateData(templateData: any) {
+    this.logger.log(`[VALIDATE] Validando template: ${JSON.stringify(templateData, null, 2)}`);
+
     if (!templateData.name) {
       throw new Error('Nome do template é obrigatório');
+    }
+
+    // Validar formato do nome (apenas letras minúsculas, números e underscore)
+    if (!/^[a-z0-9_]+$/.test(templateData.name)) {
+      throw new Error('Nome do template deve conter apenas letras minúsculas, números e underscore');
     }
 
     if (!templateData.category) {
@@ -172,11 +179,61 @@ export class TemplatesWhatsappService {
       throw new Error('Componentes do template são obrigatórios');
     }
 
+    if (templateData.components.length === 0) {
+      throw new Error('Template deve ter pelo menos um componente');
+    }
+
     // Validar que tem pelo menos um componente BODY
     const hasBody = templateData.components.some((comp: any) => comp.type === 'BODY');
     if (!hasBody) {
       throw new Error('Template deve ter pelo menos um componente BODY');
     }
+
+    // Validar cada componente
+    templateData.components.forEach((comp: any, index: number) => {
+      if (!comp.type) {
+        throw new Error(`Componente ${index} não tem tipo definido`);
+      }
+
+      if (!['HEADER', 'BODY', 'FOOTER', 'BUTTONS'].includes(comp.type)) {
+        throw new Error(`Componente ${index} tem tipo inválido: ${comp.type}`);
+      }
+
+      // HEADER precisa de format se existir
+      if (comp.type === 'HEADER' && !comp.format) {
+        throw new Error(`Componente HEADER precisa ter formato (TEXT, IMAGE, VIDEO, DOCUMENT)`);
+      }
+
+      // BODY e FOOTER precisam de text
+      if ((comp.type === 'BODY' || comp.type === 'FOOTER') && !comp.text) {
+        throw new Error(`Componente ${comp.type} precisa ter texto`);
+      }
+
+      // BUTTONS precisa de array de botões
+      if (comp.type === 'BUTTONS' && (!comp.buttons || !Array.isArray(comp.buttons))) {
+        throw new Error(`Componente BUTTONS precisa ter array de botões`);
+      }
+
+      // Validar botões
+      if (comp.buttons) {
+        comp.buttons.forEach((btn: any, btnIndex: number) => {
+          if (!btn.type) {
+            throw new Error(`Botão ${btnIndex} não tem tipo`);
+          }
+          if (!btn.text) {
+            throw new Error(`Botão ${btnIndex} não tem texto`);
+          }
+          if (btn.type === 'URL' && !btn.url) {
+            throw new Error(`Botão URL ${btnIndex} não tem URL`);
+          }
+          if (btn.type === 'PHONE_NUMBER' && !btn.phone_number) {
+            throw new Error(`Botão PHONE_NUMBER ${btnIndex} não tem número`);
+          }
+        });
+      }
+    });
+
+    this.logger.log(`[VALIDATE] ✅ Template validado com sucesso`);
   }
 
 }
