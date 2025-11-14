@@ -200,6 +200,7 @@ const SendWhatsAppOficialMessage = async ({
     };
 
     logger.info(`[WHATSAPP OFICIAL - SAVE] Salvando mensagem no banco - Ticket: ${ticket.id}`);
+    logger.info(`[WHATSAPP OFICIAL - SAVE] messageData.id = ${(messageData as any).id} (deve ser undefined)`);
     await CreateMessageService({ messageData, companyId: ticket.companyId });
     logger.info(`[WHATSAPP OFICIAL - SAVE] Mensagem salva com sucesso - Ticket: ${ticket.id}`);
 

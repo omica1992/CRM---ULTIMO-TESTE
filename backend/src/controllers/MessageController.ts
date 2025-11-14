@@ -253,13 +253,26 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
         })
       );
     } else {
-      // Tratamento para mensagens sem mídia (código existente)
-      if (ticket.channel === "whatsapp" && isPrivate === "false") {
-        await SendWhatsAppMessage({ body, ticket, quotedMsg, vCard });
-      } else if (ticket.channel == 'whatsapp_oficial' && isPrivate === "false") {
-        await SendWhatsAppOficialMessage({
-          body, ticket, quotedMsg, type: !isNil(vCard) ? 'contacts' : 'text', media: null, vCard
-        })
+      // Tratamento para mensagens sem mídia
+      if (isPrivate === "false" && ["whatsapp", "whatsapp_oficial", "whatsapp-oficial"].includes(ticket.channel)) {
+        // ✅ Verificar se é API Oficial pelo provider da conexão
+        const whatsapp = await Whatsapp.findByPk(ticket.whatsappId);
+        const isOficial = whatsapp && (
+          whatsapp.provider === "oficial" || 
+          whatsapp.provider === "beta" ||
+          whatsapp.channel === "whatsapp-oficial" || 
+          whatsapp.channel === "whatsapp_oficial"
+        );
+
+        if (isOficial) {
+          // Usar serviço da API Oficial
+          await SendWhatsAppOficialMessage({
+            body, ticket, quotedMsg, type: !isNil(vCard) ? 'contacts' : 'text', media: null, vCard
+          });
+        } else {
+          // Usar serviço Baileys
+          await SendWhatsAppMessage({ body, ticket, quotedMsg, vCard });
+        }
       } else if (isPrivate === "true") {
         const messageData = {
           wid: `PVT${ticket.updatedAt.toString().replace(' ', '')}`,

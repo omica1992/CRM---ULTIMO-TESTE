@@ -6,6 +6,7 @@ import {
   Model,
   DataType,
   PrimaryKey,
+  AutoIncrement,
   Default,
   BelongsTo,
   ForeignKey
@@ -19,6 +20,7 @@ import TicketTraking from "./TicketTraking";
 @Table
 class Message extends Model<Message> {
   @PrimaryKey
+  @AutoIncrement
   @Column
   id: number;
 

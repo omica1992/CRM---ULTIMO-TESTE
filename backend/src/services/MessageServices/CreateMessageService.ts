@@ -99,7 +99,15 @@ const CreateMessageService = async ({
     }
   } else {
     // Criar nova mensagem
-    await Message.create({ ...correctedMessageData, companyId });
+    // ✅ CORREÇÃO: Remover campo 'id' se existir (deve ser auto-gerado)
+    const { id, ...dataToCreate } = correctedMessageData as any;
+    
+    // Log para debug
+    if (id !== undefined) {
+      console.log(`[CREATE MESSAGE] ⚠️ Removendo campo 'id' com valor: ${id}`);
+    }
+    
+    await Message.create({ ...dataToCreate, companyId });
     console.log(`[CREATE MESSAGE] ➕ Nova mensagem criada ${correctedMessageData.wid}`);
   }
 
