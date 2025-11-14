@@ -19,6 +19,7 @@ import FindOrCreateATicketTrakingService from "../services/TicketServices/FindOr
 import ListTicketsServiceReport from "../services/TicketServices/ListTicketsServiceReport";
 import RelatorioVendasService from "../services/ReportService/RelatorioVendasService";
 import SetTicketMessagesAsRead from "../helpers/SetTicketMessagesAsRead";
+import BulkTransferTicketsService from "../services/TicketServices/BulkTransferTicketsService";
 import { Mutex } from "async-mutex";
 
 type IndexQuery = {
@@ -660,6 +661,49 @@ export const triggerFlow = async (
     console.error("Erro ao disparar fluxo no ticket:", error);
     return res.status(500).json({
       error: "Erro interno do servidor"
+    });
+  }
+};
+
+export const bulkTransfer = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId } = req.user;
+  const { ticketIds, userId, queueId, transferMessage } = req.body;
+
+  // Validações básicas
+  if (!ticketIds || !Array.isArray(ticketIds) || ticketIds.length === 0) {
+    return res.status(400).json({
+      error: "Lista de tickets é obrigatória e não pode estar vazia"
+    });
+  }
+
+  if (!userId && !queueId) {
+    return res.status(400).json({
+      error: "É necessário especificar pelo menos um usuário ou fila de destino"
+    });
+  }
+
+  try {
+    console.log(`[BULK TRANSFER CONTROLLER] Iniciando transferência múltipla para ${ticketIds.length} tickets`);
+    
+    const result = await BulkTransferTicketsService({
+      ticketIds,
+      userId,
+      queueId,
+      transferMessage,
+      companyId,
+      userRequestId: parseInt(req.user.id)
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Transferência concluída. ${result.successfulTransfers.length} tickets transferidos com sucesso.`,
+      data: result
+    });
+
+  } catch (error) {
+    console.error("Erro na transferência múltipla:", error);
+    return res.status(500).json({
+      error: error.message || "Erro interno do servidor"
     });
   }
 };

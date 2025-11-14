@@ -7,6 +7,8 @@ import { createTheme, ThemeProvider } from "@material-ui/core/styles";
 import { useMediaQuery } from "@material-ui/core";
 import ColorModeContext from "./layout/themeContext";
 import { ActiveMenuProvider } from "./context/ActiveMenuContext";
+import { SelectedTicketsProvider } from "./context/SelectedTickets/SelectedTicketsContext";
+import { AvailableTicketsProvider } from "./context/AvailableTickets/AvailableTicketsContext";
 import Favicon from "react-favicon";
 import { getBackendUrl } from "./config";
 import Routes from "./routes";
@@ -448,7 +450,11 @@ const App = () => {
         <ThemeProvider theme={theme}>
           <QueryClientProvider client={queryClient}>
             <ActiveMenuProvider>
-              <Routes />
+              <AvailableTicketsProvider>
+                <SelectedTicketsProvider>
+                  <Routes />
+                </SelectedTicketsProvider>
+              </AvailableTicketsProvider>
             </ActiveMenuProvider>
           </QueryClientProvider>
         </ThemeProvider>

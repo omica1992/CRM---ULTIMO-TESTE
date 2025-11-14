@@ -15,7 +15,7 @@ const useStyles = makeStyles(theme => ({
 		// backgroundColor: "#eee",
 		// padding: theme.spacing(4),
 		padding: theme.padding,
-		height: `calc(100% - 48px)`,
+		height: `calc(100% - 58px)`,
 		overflowY: "hidden",
 		// Ajuste para monitores pequenos (11-13 polegadas)
 		'@media (max-width: 1366px)': {

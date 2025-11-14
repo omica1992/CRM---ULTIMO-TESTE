@@ -56,6 +56,7 @@ interface Request {
   ticketData: TicketData;
   ticketId: string | number;
   companyId: number;
+  isBulkTransfer?: boolean; // ✅ Flag para transferências em massa
 }
 
 interface Response {
@@ -67,7 +68,8 @@ interface Response {
 const UpdateTicketService = async ({
   ticketData,
   ticketId,
-  companyId
+  companyId,
+  isBulkTransfer = false // ✅ Flag para transferências em massa
 }: Request): Promise<Response> => {
   try {
     let {
@@ -449,7 +451,7 @@ const UpdateTicketService = async ({
 
         await newTicketTransfer.reload();
 
-        if (settings.sendMsgTransfTicket === "enabled") {
+        if (settings.sendMsgTransfTicket === "enabled" && !isBulkTransfer) { // ✅ Não enviar mensagens em transferências em massa
           // Mensagem de transferencia da FILA
           if (
             (oldQueueId !== queueId || oldUserId !== userId) &&
@@ -458,7 +460,12 @@ const UpdateTicketService = async ({
             !isNil(queueId) &&
             ticket.whatsapp.status === "CONNECTED"
           ) {
-            const wbot = await GetTicketWbot(ticket);
+            // ✅ CORREÇÃO: Verificar se é API Oficial antes de usar wbot
+            const isOficial = ticket.whatsapp.provider === "oficial" || 
+                             ticket.whatsapp.provider === "beta" ||
+                             ticket.whatsapp.channel === "whatsapp-oficial" || 
+                             ticket.whatsapp.channel === "whatsapp_oficial";
+
             const msgtxt = formatBody(
               `\u200e ${settings.transferMessage.replace(
                 "${queue.name}",
@@ -466,19 +473,37 @@ const UpdateTicketService = async ({
               )}`,
               ticket
             );
-            const queueChangedMessage = await wbot.sendMessage(
-              getJidOf(ticket),
-              {
-                text: msgtxt
-              }
-            );
 
-            await verifyMessage(
-              queueChangedMessage,
-              ticket,
-              ticket.contact,
-              ticketTraking
-            );
+            let queueChangedMessage;
+            
+            if (isOficial) {
+              // Para API Oficial, usar SendWhatsAppOficialMessage
+              const SendWhatsAppOficialMessage = (await import("../WhatsAppOficial/SendWhatsAppOficialMessage")).default;
+              queueChangedMessage = await SendWhatsAppOficialMessage({
+                body: msgtxt,
+                ticket: ticket,
+                type: 'text',
+                media: null
+              });
+            } else {
+              // Para Baileys, usar o método original
+              const wbot = await GetTicketWbot(ticket);
+              queueChangedMessage = await wbot.sendMessage(
+                getJidOf(ticket),
+                {
+                  text: msgtxt
+                }
+              );
+            }
+
+            if (queueChangedMessage) {
+              await verifyMessage(
+                queueChangedMessage,
+                ticket,
+                ticket.contact,
+                ticketTraking
+              );
+            }
           }
           // else
           //   // Mensagem de transferencia do ATENDENTE
@@ -620,7 +645,7 @@ const UpdateTicketService = async ({
 
         return { ticket: newTicketTransfer, oldStatus, oldUserId };
       } else {
-        if (settings.sendMsgTransfTicket === "enabled") {
+        if (settings.sendMsgTransfTicket === "enabled" && !isBulkTransfer) { // ✅ Não enviar mensagens em transferências em massa
           // Mensagem de transferencia da FILA
           if (
             oldQueueId !== queueId ||
@@ -629,7 +654,12 @@ const UpdateTicketService = async ({
               !isNil(queueId) &&
               ticket.whatsapp.status === "CONNECTED")
           ) {
-            const wbot = await GetTicketWbot(ticket);
+            // ✅ CORREÇÃO: Verificar se é API Oficial antes de usar wbot
+            const isOficial = ticket.whatsapp.provider === "oficial" || 
+                             ticket.whatsapp.provider === "beta" ||
+                             ticket.whatsapp.channel === "whatsapp-oficial" || 
+                             ticket.whatsapp.channel === "whatsapp_oficial";
+
             const msgtxt = formatBody(
               `\u200e ${settings.transferMessage.replace(
                 "${queue.name}",
@@ -637,22 +667,39 @@ const UpdateTicketService = async ({
               )}`,
               ticket
             );
-            // const msgtxt = `\u200e*Mensagem Automática*:\nVocê foi transferido(a) para o departamento *${queue?.name}"*\nAguarde um momento, iremos atende-lo(a)!`;
 
-            const queueChangedMessage = await wbot.sendMessage(
-              `${ticket.contact.number}@${
-                ticket.isGroup ? "g.us" : "s.whatsapp.net"
-              }`,
-              {
-                text: msgtxt
-              }
-            );
-            await verifyMessage(
-              queueChangedMessage,
-              ticket,
-              ticket.contact,
-              ticketTraking
-            );
+            let queueChangedMessage;
+            
+            if (isOficial) {
+              // Para API Oficial, usar SendWhatsAppOficialMessage
+              const SendWhatsAppOficialMessage = (await import("../WhatsAppOficial/SendWhatsAppOficialMessage")).default;
+              queueChangedMessage = await SendWhatsAppOficialMessage({
+                body: msgtxt,
+                ticket: ticket,
+                type: 'text',
+                media: null
+              });
+            } else {
+              // Para Baileys, usar o método original
+              const wbot = await GetTicketWbot(ticket);
+              queueChangedMessage = await wbot.sendMessage(
+                `${ticket.contact.number}@${
+                  ticket.isGroup ? "g.us" : "s.whatsapp.net"
+                }`,
+                {
+                  text: msgtxt
+                }
+              );
+            }
+            
+            if (queueChangedMessage) {
+              await verifyMessage(
+                queueChangedMessage,
+                ticket,
+                ticket.contact,
+                ticketTraking
+              );
+            }
           }
           // else
           //   // Mensagem de transferencia do ATENDENTE

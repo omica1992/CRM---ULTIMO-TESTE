@@ -31,6 +31,7 @@ interface Request {
   showContacts?: string;
   showCampaign?: string;
   showFlow?: string;
+  showTemplates?: string; // ✅ CAMPO ADICIONADO PARA TEMPLATES
   finalizacaoComValorVendaAtiva?: boolean;
   birthDate?: Date | string;
   allowSeeMessagesInPendingTickets?: string; // 🆕 NOVO CAMPO ADICIONADO
@@ -67,6 +68,7 @@ const CreateUserService = async ({
   showContacts,
   showCampaign,
   showFlow,
+  showTemplates, // ✅ ADICIONAR AQUI
   finalizacaoComValorVendaAtiva,
   birthDate,
   allowSeeMessagesInPendingTickets = "enabled" // 🆕 INCLUIR NO DESTRUCTURING COM VALOR PADRÃO
@@ -168,6 +170,7 @@ const CreateUserService = async ({
       showContacts,
       showCampaign,
       showFlow,
+      showTemplates, // ✅ ADICIONAR AQUI TAMBÉM
       finalizacaoComValorVendaAtiva,
       birthDate: processedBirthDate,
       allowSeeMessagesInPendingTickets // 🆕 INCLUIR NO CREATE

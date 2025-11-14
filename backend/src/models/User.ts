@@ -213,6 +213,10 @@ class User extends Model<User> {
   @Column
   allowSeeMessagesInPendingTickets: string;
 
+  @Default("disabled")
+  @Column
+  showTemplates: string;
+
   @BeforeDestroy
   static async updateChatbotsUsersReferences(user: User) {
     await Chatbot.update(

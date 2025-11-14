@@ -39,18 +39,44 @@ const verifyMessageOficial = async (
         quotedMsgId = quotedMessage?.id || null;
     }
 
+    // ✅ CORREÇÃO: Melhor tratamento do body da mensagem para preservar histórico
+    let messageBody = '';
+    
+    if (message.type === "contacts") {
+        messageBody = bodyMessage;
+        console.log(`[VERIFY MESSAGE OFICIAL] 👤 Contato: ${messageBody.substring(0, 50)}...`);
+    } else {
+        // Prioridade: message.text, depois extrair do data, fallback baseado no tipo
+        messageBody = message.text || 
+                     data?.message?.text?.body || 
+                     data?.message?.conversation || 
+                     data?.text || 
+                     (message.type && message.type !== 'text' ? `📎 ${message.type}` : '');
+        
+        console.log(`[VERIFY MESSAGE OFICIAL] 💬 Msg ID: ${message.idMessage}, Type: ${message.type}, Body: "${messageBody}"`);
+        
+        // Debug adicional quando body está vazio
+        if (!messageBody) {
+            console.log(`[VERIFY MESSAGE OFICIAL] ⚠️ Body vazio - Debug data:`, {
+                messageText: message.text,
+                dataMessageTextBody: data?.message?.text?.body,
+                dataMessageConversation: data?.message?.conversation,
+                dataText: data?.text,
+                messageType: message.type
+            });
+        }
+    }
+
     const messageData = {
         wid: message.idMessage,
         ticketId: ticket.id,
         contactId: contact.id,
-        body: message.type === "contacts" ? bodyMessage : !!message.text ? message.text : '',
+        body: messageBody,
         fromMe: false,
         mediaType: message.type === "contacts" ? "contactMessage" : data.message.type,
         mediaUrl: fileName,
-        // read: false,
         read: false,
         quotedMsgId: quotedMsgId,
-        // ack: 2,
         ack: 0,
         channel: 'whatsapp_oficial',
         remoteJid: `${fromNumber}@s.whatsapp.net`,

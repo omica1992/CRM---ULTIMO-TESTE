@@ -33,6 +33,7 @@ interface SerializedUser {
   showContacts: string;
   showCampaign: string;
   showFlow: string;
+  showTemplates: string; // ✅ ADICIONAR CAMPO AQUI
 }
 
 export const SerializeUser = async (user: User): Promise<SerializedUser> => {
@@ -73,6 +74,7 @@ export const SerializeUser = async (user: User): Promise<SerializedUser> => {
     finalizacaoComValorVendaAtiva: user.finalizacaoComValorVendaAtiva,
     showContacts: user.showContacts,
     showCampaign: user.showCampaign,
-    showFlow: user.showFlow
+    showFlow: user.showFlow,
+    showTemplates: user.showTemplates // ✅ ADICIONAR CAMPO NO RETORNO
   };
 };

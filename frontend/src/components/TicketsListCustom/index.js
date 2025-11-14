@@ -10,6 +10,7 @@ import TicketsListSkeleton from "../TicketsListSkeleton";
 import useTickets from "../../hooks/useTickets";
 import { i18n } from "../../translate/i18n";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import { useAvailableTickets } from "../../context/AvailableTickets/AvailableTicketsContext";
 
 const useStyles = makeStyles((theme) => ({
     ticketsListWrapper: {
@@ -220,6 +221,7 @@ const TicketsListCustom = (props) => {
     let [ticketsList, dispatch] = useReducer(reducer, []);
     //   const socketManager = useContext(SocketContext);
     const { user, socket } = useContext(AuthContext);
+    const { updateAvailableTickets } = useAvailableTickets();
 
     const { profile, queues } = user;
     const showTicketWithoutQueue = user.allTicket === 'enable';
@@ -382,6 +384,8 @@ const TicketsListCustom = (props) => {
         if (typeof updateCount === "function") {
             updateCount(ticketsList.length);
         }
+        // Atualizar tickets disponíveis para seleção múltipla
+        updateAvailableTickets(ticketsList);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [ticketsList]);
 

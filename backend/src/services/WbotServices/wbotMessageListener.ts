@@ -1738,13 +1738,22 @@ const verifyQueue = async (
           debouncedSentMessage();
 
           //atualiza o contador de vezes que enviou o bot e que foi enviado fora de hora
-          // await ticket.update({
-          //   queueId: queue.id,
-          //   isOutOfHour: true,
-          //   amountUsedBotQueues: ticket.amountUsedBotQueues + 1
-          // });
+          const ticketUpdate: any = {
+            queueId: queue.id,
+            isOutOfHour: true,
+            amountUsedBotQueues: ticket.amountUsedBotQueues + 1
+          };
 
-          // return;
+          // ✅ NOVA FUNCIONALIDADE: Verificar configuração da empresa para fechar ticket
+          if (settings?.closeTicketOutOfHours) {
+            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Fechando ticket ${ticket.id} (configuração habilitada)`);
+            // Mantém comportamento padrão - ticket fica aberto mas marcado como isOutOfHour
+          } else {
+            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (configuração desabilitada)`);
+          }
+
+          await ticket.update(ticketUpdate);
+          return;
         }
         //atualiza o contador de vezes que enviou o bot e que foi enviado fora de hora
         await ticket.update({
@@ -2999,13 +3008,29 @@ export const handleMessageIntegration = async (
 
   if (queueIntegration.type === "n8n" || queueIntegration.type === "webhook") {
     if (queueIntegration?.urlN8N) {
+      // ✅ CORREÇÃO: Normalizar remoteJid para evitar @lid em webhooks
+      const normalizedMsg = { ...msg };
+      if (normalizedMsg.key && normalizedMsg.key.remoteJid) {
+        // Se remoteJid contém @lid, substituir pelo número real do contato
+        if (normalizedMsg.key.remoteJid.includes("@lid")) {
+          if (ticket?.contact?.number) {
+            // Usar número do contato do ticket com formato correto
+            const originalRemoteJid = normalizedMsg.key.remoteJid;
+            normalizedMsg.key.remoteJid = `${ticket.contact.number}@s.whatsapp.net`;
+            console.log(`[WEBHOOK INTEGRATION] 🔄 Normalizando remoteJid: ${originalRemoteJid} → ${normalizedMsg.key.remoteJid}`);
+          } else {
+            console.warn(`[WEBHOOK INTEGRATION] ⚠️ Não foi possível normalizar @lid - contato sem número: ${normalizedMsg.key.remoteJid}`);
+          }
+        }
+      }
+
       const options = {
         method: "POST",
         url: queueIntegration?.urlN8N,
         headers: {
           "Content-Type": "application/json"
         },
-        json: msg
+        json: normalizedMsg
       };
       try {
         request(options, function (error, response) {
@@ -4566,10 +4591,21 @@ const handleMessage = async (
             debouncedSentMessage();
           }
           //atualiza o contador de vezes que enviou o bot e que foi enviado fora de hora
-          await ticket.update({
+          const ticketUpdate: any = {
             isOutOfHour: true,
             amountUsedBotQueues: ticket.amountUsedBotQueues + 1
-          });
+          };
+
+          // ✅ NOVA FUNCIONALIDADE: Verificar configuração da empresa para fechar ticket
+          if (settings?.closeTicketOutOfHours) {
+            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS 2] Fechando ticket ${ticket.id} (configuração habilitada)`);
+            // Mantém comportamento padrão - ticket fica aberto mas marcado como isOutOfHour
+          } else {
+            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS 2] Mantendo ticket ${ticket.id} aberto (configuração desabilitada)`);
+          }
+
+          await ticket.update(ticketUpdate);
+
           return;
         }
       }

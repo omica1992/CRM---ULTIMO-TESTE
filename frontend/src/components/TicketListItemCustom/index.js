@@ -48,7 +48,9 @@ import {
   DialogActions,
   Button,
   DialogContent,
+  Checkbox,
 } from "@material-ui/core";
+import { useSelectedTickets } from "../../context/SelectedTickets/SelectedTicketsContext";
 
 const useStyles = makeStyles((theme) => ({
   ticket: {
@@ -257,6 +259,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
   const isMounted = useRef(true);
   const { setCurrentTicket } = useContext(TicketsContext);
   const { user } = useContext(AuthContext);
+  const { isSelectionMode, isTicketSelected, toggleTicketSelection } = useSelectedTickets();
 
   const { get: getSetting } = useCompanySettings();
 
@@ -481,6 +484,11 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
     setCurrentTicket({ id, uuid, code });
   };
 
+  const handleCheckboxChange = (e) => {
+    e.stopPropagation();
+    toggleTicketSelection(ticket.id);
+  };
+
   const handleUpdateTicketStatusWithData = async (
     ticketData,
     sendFarewellMessage,
@@ -578,14 +586,32 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
 
           if (isCheckboxClicked) return;
 
-          handleSelectTicket(ticket);
+          // Se está no modo de seleção, seleciona/deseleciona o ticket
+          if (isSelectionMode) {
+            toggleTicketSelection(ticket.id);
+          } else {
+            handleSelectTicket(ticket);
+            history.push(`/tickets/${ticket.uuid}`);
+          }
         }}
         selected={ticketId && ticketId === ticket.uuid}
         className={clsx(classes.ticket, {
           [classes.pendingTicket]: ticket.status === "pending",
+          [classes.selectedTicket]: isSelectionMode && isTicketSelected(ticket.id),
         })}
       >
-        <ListItemAvatar style={{ marginLeft: "-15px" }}>
+        {/* Checkbox para seleção múltipla */}
+        {isSelectionMode && (
+          <Checkbox
+            checked={isTicketSelected(ticket.id)}
+            onChange={handleCheckboxChange}
+            color="primary"
+            style={{ marginRight: 8, marginLeft: -8 }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        )}
+        
+        <ListItemAvatar style={{ marginLeft: isSelectionMode ? "-5px" : "-15px" }}>
           <Avatar
             style={{
               width: "50px",

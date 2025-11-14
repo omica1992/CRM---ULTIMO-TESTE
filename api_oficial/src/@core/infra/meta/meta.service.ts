@@ -6,6 +6,8 @@ import {
   IReturnAuthMeta,
   IReturnMessageFile,
   IReturnMessageMeta,
+  ICreateTemplateData,
+  IUpdateTemplateData,
 } from './interfaces/IMeta.interfaces';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { convertMimeTypeToExtension } from 'src/@core/common/utils/convertMimeTypeToExtension';
@@ -193,14 +195,138 @@ export class MetaService {
       if (result.status != 200) {
         const resultError = await result.json();
         throw new Error(
-          resultError.error.message || 'Falha ao enviar mensagem para a meta',
+          resultError.error.message || 'Falha ao buscar templates',
         );
       }
 
       return (await result.json()) as IResultTemplates;
     } catch (error: any) {
       this.logger.error(`getListTemplates - ${error.message}`);
-      throw Error('Erro ao enviar a mensagem');
+      throw Error('Erro ao buscar templates');
+    }
+  }
+
+  async createTemplate(wabaId: string, token: string, templateData: ICreateTemplateData) {
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      };
+
+      this.logger.log(`[META] Criando template: ${templateData.name}`);
+
+      const result = await fetch(`${this.urlMeta}/${wabaId}/message_templates`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(templateData),
+      });
+
+      if (result.status !== 200) {
+        const resultError = await result.json();
+        this.logger.error(`[META] Erro ao criar template: ${JSON.stringify(resultError)}`);
+        throw new Error(
+          resultError.error?.message || 'Falha ao criar template',
+        );
+      }
+
+      const response = await result.json();
+      this.logger.log(`[META] Template criado com sucesso. ID: ${response.id}`);
+      return response;
+    } catch (error: any) {
+      this.logger.error(`createTemplate - ${error.message}`);
+      throw Error(`Erro ao criar template: ${error.message}`);
+    }
+  }
+
+  async updateTemplate(templateId: string, token: string, updateData: IUpdateTemplateData) {
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      };
+
+      this.logger.log(`[META] Atualizando template: ${templateId}`);
+
+      const result = await fetch(`${this.urlMeta}/${templateId}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(updateData),
+      });
+
+      if (result.status !== 200) {
+        const resultError = await result.json();
+        this.logger.error(`[META] Erro ao atualizar template: ${JSON.stringify(resultError)}`);
+        throw new Error(
+          resultError.error?.message || 'Falha ao atualizar template',
+        );
+      }
+
+      const response = await result.json();
+      this.logger.log(`[META] Template atualizado com sucesso`);
+      return response;
+    } catch (error: any) {
+      this.logger.error(`updateTemplate - ${error.message}`);
+      throw Error(`Erro ao atualizar template: ${error.message}`);
+    }
+  }
+
+  async deleteTemplate(wabaId: string, templateName: string, token: string) {
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      };
+
+      this.logger.log(`[META] Deletando template: ${templateName}`);
+
+      const result = await fetch(
+        `${this.urlMeta}/${wabaId}/message_templates?name=${templateName}`, 
+        {
+          method: 'DELETE',
+          headers,
+        }
+      );
+
+      if (result.status !== 200) {
+        const resultError = await result.json();
+        this.logger.error(`[META] Erro ao deletar template: ${JSON.stringify(resultError)}`);
+        throw new Error(
+          resultError.error?.message || 'Falha ao deletar template',
+        );
+      }
+
+      const response = await result.json();
+      this.logger.log(`[META] Template deletado com sucesso`);
+      return response;
+    } catch (error: any) {
+      this.logger.error(`deleteTemplate - ${error.message}`);
+      throw Error(`Erro ao deletar template: ${error.message}`);
+    }
+  }
+
+  async getTemplateById(templateId: string, token: string) {
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      };
+
+      const result = await fetch(`${this.urlMeta}/${templateId}`, {
+        method: 'GET',
+        headers,
+      });
+
+      if (result.status !== 200) {
+        const resultError = await result.json();
+        throw new Error(
+          resultError.error?.message || 'Falha ao buscar template',
+        );
+      }
+
+      return await result.json();
+    } catch (error: any) {
+      this.logger.error(`getTemplateById - ${error.message}`);
+      throw Error('Erro ao buscar template');
     }
   }
 

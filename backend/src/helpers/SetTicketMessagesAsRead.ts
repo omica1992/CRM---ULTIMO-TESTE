@@ -28,12 +28,25 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
         });
 
         if (['whatsapp_oficial'].includes(ticket.channel)) {
-
+          // ✅ API Oficial: Usar função específica
           getJsonMessage.forEach(async message => {
             setReadMessageWhatsAppOficial(whatsapp.token, message.wid);
           });
-        } else
-          if (ticket.channel == 'whatsapp') {
+        } else if (ticket.channel == 'whatsapp') {
+          // ✅ Baileys: Verificar se é realmente Baileys antes de usar wbot
+          const isOficial = whatsapp.provider === "oficial" || 
+                           whatsapp.provider === "beta" ||
+                           whatsapp.channel === "whatsapp-oficial" || 
+                           whatsapp.channel === "whatsapp_oficial";
+          
+          if (isOficial) {
+            logger.info(`[SET MESSAGES READ] Pulando wbot para API Oficial - Ticket ${ticket.id}`);
+            // Para API Oficial, usar a função específica
+            getJsonMessage.forEach(async message => {
+              setReadMessageWhatsAppOficial(whatsapp.token, message.wid);
+            });
+          } else {
+            // Apenas para Baileys verdadeiro
             const wbot = await getWbot(ticket.whatsappId);
 
             if (getJsonMessage.length > 0) {
@@ -52,6 +65,7 @@ const SetTicketMessagesAsRead = async (ticket: Ticket): Promise<void> => {
               });
             }
           }
+        }
 
         await Message.update(
           { read: true },

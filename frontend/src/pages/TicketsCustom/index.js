@@ -24,7 +24,7 @@ const useStyles = makeStyles((theme) => ({
 	chatContainer: {
 		flex: 1,
 		padding: "2px",
-		height: `calc(100% - 48px)`,
+		height: `calc(100% - 58px)`,
 		overflowY: "hidden",
 	},
 	chatPapper: {

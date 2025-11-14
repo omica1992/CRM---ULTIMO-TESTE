@@ -145,7 +145,8 @@ if (document && document.trim() !== "") {
           createdAt: new Date(),
           updatedAt: new Date(),
           closeTicketOnTransfer: false,
-          DirectTicketsToWallets: false
+          DirectTicketsToWallets: false,
+          closeTicketOutOfHours: true
     },{ transaction: t })
     
     await t.commit();

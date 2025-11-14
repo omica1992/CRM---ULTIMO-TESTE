@@ -42,9 +42,10 @@ const ShowUserService = async (
       "showContacts",
       "showCampaign",
       "showFlow",
+      "showTemplates",
       "finalizacaoComValorVendaAtiva",
       "birthDate",
-      "allowSeeMessagesInPendingTickets" // 🆕 INCLUIR NO ATTRIBUTES
+      "allowSeeMessagesInPendingTickets" // 
     ],
     include: [
       { model: Queue, as: "queues", attributes: ["id", "name", "color"] },

@@ -81,7 +81,27 @@ const CreateMessageService = async ({
 
   const correctedMessageData = correctMediaType(messageData);
   
-  await Message.upsert({ ...correctedMessageData, companyId });
+  // ✅ CORREÇÃO: Verificar se mensagem já existe para evitar sobrescrever
+  const existingMessage = await Message.findOne({
+    where: {
+      wid: correctedMessageData.wid,
+      companyId
+    }
+  });
+
+  if (existingMessage) {
+    // Se mensagem existe mas body está vazio, atualizar apenas o body
+    if (!existingMessage.body && correctedMessageData.body) {
+      await existingMessage.update({ body: correctedMessageData.body });
+      console.log(`[CREATE MESSAGE] 📝 Atualizando body vazio da mensagem ${correctedMessageData.wid}`);
+    } else {
+      console.log(`[CREATE MESSAGE] ✅ Mensagem ${correctedMessageData.wid} já existe com conteúdo`);
+    }
+  } else {
+    // Criar nova mensagem
+    await Message.create({ ...correctedMessageData, companyId });
+    console.log(`[CREATE MESSAGE] ➕ Nova mensagem criada ${correctedMessageData.wid}`);
+  }
 
   const message = await Message.findOne({
     where: {

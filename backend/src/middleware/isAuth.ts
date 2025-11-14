@@ -39,10 +39,14 @@ const isAuth = async (req: Request, res: Response, next: NextFunction): Promise<
 
     updateUser(id, companyId);
 
+    // Buscar usuário completo para obter showTemplates
+    const user = await ShowUserService(id, companyId);
+
     req.user = {
       id,
       profile,
-      companyId
+      companyId,
+      showTemplates: user.showTemplates || "disabled"
     };
   } catch (err: any) {
     if (err.message === "ERR_SESSION_EXPIRED" && err.statusCode === 401) {

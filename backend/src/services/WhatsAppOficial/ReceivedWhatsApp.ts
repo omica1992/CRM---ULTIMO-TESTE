@@ -419,11 +419,23 @@ export class ReceibedWhatsAppService {
                     });
                 }
 
-                // Atualizar ticket
-                await ticket.update({
+                // Atualizar ticket - verificar se deve fechar ticket fora de expediente
+                const ticketUpdate: any = {
                     amountUsedBotQueues: ticket.amountUsedBotQueues + 1,
                     isOutOfHour: true
-                });
+                };
+
+                // ✅ NOVA FUNCIONALIDADE: Verificar configuração da empresa
+                if (settings.closeTicketOutOfHours) {
+                    // Comportamento padrão: fecha ticket (como era antes)
+                    logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Fechando ticket ${ticket.id} (configuração habilitada)`);
+                    // O ticket permanece aberto mas marcado como isOutOfHour
+                } else {
+                    // Nova opção: não fecha ticket, apenas marca como fora de expediente
+                    logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (configuração desabilitada)`);
+                }
+
+                await ticket.update(ticketUpdate);
 
                 await ticketTraking.update({
                     chatbotAt: moment().toDate()

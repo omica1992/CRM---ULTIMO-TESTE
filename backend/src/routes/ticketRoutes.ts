@@ -43,4 +43,10 @@ ticketRoutes.post(
   TicketController.transferTickets
 );
 
+ticketRoutes.post(
+  "/tickets/bulk-transfer",
+  isAuth,
+  TicketController.bulkTransfer
+);
+
 export default ticketRoutes;

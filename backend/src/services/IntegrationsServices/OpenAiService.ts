@@ -205,6 +205,12 @@ const returnToFlow = async (ticket: Ticket, reason: string): Promise<void> => {
         const nodes: INodes[] = flow.flow["nodes"];
         const connections: IConnections[] = flow.flow["connections"];
         
+        // ✅ CORREÇÃO: Verificar se whatsappId é válido antes de passar
+        if (!ticket.whatsappId) {
+          logger.error(`[OPENAI SERVICE] Ticket ${ticket.id} não tem whatsappId válido. Cancelando fluxo.`);
+          return;
+        }
+
         await ActionsWebhookService(
           ticket.whatsappId,
           parseInt(ticket.flowStopped),

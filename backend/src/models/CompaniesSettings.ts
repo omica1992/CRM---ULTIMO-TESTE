@@ -131,6 +131,10 @@ class CompaniesSettings extends Model<CompaniesSettings> {
 
   @Column
   motivosFinalizacao: string; // JSON string com array de motivos padrão
+
+  @Default(true)
+  @Column
+  closeTicketOutOfHours: boolean;
 }
 
 export default CompaniesSettings;

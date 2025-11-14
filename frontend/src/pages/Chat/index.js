@@ -49,7 +49,7 @@ const useStyles = makeStyles((theme) => ({
     position: "relative",
     flex: 1,
     padding: theme.spacing(2),
-    height: `calc(100% - 48px)`,
+    height: `calc(100% - 58px)`,
     overflowY: "hidden",
     border: "1px solid rgba(0, 0, 0, 0.12)",
   },

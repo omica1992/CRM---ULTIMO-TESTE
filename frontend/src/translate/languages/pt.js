@@ -264,7 +264,10 @@ const messages = {
         typography: {
           processed: "Processado",
           in: "de",
-          date: "Data da mensagem",
+          showFlow: "Acesso aos Fluxos",
+          showTemplates: "Acesso aos Templates",
+          color: "Cor",
+          birthDate: "Data de Nascimento",
         },
         toolTips: {
           disconnected: {
@@ -705,6 +708,7 @@ const messages = {
           showContacts: "Ver contatos",
           showCampaign: "Ver campanhas",
           showFlow: "Ver fluxos",
+          showTemplates: "Ver templates",
         },
         tabs: {
           general: "Geral",
@@ -2124,6 +2128,63 @@ whitelabel: {
           logosDescription: "Carregue os logos e imagens de fundo da aplicação",
           languages: "Idiomas Disponíveis",
           languagesDescription: "Selecione quais idiomas estarão disponíveis no sistema"
+        }
+      },
+      templates: {
+        title: "Templates",
+        buttons: {
+          add: "Criar Template",
+          edit: "Editar",
+          delete: "Deletar"
+        },
+        table: {
+          name: "Nome",
+          category: "Categoria",
+          language: "Idioma", 
+          status: "Status",
+          actions: "Ações"
+        },
+        modal: {
+          create: "Criar Template",
+          edit: "Editar Template",
+          name: "Nome do Template",
+          category: "Categoria",
+          language: "Idioma",
+          parameterFormat: "Formato de Parâmetros",
+          components: "Componentes",
+          addComponent: "Adicionar Componente",
+          addButton: "Adicionar Botão",
+          text: "Texto",
+          type: "Tipo",
+          save: "Salvar",
+          cancel: "Cancelar"
+        },
+        categories: {
+          authentication: "Autenticação",
+          marketing: "Marketing", 
+          utility: "Utilidade"
+        },
+        status: {
+          approved: "Aprovado",
+          pending: "Pendente",
+          rejected: "Rejeitado",
+          disabled: "Desabilitado"
+        },
+        componentTypes: {
+          header: "Cabeçalho",
+          body: "Corpo", 
+          footer: "Rodapé",
+          buttons: "Botões"
+        },
+        buttonTypes: {
+          quickReply: "Resposta Rápida",
+          url: "Link",
+          phoneNumber: "Telefone"
+        },
+        toasts: {
+          created: "Template criado com sucesso!",
+          updated: "Template atualizado com sucesso!", 
+          deleted: "Template deletado com sucesso!"
         }
       },
     },

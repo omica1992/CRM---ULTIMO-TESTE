@@ -156,6 +156,7 @@ const UserModal = ({ open, onClose, userId }) => {
     showContacts: "enabled",
     showCampaign: "enabled",
     showFlow: "enabled",
+    showTemplates: "disabled",
     finalizacaoComValorVendaAtiva: "false",
     allowSeeMessagesInPendingTickets: "enabled"
   };
@@ -189,6 +190,7 @@ const UserModal = ({ open, onClose, userId }) => {
             ? "true"
             : "false",
           allowSeeMessagesInPendingTickets: data.allowSeeMessagesInPendingTickets === "enabled" ? "enabled" : "disabled",
+          showTemplates: data.showTemplates === "enabled" ? "enabled" : "disabled", // ✅ TRATAR showTemplates
           farewellMessage: data.farewellMessage || "",
           // Formatar a data corretamente
           birthDate: formatDateForInput(data.birthDate)
@@ -1128,6 +1130,43 @@ const handleSaveUser = async (values) => {
                               </FormControl>
                             </Grid>
                           </Grid>
+
+                          <Grid container spacing={1}>
+                            <Grid item xs={12} md={6} xl={6}>
+                              <FormControl
+                                variant="outlined"
+                                className={classes.maxWidth}
+                                margin="dense"
+                                fullWidth
+                              >
+                                <>
+                                  <InputLabel>
+                                    {i18n.t("userModal.form.showTemplates")}
+                                  </InputLabel>
+
+                                  <Field
+                                    as={Select}
+                                    label={i18n.t("userModal.form.showTemplates")}
+                                    name="showTemplates"
+                                    type="showTemplates"
+                                    required
+                                  >
+                                    <MenuItem value="disabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricDisabled"
+                                      )}
+                                    </MenuItem>
+                                    <MenuItem value="enabled">
+                                      {i18n.t(
+                                        "userModal.form.allHistoricEnabled"
+                                      )}
+                                    </MenuItem>
+                                  </Field>
+                                </>
+                              </FormControl>
+                            </Grid>
+                          </Grid>
+
                         </>
                       )}
                     />

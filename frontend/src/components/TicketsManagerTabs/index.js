@@ -30,7 +30,7 @@ import VisibilityIcon from "@material-ui/icons/Visibility";
 import VisibilityOffIcon from "@material-ui/icons/VisibilityOff";
 import ToggleButton from "@material-ui/lab/ToggleButton";
 
-import { FilterAltOff, FilterAlt, PlaylistAddCheckOutlined } from "@mui/icons-material";
+import { FilterAltOff, FilterAlt, PlaylistAddCheckOutlined, CheckBox } from "@mui/icons-material";
 
 import NewTicketModal from "../NewTicketModal";
 import TicketsList from "../TicketsListCustom";
@@ -41,7 +41,9 @@ import { TagsFilter } from "../TagsFilter";
 import { UsersFilter } from "../UsersFilter";
 import { StatusFilter } from "../StatusFilter";
 import { WhatsappsFilter } from "../WhatsappsFilter";
+import BulkActionsBar from "../BulkActionsBar";
 import { Button, Snackbar } from "@material-ui/core";
+import { useSelectedTickets } from "../../context/SelectedTickets/SelectedTicketsContext";
 
 import { i18n } from "../../translate/i18n";
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -405,6 +407,7 @@ const TicketsManagerTabs = () => {
   const { profile } = user;
   const { setSelectedQueuesMessage } = useContext(QueueSelectedContext);
   const { tabOpen, setTabOpen } = useContext(TicketsContext);
+  const { isSelectionMode, toggleSelectionMode } = useSelectedTickets();
 
   const [openCount, setOpenCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
@@ -768,6 +771,23 @@ const TicketsManagerTabs = () => {
     <AddIcon className={classes.standardIcon} />
   </IconButton>
 </Badge>
+
+{/* Botão de Seleção Múltipla */}
+<Badge
+  color="primary"
+  invisible={false}
+  badgeContent="Seleção Múltipla"
+  classes={{ badge: classes.tabsBadge }}
+>
+  <IconButton
+    className={`${classes.standardButton} ${isSelectionMode ? classes.activeButton : ''}`}
+    onClick={toggleSelectionMode}
+    title="Ativar/Desativar Seleção Múltipla"
+  >
+    <CheckBox className={`${classes.standardIcon} ${isSelectionMode ? classes.activeIcon : ''}`} />
+  </IconButton>
+</Badge>
+
 {user.profile === "admin" && (
   <Badge
     color="primary"
@@ -1117,6 +1137,9 @@ const TicketsManagerTabs = () => {
           />
         )}
       </TabPanel>
+      
+      {/* Barra de Ações em Massa */}
+      <BulkActionsBar />
     </Paper >
   );
 };

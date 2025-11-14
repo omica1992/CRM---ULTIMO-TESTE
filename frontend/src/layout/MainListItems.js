@@ -673,6 +673,15 @@ useEffect(() => {
         tooltip={collapsed}
       />
 
+      {user.showTemplates === "enabled" && (
+        <ListItemLink
+          to="/templates"
+          primary={i18n.t("templates.title")}
+          icon={<LucideIcon icon={FileJson2} />}
+          tooltip={collapsed}
+        />
+      )}
+
       {showKanban && (
         <>
           <ListItemLink

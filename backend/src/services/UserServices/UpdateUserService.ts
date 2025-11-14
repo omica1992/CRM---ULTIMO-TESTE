@@ -31,6 +31,7 @@ interface UserData {
   showContacts?: string;
   showCampaign?: string;
   showFlow?: string;
+  showTemplates?: string; // ✅ CAMPO ADICIONADO PARA TEMPLATES
   profileImage?: string;
   finalizacaoComValorVendaAtiva?: boolean;
   birthDate?: Date | string;
@@ -100,6 +101,7 @@ const UpdateUserService = async ({
     showContacts,
     showCampaign,
     showFlow,
+    showTemplates, // ✅ ADICIONAR CAMPO AQUI
     profileImage,
     finalizacaoComValorVendaAtiva,
     birthDate,
@@ -158,6 +160,7 @@ const UpdateUserService = async ({
     showContacts,
     showCampaign,
     showFlow,
+    showTemplates, // ✅ ADICIONAR CAMPO AQUI TAMBÉM
     finalizacaoComValorVendaAtiva,
     birthDate: processedBirthDate,
     allowSeeMessagesInPendingTickets
@@ -201,6 +204,7 @@ const UpdateUserService = async ({
     showCampaign: user.showCampaign,
     profileImage: user.profileImage,
     showFlow: user.showFlow,
+    showTemplates: user.showTemplates, // ✅ ADICIONAR NO OBJETO RETORNADO
     finalizacaoComValorVendaAtiva: user.finalizacaoComValorVendaAtiva,
     birthDate: user.birthDate,
     allowSeeMessagesInPendingTickets: user.allowSeeMessagesInPendingTickets

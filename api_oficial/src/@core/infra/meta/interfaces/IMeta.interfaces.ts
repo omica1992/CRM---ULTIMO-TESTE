@@ -292,3 +292,55 @@ export interface IBodyReadMessage {
   status: string;
   message_id: string;
 }
+
+// Interfaces para criação e edição de templates
+export interface ICreateTemplateData {
+  name: string;
+  category: 'AUTHENTICATION' | 'MARKETING' | 'UTILITY';
+  language: string;
+  components: ITemplateComponent[];
+  parameter_format?: 'named' | 'positional';
+}
+
+export interface IUpdateTemplateData {
+  category?: 'AUTHENTICATION' | 'MARKETING' | 'UTILITY';
+  components?: ITemplateComponent[];
+}
+
+export interface ITemplateComponent {
+  type: 'HEADER' | 'BODY' | 'FOOTER' | 'BUTTONS';
+  format?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT';
+  text?: string;
+  example?: ITemplateComponentExample;
+  buttons?: ITemplateButton[];
+}
+
+export interface ITemplateComponentExample {
+  header_text?: string[];
+  body_text?: string[];
+  header_handle?: string[];
+  body_text_named_params?: ITemplateNamedParam[];
+}
+
+export interface ITemplateNamedParam {
+  param_name: string;
+  example: string;
+}
+
+export interface ITemplateButton {
+  type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER';
+  text: string;
+  url?: string;
+  phone_number?: string;
+  example?: string[];
+}
+
+export interface ICreateTemplateResponse {
+  id: string;
+  status: string;
+  category: string;
+}
+
+export interface IDeleteTemplateResponse {
+  success: boolean;
+}

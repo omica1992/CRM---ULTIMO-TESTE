@@ -49,6 +49,7 @@ import { FlowBuilderConfig } from "../pages/FlowBuilderConfig";
 import FlowBuilder from "../pages/FlowBuilder";
 import FlowDefault from "../pages/FlowDefault";
 import CampaignsPhrase from "../pages/CampaignsPhrase";
+import Templates from "../pages/Templates";
 
 const Routes = () => {
   const [showCampaigns, setShowCampaigns] = useState(false);
@@ -112,6 +113,12 @@ const Routes = () => {
                   exact
                   path="/quick-messages"
                   component={QuickMessages}
+                  isPrivate
+                />
+                <Route
+                  exact
+                  path="/templates"
+                  component={Templates}
                   isPrivate
                 />
                 <Route exact path="/todolist" component={ToDoList} isPrivate />
