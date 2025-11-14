@@ -462,7 +462,7 @@ const UpdateTicketService = async ({
           ) {
             // ✅ CORREÇÃO: Verificar se é API Oficial antes de usar wbot
             const isOficial = ticket.whatsapp.provider === "oficial" || 
-                             ticket.whatsapp.provider === "beta" ||
+                             ticket.
                              ticket.whatsapp.channel === "whatsapp-oficial" || 
                              ticket.whatsapp.channel === "whatsapp_oficial";
 
@@ -656,7 +656,7 @@ const UpdateTicketService = async ({
           ) {
             // ✅ CORREÇÃO: Verificar se é API Oficial antes de usar wbot
             const isOficial = ticket.whatsapp.provider === "oficial" || 
-                             ticket.whatsapp.provider === "beta" ||
+                             ticket.
                              ticket.whatsapp.channel === "whatsapp-oficial" || 
                              ticket.whatsapp.channel === "whatsapp_oficial";
 

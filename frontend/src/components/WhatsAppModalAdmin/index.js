@@ -117,7 +117,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
     isDefault: false,
     token: "",
     maxUseBotQueues: 3,
-    provider: "beta",
+    provider: null, // ✅ Baileys não tem provider
     expiresTicket: 0,
     allowGroup: false,
     groupAsTicket: "disabled",

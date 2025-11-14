@@ -7,7 +7,7 @@ import {
   SignalDataTypeMap,
   initAuthCreds,
   proto
-} from 'baileys'
+} from '@whiskeysockets/baileys'
 
 export const useMultiFileAuthState = async (folder: string): Promise<{ state: AuthenticationState, saveCreds: () => Promise<void> }> => {
 

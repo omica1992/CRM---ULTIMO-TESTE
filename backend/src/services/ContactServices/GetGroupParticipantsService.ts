@@ -1,4 +1,4 @@
-import { GroupMetadata, GroupParticipant } from "baileys";
+import { GroupMetadata, GroupParticipant } from "@whiskeysockets/baileys";
 import { getWbot } from "../../libs/wbot";
 import Contact from "../../models/Contact";
 import Whatsapp from "../../models/Whatsapp";

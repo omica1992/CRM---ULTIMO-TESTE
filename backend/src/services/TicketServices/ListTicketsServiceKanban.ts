@@ -108,7 +108,7 @@ const ListTicketsServiceKanban = async ({
     {
       model: Whatsapp,
       as: "whatsapp",
-      attributes: ["name"]
+      attributes: ["id", "name", "provider", "channel"]
     },
   ];
 

@@ -24,7 +24,7 @@ const DeleteTemplateService = async ({ templateName, companyId, whatsappId }: Re
 
   // Verificar se é API Oficial
   const isOficial = whatsapp.provider === "oficial" || 
-                   whatsapp.provider === "beta" ||
+                   
                    whatsapp.channel === "whatsapp-oficial" || 
                    whatsapp.channel === "whatsapp_oficial";
 

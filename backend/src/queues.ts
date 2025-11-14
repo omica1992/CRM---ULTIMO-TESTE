@@ -45,7 +45,7 @@ import formatBody from "./helpers/Mustache";
 import TicketTag from "./models/TicketTag";
 import Tag from "./models/Tag";
 import ContactTag from "./models/ContactTag";
-import { delay } from "baileys";
+import { delay } from "@whiskeysockets/baileys";
 import Plan from "./models/Plan";
 import QueueState from "./models/QueueStates";
 import { getWbot } from "./libs/wbot";
@@ -312,7 +312,7 @@ async function handleSendScheduledMessage(job) {
 
       // ✅ Verificar se é API Oficial (com ou sem ticket)
       const isOficial = whatsapp.provider === "oficial" || 
-                       whatsapp.provider === "beta" ||
+                       
                        whatsapp.channel === "whatsapp-oficial" || 
                        whatsapp.channel === "whatsapp_oficial";
 
@@ -457,7 +457,7 @@ async function handleSendScheduledMessage(job) {
       
       // ✅ Verificar se é um template da API Oficial
       const isOficial = whatsapp.provider === "oficial" || 
-                       whatsapp.provider === "beta" ||
+                       
                        whatsapp.channel === "whatsapp-oficial" || 
                        whatsapp.channel === "whatsapp_oficial";
       

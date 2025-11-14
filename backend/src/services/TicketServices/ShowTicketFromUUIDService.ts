@@ -82,7 +82,7 @@ const ShowTicketUUIDService = async (uuid: string,
       {
         model: Whatsapp,
         as: "whatsapp",
-        attributes: ["id", "name", "groupAsTicket", "greetingMediaAttachment", "facebookUserToken", "facebookUserId", "color"]
+        attributes: ["id", "name", "groupAsTicket", "greetingMediaAttachment", "facebookUserToken", "facebookUserId", "color", "provider", "channel"] // ✅ Adicionado provider e channel
       },
       {
         model: Company,

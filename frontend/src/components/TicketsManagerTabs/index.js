@@ -429,6 +429,7 @@ const TicketsManagerTabs = () => {
   const [isHoveredOpen, setIsHoveredOpen] = useState(false);
   const [isHoveredClosed, setIsHoveredClosed] = useState(false);
   const [isHoveredSort, setIsHoveredSort] = useState(false);
+  const [isHoveredSelectionMode, setIsHoveredSelectionMode] = useState(false);
 
   const [isFilterActive, setIsFilterActive] = useState(false);
 
@@ -775,13 +776,22 @@ const TicketsManagerTabs = () => {
 {/* Botão de Seleção Múltipla */}
 <Badge
   color="primary"
-  invisible={false}
+  invisible={
+      isHoveredAll ||
+      isHoveredNew ||
+      isHoveredResolve ||
+      isHoveredOpen ||
+      isHoveredClosed ||
+      !isHoveredSelectionMode
+    }
   badgeContent="Seleção Múltipla"
   classes={{ badge: classes.tabsBadge }}
 >
   <IconButton
     className={`${classes.standardButton} ${isSelectionMode ? classes.activeButton : ''}`}
     onClick={toggleSelectionMode}
+    onMouseEnter={() => setIsHoveredSelectionMode(true)}
+    onMouseLeave={() => setIsHoveredSelectionMode(false)}
     title="Ativar/Desativar Seleção Múltipla"
   >
     <CheckBox className={`${classes.standardIcon} ${isSelectionMode ? classes.activeIcon : ''}`} />

@@ -233,24 +233,37 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
             console.log("📎 Processando como arquivo comum");
           }
 
-          if (ticket.channel === "whatsapp") {
-            await SendWhatsAppMedia({ 
-              media, 
-              ticket, 
-              body: Array.isArray(body) ? body[index] : body, 
-              isPrivate: isPrivate === "true", 
-              isForwarded: false 
-            });
-          }
+          // ✅ Verificar se é API Oficial pelo provider (não apenas pelo channel)
+          if (ticket.channel === "whatsapp" || ticket.channel === "whatsapp_oficial") {
+            const whatsapp = await Whatsapp.findByPk(ticket.whatsappId);
+            const isOficial = whatsapp && (
+              whatsapp.provider === "oficial" || 
+              
+              whatsapp.channel === "whatsapp-oficial" || 
+              whatsapp.channel === "whatsapp_oficial"
+            );
 
-          if (ticket.channel == 'whatsapp_oficial') {
-            await SendWhatsAppOficialMessage({
-              media, 
-              body: Array.isArray(body) ? body[index] : body, 
-              ticket, 
-              type: null, 
-              quotedMsg
-            })
+            console.log(`[MEDIA DISPATCH] Ticket ${ticket.id} - IsOficial: ${isOficial} (Provider: ${whatsapp?.provider}, Channel: ${whatsapp?.channel})`);
+
+            if (isOficial) {
+              console.log(`[MEDIA DISPATCH] ✅ Enviando mídia via API Oficial`);
+              await SendWhatsAppOficialMessage({
+                media, 
+                body: Array.isArray(body) ? body[index] : body, 
+                ticket, 
+                type: null, 
+                quotedMsg
+              });
+            } else {
+              console.log(`[MEDIA DISPATCH] ✅ Enviando mídia via Baileys`);
+              await SendWhatsAppMedia({ 
+                media, 
+                ticket, 
+                body: Array.isArray(body) ? body[index] : body, 
+                isPrivate: isPrivate === "true", 
+                isForwarded: false 
+              });
+            }
           }
 
           if (["facebook", "instagram"].includes(ticket.channel)) {
@@ -290,19 +303,27 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       if (isPrivate === "false" && ["whatsapp", "whatsapp_oficial", "whatsapp-oficial"].includes(ticket.channel)) {
         // ✅ Verificar se é API Oficial pelo provider da conexão
         const whatsapp = await Whatsapp.findByPk(ticket.whatsappId);
+        
+        console.log(`[MESSAGE DISPATCH] Ticket ${ticket.id} - WhatsappId: ${ticket.whatsappId}`);
+        console.log(`[MESSAGE DISPATCH] Whatsapp Provider: ${whatsapp?.provider}, Channel: ${whatsapp?.channel}`);
+        
         const isOficial = whatsapp && (
           whatsapp.provider === "oficial" || 
-          whatsapp.provider === "beta" ||
+          
           whatsapp.channel === "whatsapp-oficial" || 
           whatsapp.channel === "whatsapp_oficial"
         );
 
+        console.log(`[MESSAGE DISPATCH] IsOficial: ${isOficial} (Provider: ${whatsapp?.provider}, Channel: ${whatsapp?.channel})`);
+
         if (isOficial) {
+          console.log(`[MESSAGE DISPATCH] ✅ Enviando via API Oficial`);
           // Usar serviço da API Oficial
           await SendWhatsAppOficialMessage({
             body, ticket, quotedMsg, type: !isNil(vCard) ? 'contacts' : 'text', media: null, vCard
           });
         } else {
+          console.log(`[MESSAGE DISPATCH] ✅ Enviando via Baileys`);
           // Usar serviço Baileys
           await SendWhatsAppMessage({ body, ticket, quotedMsg, vCard });
         }

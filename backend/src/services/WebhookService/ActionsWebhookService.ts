@@ -41,7 +41,7 @@ import SyncTags from "../TagServices/SyncTagsService";
 import Tag from "../../models/Tag";
 import ContactTag from "../../models/ContactTag";
 import flowBuilderQueue from "./flowBuilderQueue";
-import { proto } from "baileys";
+import { proto } from "@whiskeysockets/baileys";
 import { getWbot } from "../../libs/wbot";
 import SendWhatsAppOficialMessage from "../WhatsAppOficial/SendWhatsAppOficialMessage";
 import Whatsapp from "../../models/Whatsapp";
@@ -1830,7 +1830,7 @@ export const ActionsWebhookService = async (
         } else if (isSwitchFlow) {
           // ✅ CORREÇÃO: Verificar se é API Oficial antes de chamar getWbot
           const isOficial = whatsapp.provider === "oficial" || 
-                           whatsapp.provider === "beta" ||
+                           
                            whatsapp.channel === "whatsapp-oficial" || 
                            whatsapp.channel === "whatsapp_oficial";
           
@@ -2016,7 +2016,7 @@ const switchFlow = async (data: any, companyId: number, ticket: Ticket, recursio
 
   // ✅ Verificar se é API Oficial antes de chamar getWbot
   const isOficial = whatsapp.provider === "oficial" || 
-                   whatsapp.provider === "beta" ||
+                   
                    whatsapp.channel === "whatsapp-oficial" || 
                    whatsapp.channel === "whatsapp_oficial";
   

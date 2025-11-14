@@ -23,7 +23,7 @@ import { fi } from "date-fns/locale";
 import queue from "../../../libs/queue";
 import { getWbot } from "../../../libs/wbot";
 import flowBuilderQueue from "../../WebhookService/flowBuilderQueue";
-import { proto } from "baileys";
+import { proto } from "@whiskeysockets/baileys";
 import ShowWhatsAppService from "../../WhatsappService/ShowWhatsAppService";
 
 const os = require("os");

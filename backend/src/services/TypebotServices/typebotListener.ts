@@ -1,7 +1,7 @@
 import axios from "axios";
 import Ticket from "../../models/Ticket";
 import QueueIntegrations from "../../models/QueueIntegrations";
-import { proto } from "baileys";
+import { proto } from "@whiskeysockets/baileys";
 import { getBodyMessage } from "../WbotServices/wbotMessageListener";
 import logger from "../../utils/logger";
 import { isNil } from "lodash";

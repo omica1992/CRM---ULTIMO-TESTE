@@ -13,11 +13,11 @@ import makeWASocket, {
   jidNormalizedUser,
   makeCacheableSignalKeyStore,
   proto,
-} from "baileys";
+} from "@whiskeysockets/baileys";
 import { FindOptions } from "sequelize/types";
 import Whatsapp from "../models/Whatsapp";
 import logger from "../utils/logger";
-import MAIN_LOGGER from "baileys/lib/Utils/logger";
+import MAIN_LOGGER from "@whiskeysockets/baileys/lib/Utils/logger";
 // import { useMultiFileAuthState } from "../helpers/useMultiFileAuthState";
 import { useMultiFileAuthState } from "../helpers/useMultiFileAuthState_json";
 import { Boom } from "@hapi/boom";
@@ -49,6 +49,7 @@ export type Session = WASocket & {
 const sessions: Session[] = [];
 
 const retriesQrCodeMap = new Map<number, number>();
+const retries515Map = new Map<number, number>(); // Contador de retries para erro 515
 
 // export default function msg() {
 //   return {
@@ -240,17 +241,20 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             keys: state.keys,
           },
           mobile: false,
-          syncFullHistory: true,
+          syncFullHistory: false, // ✅ Reduzir carga inicial
           transactionOpts: { maxCommitRetries: 1, delayBetweenTriesMs: 10 },
           generateHighQualityLinkPreview: true,
           linkPreviewImageThumbnailWidth: 200,
           emitOwnEvents: true,
-          browser: Browsers.windows("Chrome"),
+          browser: Browsers.windows("Chrome"), // ✅ Manter Chrome para parecer mais legítimo
           defaultQueryTimeoutMs: 60000,
           msgRetryCounterCache,
-          maxMsgRetryCount: 5,
+          maxMsgRetryCount: 3, // ✅ Reduzir retries (era 5)
           shouldIgnoreJid: jid => isJidBroadcast(jid),
-          getMessage
+          getMessage,
+          retryRequestDelayMs: 500, // ✅ Mais delay entre retries
+          connectTimeoutMs: 60000, // ✅ Timeout maior
+          keepAliveIntervalMs: 30000 // ✅ Keep-alive mais espaçado
         });
 
         wsocket.id = whatsapp.id;
@@ -405,7 +409,48 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 `Socket  ${name} Connection Update ${connection || ""} ${lastDisconnect ? lastDisconnect.error.message : ""
                 }`
               );
-              if ((lastDisconnect?.error as Boom)?.output?.statusCode === 403) {
+
+              const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+
+              // ✅ TRATAMENTO ESPECIAL: Erro 515 (restart required) - Retry automático com backoff
+              if (statusCode === 515) {
+                const currentRetries = retries515Map.get(id) || 0;
+                const maxRetries = 3; // ✅ Reduzido de 5 para 3 para evitar detecção
+                
+                if (currentRetries < maxRetries) {
+                  // Backoff exponencial mais conservador: 5s, 15s, 30s
+                  const delayMs = (Math.pow(2, currentRetries) * 5 + (currentRetries * 5)) * 1000;
+                  
+                  retries515Map.set(id, currentRetries + 1);
+                  
+                  logger.warn(
+                    `[BAILEYS-515] Erro 515 detectado em ${name}. Tentativa ${currentRetries + 1}/${maxRetries}. Reconectando em ${delayMs}ms...`
+                  );
+                  
+                  removeWbot(id, false);
+                  setTimeout(() => {
+                    logger.info(`[BAILEYS-515] Iniciando retry ${currentRetries + 1} para ${name}`);
+                    StartWhatsAppSession(whatsapp, whatsapp.companyId);
+                  }, delayMs);
+                  
+                  return; // ✅ Sai para não processar outros tratamentos
+                } else {
+                  logger.error(
+                    `[BAILEYS-515] Máximo de retries (${maxRetries}) atingido para ${name}. Marcando como DISCONNECTED.`
+                  );
+                  retries515Map.delete(id); // Limpar contador
+                  await whatsapp.update({ status: "DISCONNECTED" });
+                  io.of(String(companyId))
+                    .emit(`company-${whatsapp.companyId}-whatsappSession`, {
+                      action: "update",
+                      session: whatsapp
+                    });
+                  removeWbot(id, false);
+                  return;
+                }
+              }
+
+              if (statusCode === 403) {
                 await whatsapp.update({ status: "PENDING", session: "" });
                 await DeleteBaileysService(whatsapp.id);
                 await deleteFolder(folderSessions);
@@ -448,6 +493,16 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
               wsocket.myLid = jidNormalizedUser(wsocket.user?.lid)
               wsocket.myJid = jidNormalizedUser(wsocket.user.id)
+
+              // ✅ Limpar contador de retries 515 ao conectar com sucesso
+              if (retries515Map.has(id)) {
+                logger.info(`[BAILEYS-515] Conexão ${name} restabelecida. Resetando contador de retries.`);
+                retries515Map.delete(id);
+              }
+
+              // ✅ Aguardar 3 segundos após conectar para parecer mais "humano"
+              logger.info(`[WBOT] Conexão ${name} estabelecida. Aguardando 3s antes de iniciar...`);
+              await new Promise(resolve => setTimeout(resolve, 3000));
 
               await whatsapp.update({
                 status: "CONNECTED",

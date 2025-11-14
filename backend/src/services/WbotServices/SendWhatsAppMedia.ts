@@ -1,4 +1,4 @@
-import { WAMessage, AnyMessageContent } from "baileys";
+import { WAMessage, AnyMessageContent } from "@whiskeysockets/baileys";
 import * as Sentry from "@sentry/node";
 import fs, { unlinkSync } from "fs";
 

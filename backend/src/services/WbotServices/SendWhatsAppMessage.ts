@@ -1,4 +1,4 @@
-import { WAMessage } from "baileys";
+import { WAMessage } from "@whiskeysockets/baileys";
 import delay from "../../utils/delay";
 import * as Sentry from "@sentry/node";
 import AppError from "../../errors/AppError";

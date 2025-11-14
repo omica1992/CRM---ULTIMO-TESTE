@@ -82,7 +82,7 @@ const CreateWhatsAppService = async ({
   isDefault = false,
   companyId,
   token = "",
-  provider = "beta",
+  provider, // ✅ SEM valor padrão - cada tipo de conexão deve especificar explicitamente
   facebookUserId,
   facebookUserToken,
   facebookPageUserId,

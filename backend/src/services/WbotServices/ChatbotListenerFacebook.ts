@@ -1,4 +1,4 @@
-import { WASocket, proto } from "baileys";
+import { WASocket, proto } from "@whiskeysockets/baileys";
 import Contact from "../../models/Contact";
 import Ticket from "../../models/Ticket";
 import ShowDialogChatBotsServices from "../DialogChatBotsServices/ShowDialogChatBotsServices";

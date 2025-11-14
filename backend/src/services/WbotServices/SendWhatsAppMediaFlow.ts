@@ -3,7 +3,7 @@ import {
   AnyMessageContent,
   delay,
   WAPresence
-} from "baileys";
+} from "@whiskeysockets/baileys";
 import * as Sentry from "@sentry/node";
 import fs from "fs";
 import { exec } from "child_process";
@@ -80,7 +80,7 @@ export const typeSimulation = async (ticket: Ticket, presence: WAPresence) => {
 
   // ✅ API Oficial não suporta sendPresenceUpdate da mesma forma
   const isOficial = whatsapp.provider === "oficial" || 
-                   whatsapp.provider === "beta" ||
+                   
                    whatsapp.channel === "whatsapp-oficial" || 
                    whatsapp.channel === "whatsapp_oficial";
   

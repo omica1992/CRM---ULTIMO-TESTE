@@ -1,4 +1,4 @@
-import { WASocket } from "baileys";
+import { WASocket } from "@whiskeysockets/baileys";
 import { getWbot, Session } from "../libs/wbot";
 import GetDefaultWhatsApp from "./GetDefaultWhatsApp";
 import Ticket from "../models/Ticket";
@@ -19,7 +19,7 @@ const GetTicketWbot = async (ticket: Ticket): Promise<Session> => {
 
   if (whatsapp) {
     const isOficial = whatsapp.provider === "oficial" || 
-                     whatsapp.provider === "beta" ||
+                     
                      whatsapp.channel === "whatsapp-oficial" || 
                      whatsapp.channel === "whatsapp_oficial";
     

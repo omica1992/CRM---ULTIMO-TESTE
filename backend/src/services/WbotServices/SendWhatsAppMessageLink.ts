@@ -1,4 +1,4 @@
-import { delay, WAMessage, AnyMessageContent } from "baileys";
+import { delay, WAMessage, AnyMessageContent } from "@whiskeysockets/baileys";
 import AppError from "../../errors/AppError";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
 import Ticket from "../../models/Ticket";

@@ -18,10 +18,11 @@ interface Check24hResult {
  * - Se o cliente nunca enviou mensagem, só pode enviar templates
  */
 const CheckApiOficial24hWindow = async (ticket: Ticket): Promise<Check24hResult> => {
-  // Carregar whatsapp se não estiver carregado
-  const whatsapp = ticket.whatsapp || await Whatsapp.findByPk(ticket.whatsappId);
+  // ✅ SEMPRE carregar whatsapp do banco para garantir dados corretos
+  const whatsapp = await Whatsapp.findByPk(ticket.whatsappId);
   
   if (!whatsapp) {
+    console.log(`[24H CHECK] ❌ Ticket ${ticket.id} - WhatsApp ${ticket.whatsappId} não encontrado`);
     return {
       isOficial: false,
       isWithin24h: false,
@@ -31,10 +32,14 @@ const CheckApiOficial24hWindow = async (ticket: Ticket): Promise<Check24hResult>
   }
 
   // Verificar se é API Oficial
+  console.log(`[24H CHECK] Ticket ${ticket.id} - WhatsApp ${whatsapp.id}: Provider="${whatsapp.provider}", Channel="${whatsapp.channel}"`);
+  
   const isOficial = whatsapp.provider === "oficial" || 
-                   whatsapp.provider === "beta" ||
+                   
                    whatsapp.channel === "whatsapp-oficial" || 
                    whatsapp.channel === "whatsapp_oficial";
+
+  console.log(`[24H CHECK] Ticket ${ticket.id} - IsOficial: ${isOficial}`);
 
   if (!isOficial) {
     return {

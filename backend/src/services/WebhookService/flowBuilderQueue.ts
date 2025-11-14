@@ -2,7 +2,7 @@ import { FlowBuilderModel } from "../../models/FlowBuilder";
 import { getBodyMessage } from "../WbotServices/wbotMessageListener";
 import { ActionsWebhookService } from "./ActionsWebhookService";
 import Ticket from "../../models/Ticket";
-import { proto, WASocket } from "baileys";
+import { proto, WASocket } from "@whiskeysockets/baileys";
 import Whatsapp from "../../models/Whatsapp";
 import { Session } from "../../libs/wbot";
 import Contact from "../../models/Contact";

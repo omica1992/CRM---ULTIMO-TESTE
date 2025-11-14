@@ -22,7 +22,7 @@ const ShowTemplateService = async ({ templateId, companyId, whatsappId }: Reques
 
   // Verificar se é API Oficial
   const isOficial = whatsapp.provider === "oficial" || 
-                   whatsapp.provider === "beta" ||
+                   
                    whatsapp.channel === "whatsapp-oficial" || 
                    whatsapp.channel === "whatsapp_oficial";
 

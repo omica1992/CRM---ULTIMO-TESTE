@@ -70,7 +70,7 @@ const SendScheduledMessage = async ({
 
     // Enviar mensagem baseado no provider
     const isOficial = whatsapp.provider === "oficial" || 
-                     whatsapp.provider === "beta" ||
+                     
                      whatsapp.channel === "whatsapp-oficial" || 
                      whatsapp.channel === "whatsapp_oficial";
     
