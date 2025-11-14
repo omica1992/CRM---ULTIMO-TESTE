@@ -27,6 +27,7 @@ import Message from "../../models/Message";
 import { Mutex } from "async-mutex";
 import { getIO } from "../../libs/socket";
 import CreateMessageService from "../MessageServices/CreateMessageService";
+import SafeCreateMessage from "../../helpers/SafeCreateMessage";
 import logger from "../../utils/logger";
 import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
 import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketService";
@@ -1043,8 +1044,46 @@ export const verifyMediaMessage = async (
 
     return newMessage;
   } catch (error) {
-    console.log(error);
-    logger.warn("Erro ao baixar media: ", JSON.stringify(msg));
+    logger.error(`[VERIFY MEDIA] ❌ Erro ao processar mídia - Ticket: ${ticket.id}`, error);
+    
+    // ✅ CRÍTICO: Tentar salvar mensagem mesmo com erro no download de mídia
+    try {
+      logger.warn(`[VERIFY MEDIA] Tentando salvar mensagem sem mídia devido a erro no download`);
+      
+      const fallbackMessageData = {
+        wid: msg.key.id,
+        ticketId: ticket.id,
+        contactId: msg.key.fromMe ? undefined : contact.id,
+        body: `❌ Erro ao baixar mídia`,
+        fromMe: msg.key.fromMe,
+        mediaType: getTypeMessage(msg),
+        read: msg.key.fromMe,
+        quotedMsgId: quotedMsg?.id,
+        ack: Number(String(msg.status).replace("PENDING", "2").replace("NaN", "1")) || 2,
+        remoteJid: msg.key.remoteJid,
+        participant: msg.key.participant,
+        dataJson: JSON.stringify(msg),
+        ticketTrakingId: ticketTraking?.id,
+        isPrivate,
+        createdAt: new Date(Math.floor(getTimestampMessage(msg.messageTimestamp) * 1000)).toISOString(),
+        ticketImported: ticket.imported,
+        isForwarded
+      };
+      
+      await SafeCreateMessage({
+        messageData: fallbackMessageData,
+        companyId: companyId,
+        maxRetries: 3,
+        context: `VERIFY_MEDIA_ERROR_${ticket.id}`
+      });
+      
+      logger.info(`[VERIFY MEDIA] ✅ Mensagem de erro salva com sucesso`);
+    } catch (saveError) {
+      logger.error(`[VERIFY MEDIA] ❌ CRÍTICO: Falha ao salvar mensagem de erro`, saveError);
+    }
+    
+    // Retornar undefined para não quebrar o fluxo
+    return undefined;
   }
 };
 
@@ -1089,7 +1128,12 @@ export const verifyMessage = async (
     lastMessage: body
   });
 
-  await CreateMessageService({ messageData, companyId: companyId });
+  await SafeCreateMessage({
+    messageData,
+    companyId: companyId,
+    maxRetries: 3,
+    context: `VERIFY_MESSAGE_${ticket.id}`
+  });
 
   if (!msg.key.fromMe && ticket.status === "closed") {
     await ticket.update({ status: "pending" });

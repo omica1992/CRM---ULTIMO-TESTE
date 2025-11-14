@@ -7,6 +7,7 @@ import { isNil } from "lodash";
 import { sendMessageWhatsAppOficial } from "../../libs/whatsAppOficial/whatsAppOficial.service";
 import { IMetaMessageTemplate, IMetaMessageinteractive, IReturnMessageMeta, ISendMessageOficial } from "../../libs/whatsAppOficial/IWhatsAppOficial.interfaces";
 import CreateMessageService from "../MessageServices/CreateMessageService";
+import SafeCreateMessage from "../../helpers/SafeCreateMessage";
 import formatBody from "../../helpers/Mustache";
 import logger from "../../utils/logger";
 
@@ -165,18 +166,25 @@ const SendWhatsAppOficialMessage = async ({
   options.type = type;
   options.quotedId = quotedMsg?.wid;
 
+  let sendMessage: IReturnMessageMeta | null = null;
+  let messageData: any = null;
+  
   try {
-    const sendMessage = await sendMessageWhatsAppOficial(
+    // ✅ PASSO 1: Enviar mensagem via API Oficial
+    sendMessage = await sendMessageWhatsAppOficial(
       pathMedia,
       ticket.whatsapp.token,
       options
     )
+    
+    logger.info(`[WHATSAPP OFICIAL - SEND] ✅ Mensagem enviada via API - Ticket: ${ticket.id}`);
+    
     await ticket.update({ lastMessage: !bodyMsg && !!media ? bodyTicket : bodyMsg, imported: null, unreadMessages: 0 });
 
     const wid: any = sendMessage
 
     const bodyMessage = !isNil(vCard) ? vcard : !bodyMsg ? '' : bodyMsg;
-    const messageData = {
+    messageData = {
       wid: wid?.idMessageWhatsApp[0],
       ticketId: ticket.id,
       contactId: contact.id,
@@ -199,26 +207,41 @@ const SendWhatsAppOficialMessage = async ({
       originalName: !!media ? media.filename : null
     };
 
+    // ✅ PASSO 2: Salvar mensagem no banco com retry
     logger.info(`[WHATSAPP OFICIAL - SAVE] Salvando mensagem no banco - Ticket: ${ticket.id}`);
-    logger.info(`[WHATSAPP OFICIAL - SAVE] messageData.id = ${(messageData as any).id} (deve ser undefined)`);
-    await CreateMessageService({ messageData, companyId: ticket.companyId });
-    logger.info(`[WHATSAPP OFICIAL - SAVE] Mensagem salva com sucesso - Ticket: ${ticket.id}`);
-
-    // const io = getIO();
-
-    // io.of(String(ticket.companyId))
-    //   .emit(`company-${ticket.companyId}-appMessage`, {
-    //     action: "create",
-    //     message: messageData,
-    //     ticket: ticket,
-    //     contact: ticket.contact
-    //   });
+    
+    const savedMessage = await SafeCreateMessage({ 
+      messageData, 
+      companyId: ticket.companyId,
+      maxRetries: 3,
+      context: `SEND_OFICIAL_${ticket.id}`
+    });
+    
+    if (savedMessage) {
+      logger.info(`[WHATSAPP OFICIAL - SAVE] ✅ Mensagem salva com sucesso - Ticket: ${ticket.id}`);
+    } else {
+      logger.error(`[WHATSAPP OFICIAL - SAVE] ❌ CRÍTICO: Mensagem enviada mas NÃO foi salva - Ticket: ${ticket.id}, WID: ${messageData.wid}`);
+      // ⚠️ Mensagem foi enviada mas não foi salva - registrado em arquivo para recuperação
+    }
 
     return sendMessage;
+    
   } catch (err) {
-    console.log(`erro ao enviar mensagem na company ${ticket.companyId} - `, body)
+    logger.error(`[WHATSAPP OFICIAL - ERROR] Erro ao enviar mensagem - Company: ${ticket.companyId}, Ticket: ${ticket.id}`, err);
+    
+    // ✅ Se mensagem foi enviada mas erro aconteceu depois, tentar salvar
+    if (sendMessage && messageData) {
+      logger.warn(`[WHATSAPP OFICIAL - RECOVERY] Tentando salvar mensagem que foi enviada mas teve erro no processamento`);
+      
+      await SafeCreateMessage({ 
+        messageData, 
+        companyId: ticket.companyId,
+        maxRetries: 5, // Mais tentativas pois mensagem JÁ foi enviada
+        context: `RECOVERY_OFICIAL_${ticket.id}`
+      });
+    }
+    
     Sentry.captureException(err);
-    console.log(err);
     throw new AppError("ERR_SENDING_WAPP_MSG");
   }
 

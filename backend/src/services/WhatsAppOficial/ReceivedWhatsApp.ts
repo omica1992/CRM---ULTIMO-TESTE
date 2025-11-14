@@ -544,6 +544,30 @@ export class ReceibedWhatsAppService {
                     }
                 } catch (error) {
                     logger.error(`[WHATSAPP OFICIAL - INPUT NODE] ❌ Erro ao processar resposta do nó de input:`, error);
+                    
+                    // ✅ FALLBACK: Tentar salvar mensagem básica
+                    try {
+                        const SafeCreateMessage = (await import("../../helpers/SafeCreateMessage")).default;
+                        await SafeCreateMessage({
+                            messageData: {
+                                wid: message.idMessage,
+                                ticketId: ticket.id,
+                                contactId: contact.id,
+                                body: message.text || '❌ Erro ao processar input',
+                                fromMe: false,
+                                mediaType: 'conversation',
+                                read: false,
+                                ack: 0,
+                                channel: 'whatsapp_oficial'
+                            },
+                            companyId,
+                            maxRetries: 3,
+                            context: `RECOVERY_INPUT_${ticket.id}`
+                        });
+                        logger.info(`[WHATSAPP OFICIAL - INPUT NODE] ✅ Mensagem básica salva após erro`);
+                    } catch (saveError) {
+                        logger.error(`[WHATSAPP OFICIAL - INPUT NODE] ❌ Falha ao salvar fallback`, saveError);
+                    }
                 }
             }
 
@@ -584,6 +608,30 @@ export class ReceibedWhatsAppService {
                     return; // ✅ CORREÇÃO: Sair após processar fluxo para evitar duplicação
                 } catch (error) {
                     logger.error(`[WHATSAPP OFICIAL - FLOW QUEUE] ❌ Erro ao retomar fluxo interrompido:`, error);
+                    
+                    // ✅ FALLBACK: Tentar salvar mensagem básica
+                    try {
+                        const SafeCreateMessage = (await import("../../helpers/SafeCreateMessage")).default;
+                        await SafeCreateMessage({
+                            messageData: {
+                                wid: message.idMessage,
+                                ticketId: ticket.id,
+                                contactId: contact.id,
+                                body: message.text || '❌ Erro ao retomar fluxo',
+                                fromMe: false,
+                                mediaType: 'conversation',
+                                read: false,
+                                ack: 0,
+                                channel: 'whatsapp_oficial'
+                            },
+                            companyId,
+                            maxRetries: 3,
+                            context: `RECOVERY_FLOW_QUEUE_${ticket.id}`
+                        });
+                        logger.info(`[WHATSAPP OFICIAL - FLOW QUEUE] ✅ Mensagem básica salva após erro`);
+                    } catch (saveError) {
+                        logger.error(`[WHATSAPP OFICIAL - FLOW QUEUE] ❌ Falha ao salvar fallback`, saveError);
+                    }
                 }
             }
 
@@ -706,6 +754,30 @@ export class ReceibedWhatsAppService {
                     } catch (error) {
                         logger.error("[WHATSAPP OFICIAL] ❌ Erro ao verificar campanhas:", error);
                         
+                        // ✅ FALLBACK: Tentar salvar mensagem básica
+                        try {
+                            const SafeCreateMessage = (await import("../../helpers/SafeCreateMessage")).default;
+                            await SafeCreateMessage({
+                                messageData: {
+                                    wid: message.idMessage,
+                                    ticketId: ticket.id,
+                                    contactId: contact.id,
+                                    body: message.text || '❌ Erro ao verificar campanhas',
+                                    fromMe: false,
+                                    mediaType: 'conversation',
+                                    read: false,
+                                    ack: 0,
+                                    channel: 'whatsapp_oficial'
+                                },
+                                companyId,
+                                maxRetries: 3,
+                                context: `RECOVERY_CAMPAIGN_${ticket.id}`
+                            });
+                            logger.info(`[WHATSAPP OFICIAL] ✅ Mensagem básica salva após erro de campanha`);
+                        } catch (saveError) {
+                            logger.error(`[WHATSAPP OFICIAL] ❌ Falha ao salvar fallback`, saveError);
+                        }
+                        
                         // ✅ LIMPAR ESTADO EM CASO DE ERRO GERAL
                         try {
                             await ticket.update({
@@ -779,6 +851,30 @@ export class ReceibedWhatsAppService {
                         }
                     } catch (error) {
                         console.error("[FLOW WEBHOOK - OFICIAL] ❌ Erro ao processar fluxo webhook:", error);
+                        
+                        // ✅ FALLBACK: Tentar salvar mensagem básica
+                        try {
+                            const SafeCreateMessage = (await import("../../helpers/SafeCreateMessage")).default;
+                            await SafeCreateMessage({
+                                messageData: {
+                                    wid: message.idMessage,
+                                    ticketId: ticket.id,
+                                    contactId: contact.id,
+                                    body: message.text || '❌ Erro ao processar fluxo webhook',
+                                    fromMe: false,
+                                    mediaType: 'conversation',
+                                    read: false,
+                                    ack: 0,
+                                    channel: 'whatsapp_oficial'
+                                },
+                                companyId,
+                                maxRetries: 3,
+                                context: `RECOVERY_WEBHOOK_${ticket.id}`
+                            });
+                            logger.info(`[FLOW WEBHOOK - OFICIAL] ✅ Mensagem básica salva após erro`);
+                        } catch (saveError) {
+                            logger.error(`[FLOW WEBHOOK - OFICIAL] ❌ Falha ao salvar fallback`, saveError);
+                        }
                     }
                 }
             }
