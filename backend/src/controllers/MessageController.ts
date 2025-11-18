@@ -76,6 +76,9 @@ type MessageTemplateData = {
   quotedMsg?: Message;
   number?: string;
   templateId: string;
+  templateName?: string; // ✅ Nome do template da Meta
+  templateLanguage?: string; // ✅ Idioma do template
+  templateComponents?: any[]; // ✅ Componentes do template
   variables: string[];
   bodyToSave: string;
 };
@@ -639,17 +642,37 @@ export const edit = async (req: Request, res: Response): Promise<Response> => {
 export const storeTemplate = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
 
-  const { quotedMsg, templateId, variables, bodyToSave }: MessageTemplateData = req.body;
+  const { 
+    quotedMsg, 
+    templateId, 
+    templateName,
+    templateLanguage,
+    templateComponents,
+    variables, 
+    bodyToSave 
+  }: MessageTemplateData = req.body;
   const medias = req.files as Express.Multer.File[];
   const { companyId } = req.user;
 
   const ticket = await ShowTicketService(ticketId, companyId);
 
-  const template = await ShowService(templateId, companyId);
-
-  if (!template) {
-    throw new Error("Template not found");
+  // ✅ CORREÇÃO: Se vier templateName, é template da Meta API (não buscar em QuickMessages)
+  let template;
+  if (templateName && templateLanguage && templateComponents) {
+    console.log("📋 Template da Meta API recebido:", templateName);
+    template = {
+      shortcode: templateName,
+      language: templateLanguage,
+      components: templateComponents
+    };
+  } else {
+    // Template antigo (QuickMessages)
+    template = await ShowService(templateId, companyId);
+    if (!template) {
+      throw new Error("Template not found");
+    }
   }
+
   let templateData: IMetaMessageTemplate = {
     name: template.shortcode,
     language: {

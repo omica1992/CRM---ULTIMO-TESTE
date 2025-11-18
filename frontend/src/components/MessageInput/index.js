@@ -579,23 +579,33 @@ const MessageInput = ({
 
   useEffect(() => {
     async function fetchTemplates() {
-      const templates = await api.request({
-        url: `/quick-messages/list`,
-        method: "GET",
-        params: {
-          isOficial: "true",
-          userId: user.id,
-          companyId: user.companyId,
-          status: "APPROVED",
-          // whatsappId,
-        },
-      });
-      setTemplates(templates.data);
+      console.log("🔍 Verificando templates - useWhatsappOfficial:", useWhatsappOfficial, "whatsappId:", whatsappId);
+      
+      // ✅ CORREÇÃO: Buscar templates da Meta API, não quick-messages
+      if (!whatsappId) {
+        console.log("⚠️ Sem whatsappId para buscar templates");
+        setTemplates([]);
+        return;
+      }
+
+      try {
+        console.log("📡 Buscando templates de /templates?whatsappId=" + whatsappId);
+        const { data } = await api.get(`/templates?whatsappId=${whatsappId}`);
+        console.log("📋 Resposta da API:", data);
+        console.log("📋 Templates Meta carregados:", data.data?.length || 0, data.data);
+        setTemplates(data.data || []);
+      } catch (err) {
+        console.error("❌ Erro ao buscar templates:", err);
+        setTemplates([]);
+      }
     }
-    if (useWhatsappOfficial) {
+    
+    if (useWhatsappOfficial && whatsappId) {
       fetchTemplates();
+    } else {
+      console.log("⏭️ Não buscando templates - useWhatsappOfficial:", useWhatsappOfficial, "whatsappId:", whatsappId);
     }
-  }, [useWhatsappOfficial]);
+  }, [useWhatsappOfficial, whatsappId]);
 
   useEffect(() => {
     async function fetchData() {
@@ -1280,11 +1290,16 @@ const MessageInput = ({
 
     const message = {
       templateId: e.id,
+      templateName: e.name, // ✅ Enviar nome do template
+      templateLanguage: e.language, // ✅ Enviar idioma
+      templateComponents: e.components, // ✅ Enviar componentes
       variables: e.variables,
       bodyToSave: e.bodyToSave,
       mediaUrl: "",
       quotedMsg: replyingMessage,
     };
+
+    console.log("📤 Enviando template:", message);
 
     try {
       await api.post(`/messages-template/${ticketId}`, message);

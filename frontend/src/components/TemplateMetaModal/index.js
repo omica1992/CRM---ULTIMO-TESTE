@@ -57,12 +57,20 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
     const classes = useStyles();
     const [search, setSearch] = useState('');
     const [selectedTemplate, setSelectedTemplate] = useState(null);
+    const [expandedTemplates, setExpandedTemplates] = useState({}); // Controla quais templates estão expandidos
     const [variables, setVariables] = useState([]);
     const [variableValues, setVariableValues] = useState({});
     const [renderedContent, setRenderedContent] = useState('');
 
     const handleSearchChange = (event) => {
         setSearch(event.target.value);
+    };
+
+    const toggleExpand = (templateId) => {
+        setExpandedTemplates(prev => ({
+            ...prev,
+            [templateId]: !prev[templateId]
+        }));
     };
 
     const extractVariablesByComponent = (components) => {
@@ -212,9 +220,12 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
         setVariableValues(newValues);
     };
 
-    const filteredTemplates = templates.filter((template) =>
-        template?.shortcode?.toLowerCase().includes(search?.toLowerCase())
-    )
+    const filteredTemplates = templates.filter((template) => {
+        // ✅ CORREÇÃO: Templates Meta usam 'name', não 'shortcode'
+        const searchField = template?.name || template?.shortcode || '';
+        const searchTerm = search?.toLowerCase() || '';
+        return searchField.toLowerCase().includes(searchTerm);
+    })
 
     return (
         <Modal
@@ -242,32 +253,78 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
                         </div>
 
                         <List>
-                            {filteredTemplates.map((template, index) => (
-                                <ListItem
-                                    key={index}
-                                    className={classes.templateItem}
-                                    onClick={() => handleSelectTemplate(template)}
-                                >
-                                    <ListItemText
-                                        primary={
-                                            <div className={classes.templateInfo}>
-                                                <Typography variant="body1">{template.shortcode}</Typography>
-                                                <Typography variant="body2">Idioma: {template.language}</Typography>
-                                            </div>
-                                        }
-                                        secondary={
-                                            <>
-                                                <Typography variant="body2" component="div">
-                                                    Conteúdo do Template: {template?.components?.map(component => component?.text).join(`\n`)}
-                                                </Typography>
-                                                <Typography variant="body2" className={classes.category}>
-                                                    Categoria: {template.category}
-                                                </Typography>
-                                            </>
-                                        }
-                                    />
-                                </ListItem>
-                            ))}
+                            {filteredTemplates.map((template, index) => {
+                                const bodyText = template?.components?.find(c => c.type === 'BODY')?.text || 'Sem conteúdo';
+                                const isExpanded = expandedTemplates[template.id];
+                                const maxPreviewLength = 150;
+                                const needsExpand = bodyText.length > maxPreviewLength;
+                                const displayText = isExpanded || !needsExpand 
+                                    ? bodyText 
+                                    : bodyText.substring(0, maxPreviewLength) + '...';
+
+                                return (
+                                    <ListItem
+                                        key={template.id || index}
+                                        className={classes.templateItem}
+                                        style={{ display: 'block', cursor: 'default' }}
+                                    >
+                                        <ListItemText
+                                            primary={
+                                                <div className={classes.templateInfo}>
+                                                    <Typography variant="body1" style={{ fontWeight: 'bold' }}>
+                                                        {template.name || template.shortcode}
+                                                    </Typography>
+                                                    <Typography variant="body2" color="textSecondary">
+                                                        Idioma: {template.language}
+                                                    </Typography>
+                                                </div>
+                                            }
+                                            secondary={
+                                                <>
+                                                    <Typography 
+                                                        variant="body2" 
+                                                        component="div" 
+                                                        style={{ 
+                                                            whiteSpace: 'pre-wrap',
+                                                            marginTop: '8px',
+                                                            marginBottom: '8px'
+                                                        }}
+                                                    >
+                                                        {displayText}
+                                                    </Typography>
+                                                    {needsExpand && (
+                                                        <Button
+                                                            size="small"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                toggleExpand(template.id);
+                                                            }}
+                                                            style={{ 
+                                                                marginBottom: '8px',
+                                                                textTransform: 'none'
+                                                            }}
+                                                        >
+                                                            {isExpanded ? '▲ Ver menos' : '▼ Ver mais'}
+                                                        </Button>
+                                                    )}
+                                                    <Typography variant="body2" className={classes.category}>
+                                                        Categoria: {template.category} | Status: {template.status}
+                                                    </Typography>
+                                                    <Button
+                                                        variant="contained"
+                                                        color="primary"
+                                                        size="small"
+                                                        onClick={() => handleSelectTemplate(template)}
+                                                        style={{ marginTop: '8px' }}
+                                                    >
+                                                        Selecionar Template
+                                                    </Button>
+                                                </>
+                                            }
+                                        />
+                                    </ListItem>
+                                );
+                            })}
                         </List>
                     </>
                 )}
