@@ -67,6 +67,7 @@ import MicRecorder from "mic-recorder-to-mp3";
 import clsx from "clsx";
 import { ReplyMessageContext } from "../../context/ReplyingMessage/ReplyingMessageContext";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import MetaWindow24hContext from "../../context/MetaWindow24h/MetaWindow24hContext";
 import { i18n } from "../../translate/i18n";
 import toastError from "../../errors/toastError";
 import api, { openApi } from "../../services/api";
@@ -537,9 +538,37 @@ const MessageInput = ({
   const [formatMenuAnchorPosition, setFormatMenuAnchorPosition] = useState(null);
   const [selectedText, setSelectedText] = useState({ text: '', start: 0, end: 0 });
 
+  // ✅ Usar contexto de janela de 24h
+  const metaWindow24hContext = useContext(MetaWindow24hContext);
+  const is24HourWindowExpired = metaWindow24hContext?.is24HourWindowExpired || false;
+
+  // ✅ Debug: Log quando contexto mudar
+  useEffect(() => {
+    console.log("📊 MessageInput - Estado 24h:", {
+      is24HourWindowExpired,
+      ticketChannel,
+      ticketStatus,
+      contextExists: !!metaWindow24hContext
+    });
+  }, [is24HourWindowExpired, ticketChannel, ticketStatus]);
+
   const isTicketPending = () => {
     return ticketStatus === "pending";
   };
+
+  // ✅ Verificar se deve bloquear envio (ticket não aberto OU janela de 24h expirada para Meta)
+  const shouldBlockSending = useCallback(() => {
+    if (isTicketPending()) return false; // Mensagens internas sempre permitidas
+    if (ticketStatus !== "open" && ticketStatus !== "group") return true; // Ticket fechado
+    
+    // Para canais Meta (Facebook/Instagram/WhatsApp Oficial), bloquear se janela expirou
+    const isMetaChannel = ticketChannel && ticketChannel !== "whatsapp";
+    if (isMetaChannel && is24HourWindowExpired) {
+      return true;
+    }
+    
+    return false;
+  }, [ticketStatus, ticketChannel, is24HourWindowExpired]);
 
   useEffect(() => {
     if (isTicketPending()) {
@@ -1193,6 +1222,13 @@ const MessageInput = ({
 
   const handleSendMessage = async () => {
     if (!inputMessage || inputMessage.trim() === "") return;
+    
+    // ✅ Verificar se envio está bloqueado
+    if (shouldBlockSending()) {
+      console.warn("🚫 Envio bloqueado - janela de 24h expirada ou ticket fechado");
+      return;
+    }
+    
     setLoading(true);
 
     const userName = (privateMessage || isTicketPending())
@@ -1353,9 +1389,9 @@ const MessageInput = ({
       loading ||
       recording ||
       isFlowProcessing || // 🛡️ Usar tanto ref quanto estado
-      (!isTicketPending() && ticketStatus !== "open" && ticketStatus !== "group")
+      shouldBlockSending() // ✅ Inclui verificação de ticket fechado E janela de 24h
     );
-  }, [loading, recording, flowProcessing, ticketStatus]);
+  }, [loading, recording, flowProcessing, ticketStatus, is24HourWindowExpired, ticketChannel]);
 
   const disableOptionForPending = useCallback(() => {
     const isFlowProcessing = flowProcessingRef.current || flowProcessing;
@@ -1364,9 +1400,35 @@ const MessageInput = ({
       loading ||
       recording ||
       isFlowProcessing || // 🛡️ Usar tanto ref quanto estado
-      ticketStatus === "closed"
+      shouldBlockSending() // ✅ Usar nova função que inclui verificação de 24h
+    );
+  }, [loading, recording, flowProcessing, ticketStatus, is24HourWindowExpired, ticketChannel]);
+
+  // ✅ Função para mensagens internas/privadas - NUNCA bloqueia por 24h
+  const disablePrivateMessage = useCallback(() => {
+    const isFlowProcessing = flowProcessingRef.current || flowProcessing;
+
+    return (
+      loading ||
+      recording ||
+      isFlowProcessing ||
+      ticketStatus === "closed" // Só bloqueia se ticket fechado
     );
   }, [loading, recording, flowProcessing, ticketStatus]);
+
+  // ✅ Função especial para menu de anexos - permite abrir se for API Oficial com janela expirada (para templates)
+  const disableAttachMenu = useCallback(() => {
+    const isFlowProcessing = flowProcessingRef.current || flowProcessing;
+    
+    // Se janela de 24h expirou mas é API Oficial, permite abrir menu (para templates)
+    const isMetaChannel = ticketChannel && ticketChannel !== "whatsapp";
+    if (isMetaChannel && is24HourWindowExpired && useWhatsappOfficial) {
+      return loading || recording || isFlowProcessing; // Só bloqueia se loading/recording
+    }
+    
+    // Caso contrário, usa lógica normal
+    return disableOption();
+  }, [loading, recording, flowProcessing, ticketStatus, is24HourWindowExpired, ticketChannel, useWhatsappOfficial]);
 
   const handleUploadCamera = async (blob) => {
     setLoading(true);
@@ -1855,7 +1917,7 @@ const MessageInput = ({
                 ) : null}
 
                 <Fab
-                  disabled={disableOption()}
+                  disabled={disableAttachMenu()}
                   aria-label="uploadMedias"
                   component="span"
                   className={classes.invertedFabMenu}
@@ -1870,7 +1932,7 @@ const MessageInput = ({
                   onClose={handleMenuItemClick}
                   id="simple-menu"
                 >
-                  <MenuItem onClick={handleMenuItemClick}>
+                  <MenuItem onClick={handleMenuItemClick} disabled={disableOption()}>
                     <input
                       multiple
                       type="file"
@@ -1878,6 +1940,7 @@ const MessageInput = ({
                       accept="image/*, video/*, audio/* "
                       className={classes.uploadInput}
                       onChange={handleChangeMedias}
+                      disabled={disableOption()}
                     />
                     <label htmlFor="upload-img-button">
                       <Fab
@@ -1890,13 +1953,13 @@ const MessageInput = ({
                       {i18n.t("messageInput.type.imageVideo")}
                     </label>
                   </MenuItem>
-                  <MenuItem onClick={handleCameraModalOpen}>
+                  <MenuItem onClick={handleCameraModalOpen} disabled={disableOption()}>
                     <Fab className={classes.invertedFabMenuCamera}>
                       <CameraAlt />
                     </Fab>
                     {i18n.t("messageInput.type.cam")}
                   </MenuItem>
-                  <MenuItem onClick={handleMenuItemClick}>
+                  <MenuItem onClick={handleMenuItemClick} disabled={disableOption()}>
                     <input
                       multiple
                       type="file"
@@ -1904,6 +1967,7 @@ const MessageInput = ({
                       accept="application/*, text/*, .odt, .ods, .odp, .odg, .xml, .ofx, .zip, .rar, .7z, .tar, .gz, .bz2, .msg, .key, .numbers, .pages"
                       className={classes.uploadInput}
                       onChange={handleChangeMedias}
+                      disabled={disableOption()}
                     />
                     <label htmlFor="upload-doc-button">
                       <Fab
@@ -1916,13 +1980,13 @@ const MessageInput = ({
                       Documento
                     </label>
                   </MenuItem>
-                  <MenuItem onClick={handleSendContactModalOpen}>
+                  <MenuItem onClick={handleSendContactModalOpen} disabled={disableOption()}>
                     <Fab className={classes.invertedFabMenuCont}>
                       <Person />
                     </Fab>
                     {i18n.t("messageInput.type.contact")}
                   </MenuItem>
-                  <MenuItem onClick={handleSendLinkVideo}>
+                  <MenuItem onClick={handleSendLinkVideo} disabled={disableOption()}>
                     <Fab className={classes.invertedFabMenuMeet}>
                       <Duo />
                     </Fab>
@@ -2173,7 +2237,7 @@ const MessageInput = ({
                       maxRows={5}
                       value={safeCapitalizeFirstLetter(inputMessage)}
                       onChange={handleChangeInput}
-                      disabled={disableOptionForPending()}
+                      disabled={disablePrivateMessage()}
                       onPaste={(e) => {
                         (ticketStatus === "open" || ticketStatus === "group" || isTicketPending()) &&
                           handleInputPaste(e);
@@ -2353,7 +2417,7 @@ const MessageInput = ({
                           ? handleOpenModalForward
                           : handleSendMessage
                       }
-                      disabled={loading}
+                      disabled={disableOptionForPending()}
                     >
                       {showSelectMessageCheckbox ? (
                         <Reply className={classes.ForwardMessageIcons} />
@@ -2413,7 +2477,7 @@ const MessageInput = ({
                       ? handleOpenModalForward
                       : handleSendMessage
                   }
-                  disabled={loading}
+                  disabled={disablePrivateMessage()}
                 >
                   {showSelectMessageCheckbox ? (
                     <Reply className={classes.ForwardMessageIcons} />

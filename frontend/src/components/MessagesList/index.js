@@ -1,5 +1,5 @@
 import React, { useContext, useState, useEffect, useReducer, useRef } from "react";
-import { isSameDay, parseISO, format } from "date-fns";
+import { isSameDay, parseISO, format, differenceInHours } from "date-fns";
 import clsx from "clsx";
 import { isNil } from "lodash";
 import { blue, green } from "@material-ui/core/colors";
@@ -42,6 +42,7 @@ import SelectMessageCheckbox from "./SelectMessageCheckbox";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { QueueSelectedContext } from "../../context/QueuesSelected/QueuesSelectedContext";
+import MetaWindow24hContext from "../../context/MetaWindow24h/MetaWindow24hContext";
 import AudioModal from "../AudioModal";
 import { CircularProgress } from "@material-ui/core";
 import { useParams, useHistory } from 'react-router-dom';
@@ -478,6 +479,53 @@ const MessagesList = ({
   const { showSelectMessageCheckbox } = useContext(ForwardMessageContext);
   const { user, socket } = useContext(AuthContext);
   const companyId = user.companyId;
+
+  // ✅ Usar contexto para compartilhar estado de 24h com MessageInput
+  const { setIs24HourWindowExpired } = useContext(MetaWindow24hContext);
+  const [is24HourWindowExpired, setLocalIs24HourWindowExpired] = useState(false);
+
+  // ✅ Verificar se janela de 24h expirou baseado na última mensagem do cliente
+  useEffect(() => {
+    if (!messagesList || messagesList.length === 0) {
+      setLocalIs24HourWindowExpired(false);
+      setIs24HourWindowExpired(false);
+      return;
+    }
+
+    // Encontrar a última mensagem recebida (fromMe: false)
+    const lastClientMessage = [...messagesList]
+      .reverse()
+      .find(msg => msg.fromMe === false);
+
+    if (!lastClientMessage || !lastClientMessage.createdAt) {
+      setLocalIs24HourWindowExpired(false);
+      setIs24HourWindowExpired(false);
+      return;
+    }
+
+    try {
+      const messageDate = parseISO(lastClientMessage.createdAt);
+      const now = new Date();
+      const hoursDiff = differenceInHours(now, messageDate);
+
+      // Janela expirou se passou mais de 24h
+      const expired = hoursDiff >= 24;
+      
+      console.log("⏰ Cálculo janela 24h:", {
+        lastMessageDate: lastClientMessage.createdAt,
+        hoursDiff,
+        expired,
+        channel
+      });
+      
+      setLocalIs24HourWindowExpired(expired);
+      setIs24HourWindowExpired(expired); // ✅ Atualizar contexto para MessageInput
+    } catch (error) {
+      console.error("Erro ao calcular diferença de horas:", error);
+      setLocalIs24HourWindowExpired(false);
+      setIs24HourWindowExpired(false);
+    }
+  }, [messagesList, setIs24HourWindowExpired]);
 
   useEffect(() => {
     async function fetchData() {
@@ -1442,31 +1490,31 @@ const shouldBlurMessages = ticketStatus === "pending" && user.allowSeeMessagesIn
   {messagesList.length > 0 ? renderMessages() : []}
 </div>
 
-      {(channel !== "whatsapp" && channel !== undefined) && (
+      {(channel !== "whatsapp" && channel !== undefined && is24HourWindowExpired) && (
         <div
           style={{
             width: "100%",
             display: "flex",
             padding: "10px",
             alignItems: "center",
-            backgroundColor: "#E1F3FB",
+            backgroundColor: "#FFE4E1",
+            borderLeft: "4px solid #FF6B6B"
           }}
         >
           {channel === "facebook" ? (
-            <Facebook />
+            <Facebook style={{ marginRight: "10px", color: "#FF6B6B" }} />
           ) : channel === "instagram" ? (
-            <Instagram />
+            <Instagram style={{ marginRight: "10px", color: "#FF6B6B" }} />
           ) : (
-            <WhatsApp />
+            <WhatsApp style={{ marginRight: "10px", color: "#FF6B6B" }} />
           )}
 
-          <span>
-            Você tem 24h para responder após receber uma mensagem, de acordo
-            com as políticas da Meta.
+          <span style={{ color: "#D32F2F", fontWeight: 500 }}>
+            ⚠️ A janela de 24h expirou. Você só pode enviar mensagens usando templates aprovados pela Meta.
           </span>
         </div>
       )}
-      
+
       {loading && (
         <div>
           <CircularProgress className={classes.circleLoading} />

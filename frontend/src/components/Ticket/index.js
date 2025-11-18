@@ -14,6 +14,7 @@ import MessagesList from "../MessagesList";
 import api from "../../services/api";
 import { ReplyMessageProvider } from "../../context/ReplyingMessage/ReplyingMessageContext";
 import { ForwardMessageProvider } from "../../context/ForwarMessage/ForwardMessageContext";
+import MetaWindow24hProvider from "../../context/MetaWindow24h/MetaWindow24hProvider";
 
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
@@ -238,13 +239,15 @@ const Ticket = () => {
         <Paper>
           <TagsContainer contact={contact} />
         </Paper>
-        <ReplyMessageProvider>
-          <ForwardMessageProvider>
-            <EditMessageProvider>
-              {renderMessagesList()}
-            </EditMessageProvider>
-          </ForwardMessageProvider>
-        </ReplyMessageProvider>
+        <MetaWindow24hProvider>
+          <ReplyMessageProvider>
+            <ForwardMessageProvider>
+              <EditMessageProvider>
+                {renderMessagesList()}
+              </EditMessageProvider>
+            </ForwardMessageProvider>
+          </ReplyMessageProvider>
+        </MetaWindow24hProvider>
       </Paper>
 
       <ContactDrawer
