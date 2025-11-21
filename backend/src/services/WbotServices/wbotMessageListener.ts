@@ -4127,6 +4127,19 @@ const handleMessage = async (
     }
 
     try {
+      // ✅ NOVA FUNCIONALIDADE: Limpar isOutOfHour quando volta ao expediente
+      if (
+        !msg.key.fromMe &&
+        settings.scheduleType &&
+        (!ticket.isGroup || whatsapp.groupAsTicket === "enabled") &&
+        ticket.isOutOfHour === true &&
+        currentSchedule &&
+        currentSchedule.inActivity === true
+      ) {
+        logger.info(`[WBOT MESSAGE LISTENER - BACK TO HOURS] Limpando isOutOfHour do ticket ${ticket.id} - voltou ao expediente`);
+        await ticket.update({ isOutOfHour: false });
+      }
+
       if (
         !msg.key.fromMe &&
         settings.scheduleType &&
@@ -4213,10 +4226,16 @@ const handleMessage = async (
           }
 
           //atualiza o contador de vezes que enviou o bot e que foi enviado fora de hora
-          await ticket.update({
-            isOutOfHour: true,
+          const ticketUpdate: any = {
             amountUsedBotQueues: ticket.amountUsedBotQueues + 1
-          });
+          };
+
+          // ✅ CORREÇÃO: Verificar configuração da empresa para marcar ticket como fora de expediente
+          if (settings?.closeTicketOutOfHours) {
+            ticketUpdate.isOutOfHour = true;
+          }
+
+          await ticket.update(ticketUpdate);
 
           return;
         }

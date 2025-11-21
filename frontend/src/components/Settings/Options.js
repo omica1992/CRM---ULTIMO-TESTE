@@ -161,6 +161,10 @@ export default function Options(props) {
   const [closeTicketOnTransfer, setCloseTicketOnTransfer] = useState(false)
   const [loadingCloseTicketOnTransfer, setLoadingCloseTicketOnTransfer] = useState(false)
 
+  // Fechar ticket ao enviar mensagem fora de expediente
+  const [closeTicketOutOfHours, setCloseTicketOutOfHours] = useState(true)
+  const [loadingCloseTicketOutOfHours, setLoadingCloseTicketOutOfHours] = useState(false)
+
   // Usar carteira de clientes
   const [directTicketsToWallets, setDirectTicketsToWallets] = useState(false)
   const [loadingDirectTicketsToWallets, setLoadingDirectTicketsToWallets] = useState(false)
@@ -276,6 +280,7 @@ const [loadingCopyContactPrefix, setLoadingCopyContactPrefix] = useState(false);
       if (key === "lgpdLink") setLGPDLink(value);
       if (key === "DirectTicketsToWallets") setDirectTicketsToWallets(value);
       if (key === "closeTicketOnTransfer") setCloseTicketOnTransfer(value);
+      if (key === "closeTicketOutOfHours") setCloseTicketOutOfHours(value);
       if (key === "transferMessage") setTransferMessage(value);
       if (key === "greetingAcceptedMessage") setGreetingAcceptedMessage(value);
       if (key === "AcceptCallWhatsappMessage") setAcceptCallWhatsappMessage(value);
@@ -644,6 +649,17 @@ async function handleCopyContactPrefix(value) {
       data: value,
     });
     setLoadingCloseTicketOnTransfer(false);
+  }
+
+  async function handleCloseTicketOutOfHours(value) {
+    setCloseTicketOutOfHours(value);
+    setLoadingCloseTicketOutOfHours(true);
+    await update({
+      column: "closeTicketOutOfHours",
+      data: value,
+    });
+    setLoadingCloseTicketOutOfHours(false);
+    toast.success("Configuração atualizada com sucesso!");
   }
 
   async function handleDirectTicketsToWallets(value) {
@@ -1071,6 +1087,25 @@ async function handleCopyContactPrefix(value) {
             </Select>
             <FormHelperText>
               {loadingCloseTicketOnTransfer && i18n.t("settings.settings.options.updating")}
+            </FormHelperText>
+          </FormControl>
+        </Grid>
+
+        <Grid xs={12} sm={6} md={4} item>
+          <FormControl className={classes.selectContainer}>
+            <InputLabel id="closeTicketOutOfHours-label">Marcar ticket como fora de expediente</InputLabel>
+            <Select
+              labelId="closeTicketOutOfHours-label"
+              value={closeTicketOutOfHours}
+              onChange={async (e) => {
+                handleCloseTicketOutOfHours(e.target.value);
+              }}
+            >
+              <MenuItem value={false}>Não</MenuItem>
+              <MenuItem value={true}>Sim</MenuItem>
+            </Select>
+            <FormHelperText>
+              {loadingCloseTicketOutOfHours ? "Atualizando..." : "Marca ticket como fora de expediente ao enviar mensagem automática"}
             </FormHelperText>
           </FormControl>
         </Grid>

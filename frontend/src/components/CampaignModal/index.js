@@ -438,22 +438,17 @@ const CampaignModal = ({
       const selectedWhatsapp = whatsapps.find(w => w.id === whatsappId);
       setIsWhatsAppOficial(selectedWhatsapp?.channel === "whatsapp_oficial");
       
-      // Buscar templates se for oficial (usando mesmo endpoint das conversas)
+      // ✅ CORREÇÃO: Buscar templates da Meta API, não quick-messages
       if (selectedWhatsapp?.channel === "whatsapp_oficial") {
-        api.get(`/quick-messages/list`, {
-          params: { 
-            isOficial: "true",
-            userId: user.id,
-            companyId: companyId,
-            status: "APPROVED"
-          }
-        }).then(({ data }) => {
-          console.log("Templates carregados:", data);
-          setAvailableTemplates(data || []);
-        }).catch(err => {
-          console.error("Erro ao buscar templates:", err);
-          setAvailableTemplates([]);
-        });
+        api.get(`/templates?whatsappId=${whatsappId}`)
+          .then(({ data }) => {
+            console.log("📋 Templates Meta carregados para campanha:", data.data?.length || 0);
+            setAvailableTemplates(data.data || []);
+          })
+          .catch(err => {
+            console.error("❌ Erro ao buscar templates:", err);
+            setAvailableTemplates([]);
+          });
       } else {
         setAvailableTemplates([]);
         setSelectedTemplate(null);
@@ -490,8 +485,11 @@ const handleSaveCampaign = async (values) => {
       recurrenceDaysOfWeek: (values.isRecurring && values.recurrenceDaysOfWeek && values.recurrenceDaysOfWeek.length > 0) 
         ? values.recurrenceDaysOfWeek // Enviar array, o backend irá converter para JSON
         : null, // Enviar null se não for recorrente ou array vazio
-      // Adicionar campos de template
+      // ✅ CORREÇÃO: Adicionar campos completos do template Meta
       templateId: selectedTemplate?.id || null,
+      templateName: selectedTemplate?.name || null,
+      templateLanguage: selectedTemplate?.language || null,
+      templateComponents: selectedTemplate?.components || null,
       templateVariables: selectedTemplate?.variables ? JSON.stringify(selectedTemplate.variables) : null,
     };
     
@@ -499,13 +497,14 @@ const handleSaveCampaign = async (values) => {
     console.log("templateVariables sendo enviado:", dataValues.templateVariables);
 
     // Processar datas
+    const skipKeys = ["recurrenceDaysOfWeek", "templateId", "templateName", "templateLanguage", "templateComponents", "templateVariables"];
     Object.entries(values).forEach(([key, value]) => {
       if (key === "scheduledAt" && value !== "" && value !== null) {
         dataValues[key] = moment(value).format("YYYY-MM-DD HH:mm:ss");
       } else if (key === "recurrenceEndDate" && value !== "" && value !== null) {
         dataValues[key] = moment(value).format("YYYY-MM-DD HH:mm:ss");
-      } else if (key !== "recurrenceDaysOfWeek" && key !== "templateId" && key !== "templateVariables") {
-        // Não processar recurrenceDaysOfWeek, templateId e templateVariables aqui
+      } else if (!skipKeys.includes(key)) {
+        // Não processar campos de template e recorrência aqui
         dataValues[key] = value === "" ? null : value;
       }
     });

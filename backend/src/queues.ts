@@ -2147,7 +2147,7 @@ async function handleDispatchCampaign(job) {
           await campaignShipping.update({ deliveredAt: moment() });
           
           // Log de sucesso
-          campaignLogger.templateSent(campaignId, formattedNumber, campaign.templateId, result);
+          campaignLogger.templateSent(campaignId, formattedNumber, parseInt(campaign.templateId), result);
           logger.info(`Template enviado via Meta API sem ticket: Campanha=${campaignId};Numero=${cleanNumber};Status=Enviado`);
         } catch (error) {
           // Log de erro detalhado

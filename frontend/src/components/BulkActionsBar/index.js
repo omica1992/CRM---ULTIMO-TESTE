@@ -97,8 +97,9 @@ const BulkActionsBar = () => {
     
     setUsersLoading(true);
     try {
-      const { data } = await api.get("/users/");
-      setUsers(data.users || data || []);
+      // ✅ Usar /users/list que retorna TODOS os usuários sem paginação
+      const { data } = await api.get("/users/list");
+      setUsers(data || []);
     } catch (err) {
       console.error("Erro ao carregar usuários:", err);
       toast.error("Erro ao carregar usuários");

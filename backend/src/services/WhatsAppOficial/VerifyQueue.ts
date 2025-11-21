@@ -289,11 +289,17 @@ const verifyQueueOficial = async (
                     })
                 }
                 //atualiza o contador de vezes que enviou o bot e que foi enviado fora de hora
-                await ticket.update({
+                const ticketUpdate: any = {
                     queueId: queue.id,
-                    isOutOfHour: true,
                     amountUsedBotQueues: ticket.amountUsedBotQueues + 1
-                });
+                };
+
+                // ✅ CORREÇÃO: Verificar configuração da empresa
+                if (settings?.closeTicketOutOfHours) {
+                    ticketUpdate.isOutOfHour = true;
+                }
+
+                await ticket.update(ticketUpdate);
                 return;
             }
 
@@ -688,11 +694,17 @@ const verifyQueueOficial = async (
                     })
                 }
                 //atualiza o contador de vezes que enviou o bot e que foi enviado fora de hora
-                await ticket.update({
+                const ticketUpdate: any = {
                     queueId: queue.id,
-                    isOutOfHour: true,
                     amountUsedBotQueues: ticket.amountUsedBotQueues + 1
-                });
+                };
+
+                // ✅ CORREÇÃO: Verificar configuração da empresa
+                if (settings?.closeTicketOutOfHours) {
+                    ticketUpdate.isOutOfHour = true;
+                }
+
+                await ticket.update(ticketUpdate);
                 return;
             }
 

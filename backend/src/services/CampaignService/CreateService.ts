@@ -34,7 +34,10 @@ interface Data {
   recurrenceDayOfMonth?: number;
   recurrenceEndDate?: string;
   maxExecutions?: number;
-  templateId?: number | null;
+  templateId?: string | null; // ✅ CORREÇÃO: String para aceitar IDs grandes da Meta
+  templateName?: string | null; // ✅ Nome do template Meta
+  templateLanguage?: string | null; // ✅ Idioma do template
+  templateComponents?: any | null; // ✅ Componentes do template
   templateVariables?: string | null;
 }
 

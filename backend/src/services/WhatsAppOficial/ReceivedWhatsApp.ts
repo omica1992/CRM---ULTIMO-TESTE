@@ -314,6 +314,7 @@ export class ReceibedWhatsAppService {
                     chmodSync(folder, 0o777)
                 }
 
+                // Escrever arquivo binário (buffer já está decodificado de base64)
                 writeFileSync(`${folder}/${fileName}`, buffer, { encoding: 'base64' });
             }
             const settings = await CompaniesSettings.findOne({
@@ -354,14 +355,23 @@ export class ReceibedWhatsAppService {
                 currentSchedule = await VerifyCurrentSchedule(companyId, 0, whatsapp.id);
             }
 
-            // Verifica se está fora do expediente (company ou connection)
+            // ✅ NOVA FUNCIONALIDADE: Limpar isOutOfHour quando volta ao expediente
             if (
                 settings.scheduleType &&
-                (settings.scheduleType === "company" || settings.scheduleType === "connection") &&
+                ticket.isOutOfHour === true &&
+                currentSchedule &&
+                currentSchedule.inActivity === true
+            ) {
+                logger.info(`[WHATSAPP OFICIAL - BACK TO HOURS] Limpando isOutOfHour do ticket ${ticket.id} - voltou ao expediente`);
+                await ticket.update({ isOutOfHour: false });
+            }
+
+            // Verificar se está fora do expediente
+            if (
+                settings.scheduleType &&
                 !isNil(currentSchedule) &&
                 (!currentSchedule || currentSchedule.inActivity === false) &&
-                (!ticket.isGroup || whatsapp.groupAsTicket === "enabled") &&
-                !["open", "group"].includes(ticket.status)
+                !ticket.imported
             ) {
                 logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Ticket ${ticket.id} fora de expediente (${settings.scheduleType})`);
 
@@ -421,18 +431,15 @@ export class ReceibedWhatsAppService {
 
                 // Atualizar ticket - verificar se deve fechar ticket fora de expediente
                 const ticketUpdate: any = {
-                    amountUsedBotQueues: ticket.amountUsedBotQueues + 1,
-                    isOutOfHour: true
+                    amountUsedBotQueues: ticket.amountUsedBotQueues + 1
                 };
 
-                // ✅ NOVA FUNCIONALIDADE: Verificar configuração da empresa
+                // ✅ CORREÇÃO: Verificar configuração da empresa para marcar ticket como fora de expediente
                 if (settings.closeTicketOutOfHours) {
-                    // Comportamento padrão: fecha ticket (como era antes)
-                    logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Fechando ticket ${ticket.id} (configuração habilitada)`);
-                    // O ticket permanece aberto mas marcado como isOutOfHour
+                    ticketUpdate.isOutOfHour = true;
+                    logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Marcando ticket ${ticket.id} como fora de expediente (configuração habilitada)`);
                 } else {
-                    // Nova opção: não fecha ticket, apenas marca como fora de expediente
-                    logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (configuração desabilitada)`);
+                    logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Mantendo ticket ${ticket.id} sem marcar como fora de expediente (configuração desabilitada)`);
                 }
 
                 await ticket.update(ticketUpdate);

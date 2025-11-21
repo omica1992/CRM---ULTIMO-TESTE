@@ -8,7 +8,8 @@ import {
   AutoIncrement,
   ForeignKey,
   BelongsTo,
-  HasMany
+  HasMany,
+  DataType
 } from "sequelize-typescript";
 import CampaignShipping from "./CampaignShipping";
 import Company from "./Company";
@@ -161,7 +162,16 @@ class Campaign extends Model<Campaign> {
 
   @ForeignKey(() => QuickMessage)
   @Column
-  templateId: number; // ID do template da Meta (QuickMessage isOficial)
+  templateId: string; // ✅ CORREÇÃO: String para aceitar IDs grandes da Meta
+
+  @Column
+  templateName: string; // ✅ Nome do template Meta
+
+  @Column
+  templateLanguage: string; // ✅ Idioma do template
+
+  @Column(DataType.JSON)
+  templateComponents: any; // ✅ Componentes do template
 
   @Column
   templateVariables: string; // JSON com variáveis do template
