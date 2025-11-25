@@ -29,7 +29,8 @@ interface ScheduleData {
   reminderDate?: string;
   reminderMessage?: string;
   // ✅ Campos de template da API Oficial
-  templateMetaId?: number; // ID da QuickMessage (igual campanha)
+  templateMetaId?: string; // ID da QuickMessage (igual campanha) - string para suportar IDs grandes da Meta
+  templateName?: string; // ✅ NOVO: Nome do template para API Meta
   templateLanguage?: string;
   templateComponents?: any;
   isTemplate?: boolean;
@@ -79,6 +80,7 @@ const UpdateUserService = async ({
     reminderMessage,
     // ✅ Campos de template
     templateMetaId,
+    templateName, // ✅ NOVO: Nome do template para API Meta
     templateLanguage,
     templateComponents,
     isTemplate
@@ -86,6 +88,29 @@ const UpdateUserService = async ({
 
   try {
     await schema.validate({ body });
+    
+    // ✅ Debug do templateName em atualização
+    if (isTemplate) {
+      console.log(`📋 [DEBUG-UPDATE] ================================================`);
+      console.log(`📋 [DEBUG-UPDATE] ATUALIZANDO AGENDAMENTO COM TEMPLATE`);
+      console.log(`📋 [DEBUG-UPDATE] ID: ${id}`);
+      console.log(`📋 [DEBUG-UPDATE] templateName: ${templateName || 'NULL'}`);
+      console.log(`📋 [DEBUG-UPDATE] templateMetaId: ${templateMetaId || 'NULL'}`);
+      console.log(`📋 [DEBUG-UPDATE] templateLanguage: ${templateLanguage || 'NULL'}`);
+      console.log(`📋 [DEBUG-UPDATE] tipos: templateName(${typeof templateName}), templateMetaId(${typeof templateMetaId})`);
+      
+      // Analisar objeto completo dos dados recebidos
+      console.log(`📋 [DEBUG-UPDATE] DADOS JSON COMPLETOS:`);
+      console.log(JSON.stringify({
+        templateMetaId,
+        templateName,
+        templateLanguage,
+        isTemplate,
+        templateComponents: templateComponents ? '[OBJETO COMPLEXO]' : 'NULL'
+      }, null, 2));
+      
+      console.log(`📋 [DEBUG-UPDATE] ================================================`);
+    }
   } catch (err: any) {
     throw new AppError(err.message);
   }
@@ -112,11 +137,20 @@ const UpdateUserService = async ({
     reminderMessage: (reminderDate ? (reminderMessage || body) : null),
     reminderStatus: reminderDate ? 'PENDENTE' : null,
     // ✅ Incluir campos de template
-    templateMetaId: templateMetaId || null,
-    templateLanguage: templateLanguage || null,
+    templateMetaId: templateMetaId?.toString() || null, // Garantir que seja string
+    templateName: templateName || templateMetaId?.toString() || null, // ✅ NOVO: Nome do template ou ID como fallback
+    templateLanguage: templateLanguage || 'pt_BR', // Default para pt_BR se não fornecido
     templateComponents: templateComponents || null,
     isTemplate: isTemplate || false
   });
+
+  // ✅ Log detalhado após update
+if (schedule.isTemplate) {
+  console.log(`💾 [UPDATE-SCHEDULE] Agendamento ${schedule.id} atualizado com sucesso`);
+  console.log(`💾 [UPDATE-SCHEDULE] templateName salvo: "${schedule.templateName}"`);
+  console.log(`💾 [UPDATE-SCHEDULE] templateMetaId salvo: "${schedule.templateMetaId}"`);
+  console.log(`💾 [UPDATE-SCHEDULE] isTemplate: ${schedule.isTemplate}`);
+}
 
   // ✅ Atualizar relacionamentos com múltiplos usuários
   if (userIds !== undefined) {

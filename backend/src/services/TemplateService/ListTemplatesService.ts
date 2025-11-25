@@ -55,6 +55,24 @@ const ListTemplatesService = async ({ companyId, whatsappId }: Request): Promise
       }
     });
 
+    // ✅ Log detalhado dos templates retornados
+    if (response.data && Array.isArray(response.data)) {
+      console.log(`[TEMPLATES] ✅ Encontrados ${response.data.length} templates`);
+      
+      if (response.data.length > 0) {
+        // Mostrar estrutura do primeiro template
+        const firstTemplate = response.data[0];
+        console.log(`[TEMPLATES] ✅ Amostra de template:`);
+        console.log(`[TEMPLATES] - id: ${firstTemplate.id}`);
+        console.log(`[TEMPLATES] - name: ${firstTemplate.name}`); // ✅ Nome/shortcode do template
+        console.log(`[TEMPLATES] - status: ${firstTemplate.status}`);
+        console.log(`[TEMPLATES] - category: ${firstTemplate.category}`);
+        console.log(`[TEMPLATES] - language: ${firstTemplate.language}`);
+      }
+    } else {
+      console.log(`[TEMPLATES] ❌ Resposta não contém array de templates:`, response.data);
+    }
+
     return response.data;
   } catch (error: any) {
     console.error("Erro ao buscar templates:", error.response?.data || error.message);

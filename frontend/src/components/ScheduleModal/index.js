@@ -1,6 +1,6 @@
 // src/components/ScheduleModal/index.js
 
-import React, { useState, useEffect, useContext, useRef } from "react";
+import React, { useState, useEffect, useContext, useRef, useMemo } from "react";
 
 import * as Yup from "yup";
 import { Formik, Form, Field, FieldArray } from "formik";
@@ -66,12 +66,11 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const ScheduleSchema = Yup.object().shape({
-  body: Yup.string().min(5, "Mensagem muito curta").required("Obrigatório"),
+// Schema base, será extendido dentro do componente com validação condicional
+const baseScheduleSchema = Yup.object().shape({
   contactId: Yup.number().required("Obrigatório"),
   sendAt: Yup.string().required("Obrigatório"),
   reminderDate: Yup.string().nullable(),
-  // Tornar reminderMessage opcional mesmo quando houver reminderDate
   reminderMessage: Yup.string().nullable()
 });
 
@@ -82,8 +81,8 @@ const ScheduleModal = ({
   contactId,
   cleanContact,
   reload,
-  message, // ✅ Nova prop para pre-popular mensagem
-  fromMessageInput = false, // ✅ Nova prop para identificar origem
+  message, // Nova prop para pre-popular mensagem
+  fromMessageInput = false, // Nova prop para identificar origem
   user
 }) => {
   const classes = useStyles();
@@ -93,8 +92,8 @@ const ScheduleModal = ({
   const isAdmin = user.profile === 'admin';
 
   const initialState = {
-    body: message || "", // ✅ Pre-popular com mensagem se fornecida
-    contactId: contactId || "", // ✅ Pre-popular com contactId se fornecido
+    body: message || "", // Pre-popular com mensagem se fornecida
+    contactId: contactId || "", // Pre-popular com contactId se fornecido
     sendAt: moment().add(1, "hour").format("YYYY-MM-DDTHH:mm"),
     sentAt: "",
     openTicket: "enabled",
@@ -143,6 +142,34 @@ const ScheduleModal = ({
   // Estado para template
   const [selectedTemplate, setSelectedTemplate] = useState(null);
 
+  // Schema dinâmico com validação condicional para mensagem - MOVIDO PARA DEPOIS DA INICIALIZAÇÃO DE selectedTemplate
+  // Helper para verificar se é uma conexão API Oficial
+  const isOfficialConnection = useMemo(() => {
+    const whatsapp = whatsapps.find(w => w.id?.toString() === selectedWhatsapps?.toString());
+    return whatsapp && (
+      whatsapp.provider === "oficial" || 
+      whatsapp.provider === "beta" ||
+      whatsapp.channel === "whatsapp-oficial" || 
+      whatsapp.channel === "whatsapp_oficial"
+    );
+  }, [whatsapps, selectedWhatsapps]);
+  
+  const scheduleSchema = useMemo(() => {
+    return baseScheduleSchema.shape({
+      body: Yup.string().when(['selectedTemplate', 'whatsappId'], {
+        is: (isTemplate, whatsappId) => {
+          // Verificar se é template ou conexão da API Oficial
+          const isSelectedTemplate = !!selectedTemplate;
+          const isApiOficial = isOfficialConnection;
+          console.log('Validando mensagem:', { isTemplate, isSelectedTemplate, isApiOficial, selectedWhatsapps });
+          return isSelectedTemplate || isApiOficial;
+        },
+        then: Yup.string().nullable(), // Opcional para templates ou API Oficial
+        otherwise: Yup.string().min(5, "Mensagem muito curta").required("Obrigatório")
+      })
+    });
+  }, [selectedTemplate, isOfficialConnection, selectedWhatsapps]);
+
   useEffect(() => {
     return () => {
       isMounted.current = false;
@@ -163,11 +190,18 @@ const ScheduleModal = ({
   // Buscar quickMessages quando o modal abrir ou o WhatsApp mudar
   useEffect(() => {
     if (open && user?.companyId) {
+      console.group('🔍 [TEMPLATE-LOG] Carregando templates e respostas rápidas');
+      console.log('WhatsApp selecionado:', selectedWhatsapps);
+      console.log('Empresa ID:', user?.companyId);
+      console.log('Usuário ID:', user?.id);
       fetchQuickMessages();
+      console.groupEnd();
     }
   }, [open, user?.companyId, user?.id, selectedWhatsapps]); // ✅ CORREÇÃO: Recarregar quando o WhatsApp muda
 
   const fetchQuickMessages = async () => {
+    console.group('📋 [TEMPLATE-LOG] Início do fetchQuickMessages');
+    console.time('fetchQuickMessages');
     setLoadingQuickMessages(true);
     try {
       // ✅ CORREÇÃO 1: Buscar templates da API e mensagens rápidas separadamente
@@ -201,19 +235,54 @@ const ScheduleModal = ({
       console.log("✅ Templates Meta carregados:", templates.length);
 
       // Converter templates para formato compatível com quick messages
-      const formattedTemplates = templates.map(template => ({
-        id: template.id,
-        shortcode: template.name,
-        message: template.components?.find(c => c.type === 'BODY')?.text || 'Template sem conteúdo',
-        isOficial: true,
-        metaID: template.id,
-        language: template.language,
-        components: template.components
-      }));
+      const formattedTemplates = templates.map(template => {
+        // ✅ Garantir que o nome do template (shortcode) esteja sempre definido
+        // O nome do template da API Meta É o shortcode que precisamos usar na API
+        if (!template.name) {
+          console.error("❌ Template sem nome/shortcode!", template);
+        }
+        
+        return {
+          id: template.id,
+          shortcode: template.name, // ✅ Este é o nome real que precisa ser usado na API
+          message: template.components?.find(c => c.type === 'BODY')?.text || 'Template sem conteúdo',
+          isOficial: true,
+          metaID: template.id,
+          language: template.language,
+          components: template.components,
+          // ✅ Garantir que templateName seja sempre preenchido
+          templateName: template.name // ✅ Duplicando para garantir consistência
+        };
+      });
+      
+      // ✅ Log para debug dos templates carregados
+      if (templates.length > 0) {
+        console.log("✅ Primeiro template carregado:", {
+          id: templates[0].id,
+          name: templates[0].name,
+          language: templates[0].language
+        });
+      }
 
       // Combinar ambas as fontes
       const combinedMessages = [...quickMessages, ...formattedTemplates];
       console.log("✅ Total de mensagens combinadas:", combinedMessages.length);
+      
+      // Log detalhado dos templates da Meta
+      if (formattedTemplates.length > 0) {
+        console.group('🔍 [TEMPLATE-LOG] Templates formatados');
+        formattedTemplates.forEach((template, index) => {
+          console.log(`Template #${index+1}:`, {
+            id: template.id,
+            shortcode: template.shortcode,
+            templateName: template.templateName,
+            metaID: template.metaID,
+            tipo_id: typeof template.id,
+            tipo_shortcode: typeof template.shortcode
+          });
+        });
+        console.groupEnd();
+      }
       
       setQuickMessages(combinedMessages || []);
     } catch (err) {
@@ -222,6 +291,8 @@ const ScheduleModal = ({
       setQuickMessages([]);
     } finally {
       setLoadingQuickMessages(false);
+      console.timeEnd('fetchQuickMessages');
+      console.groupEnd();
     }
   };
 
@@ -296,6 +367,14 @@ const ScheduleModal = ({
       fetchUsers();
     }
   }, [open, isAdmin]);
+
+  // Limpar o campo de mensagem quando mudar para uma conexão API Oficial
+  useEffect(() => {
+    if (isOfficialConnection) {
+      // Se mudou para uma conexão API Oficial, limpar o campo de mensagem
+      setSchedule(prev => ({ ...prev, body: "" }));
+    }
+  }, [isOfficialConnection]);
 
   // Carregar WhatsApps ao abrir o modal
   useEffect(() => {
@@ -574,6 +653,8 @@ const ScheduleModal = ({
   };
 
   const handleSaveSchedule = async (values) => {
+    console.group('💾 [TEMPLATE-LOG] Início do processo de salvamento');
+    console.time('handleSaveSchedule');
     try {
       // Validar que whatsappId foi fornecido
       if (!selectedWhatsapps) {
@@ -599,14 +680,25 @@ const ScheduleModal = ({
             reminderMessage: values.reminderMessage && values.reminderMessage.trim() !== "" ? values.reminderMessage : null,
             // ✅ Incluir dados do template se selecionado (igual campanha)
             templateMetaId: selectedTemplate?.templateId || null, // ID da QuickMessage
+            templateName: selectedTemplate?.templateName || null, // ✅ Nome (shortcode) do template
             templateLanguage: selectedTemplate?.language || null,
             templateComponents: selectedTemplate?.components || null,
             isTemplate: selectedTemplate ? true : false
           };
 
-          console.log("💾 [SAVE] Salvando agendamento:", scheduleData);
-          console.log("💾 [SAVE] Selected Template:", selectedTemplate);
-          console.log("💾 [SAVE] Is Template:", scheduleData.isTemplate);
+          console.log(" Salvando agendamento:", scheduleData);
+          console.log(" Selected Template:", selectedTemplate);
+          console.log(" Is Template:", scheduleData.isTemplate);
+          console.log(" [SAVE-DEBUG] templateName:", scheduleData.templateName);
+console.log(" [SAVE-DEBUG] templateMetaId:", scheduleData.templateMetaId);
+console.log(" [SAVE-DEBUG] selectedTemplate detalhado:", JSON.stringify(selectedTemplate, null, 2));
+
+// Verificação final para garantir que templateName está definido
+if (!scheduleData.templateName && scheduleData.isTemplate) {
+  console.warn(" templateName está undefined no momento do salvamento - aplicando correção");
+  scheduleData.templateName = scheduleData.templateMetaId || "template_" + Date.now();
+  console.log(" templateName corrigido para:", scheduleData.templateName);
+}
 
           const { data } = await api.post("/schedules", scheduleData);
           
@@ -638,15 +730,35 @@ const ScheduleModal = ({
           reminderDate: values.reminderDate || null,
           reminderMessage: values.reminderMessage && values.reminderMessage.trim() !== "" ? values.reminderMessage : null,
           // ✅ Incluir dados do template se selecionado (igual campanha)
-          templateMetaId: selectedTemplate?.templateId || null, // ID da QuickMessage
-          templateLanguage: selectedTemplate?.language || null,
+          templateMetaId: selectedTemplate?.templateId?.toString() || null, // ID da QuickMessage
+          templateName: selectedTemplate?.templateName || selectedTemplate?.templateId?.toString() || null, // ✅ Nome (shortcode) do template
+          templateLanguage: selectedTemplate?.language || "pt_BR",
           templateComponents: selectedTemplate?.components || null,
           isTemplate: selectedTemplate ? true : false
         };
+        
+        // Log detalhado dos dados antes do envio
+        console.group('📤 [TEMPLATE-LOG] Dados do template a serem enviados');
+        console.log('selectedTemplate objeto completo:', selectedTemplate);
+        console.log('templateMetaId:', {
+          valor: scheduleData.templateMetaId,
+          tipo: typeof scheduleData.templateMetaId,
+          fonte_direta: selectedTemplate?.templateId,
+          fonte_tipo: typeof selectedTemplate?.templateId
+        });
+        console.log('templateName:', {
+          valor: scheduleData.templateName,
+          tipo: typeof scheduleData.templateName,
+          fonte_direta: selectedTemplate?.templateName,
+          fonte_tipo: typeof selectedTemplate?.templateName
+        });
+        console.log('isTemplate:', scheduleData.isTemplate);
 
-        console.log("💾 [SAVE-SINGLE] Salvando agendamento único:", scheduleData);
-        console.log("💾 [SAVE-SINGLE] Selected Template:", selectedTemplate);
+        console.log("💾 [SAVE-SINGLE] Salvando agendamento único...");
         console.log("💾 [SAVE-SINGLE] Is Template:", scheduleData.isTemplate);
+        console.log("💾 [SAVE-SINGLE-DEBUG] templateName:", scheduleData.templateName);
+        console.log("💾 [SAVE-SINGLE-DEBUG] templateMetaId:", scheduleData.templateMetaId);
+        console.groupEnd(); // Fecha o grupo de dados do template
 
         if (scheduleId) {
           await api.put(`/schedules/${scheduleId}`, scheduleData);
@@ -678,7 +790,11 @@ const ScheduleModal = ({
         }
       }
     } catch (err) {
+      console.error('❌ [TEMPLATE-LOG] Erro ao salvar agendamento:', err);
       toastError(err);
+    } finally {
+      console.timeEnd('handleSaveSchedule');
+      console.groupEnd(); // Fecha o grupo principal do salvamento
     }
 
     setCurrentContact(null);
@@ -708,9 +824,12 @@ const ScheduleModal = ({
 
   // Função para lidar com seleção do dropdown de quickMessages
   const handleQuickMessageDropdownSelect = async (event, setFieldValue) => {
+    console.group('🎯 [TEMPLATE-LOG] Seleção de template/resposta rápida');
+    console.time('handleQuickMessageDropdownSelect');
     const selectedId = event.target.value;
-    console.log("🎯 ID selecionado:", selectedId);
-    console.log("📋 QuickMessages disponíveis:", quickMessages);
+    console.log("ID selecionado:", selectedId);
+    console.log("Tipo do ID:", typeof selectedId);
+    console.log("Total de QuickMessages disponíveis:", quickMessages.length);
 
     setSelectedQuickMessage(selectedId);
 
@@ -720,28 +839,69 @@ const ScheduleModal = ({
 
       if (selectedMessage) {
         console.log("📝 Mensagem selecionada completa:", selectedMessage);
+        console.log("📝 ID:", selectedMessage.id, "tipo:", typeof selectedMessage.id);
+        console.log("📝 shortcode:", selectedMessage.shortcode, "tipo:", typeof selectedMessage.shortcode);
         console.log("📝 isOficial:", selectedMessage.isOficial, "tipo:", typeof selectedMessage.isOficial);
         console.log("📝 metaID:", selectedMessage.metaID, "tipo:", typeof selectedMessage.metaID);
+        console.log("📝 templateName:", selectedMessage.templateName, "tipo:", typeof selectedMessage.templateName);
         
         // ✅ Verificar se é um template da API Oficial
         if (selectedMessage.isOficial && selectedMessage.metaID) {
           console.log("📋 ✅ Template da API Oficial selecionado:", selectedMessage.metaID);
           
-          // Salvar dados do template  
-          setSelectedTemplate({
-            templateId: selectedMessage.id, // ✅ ID da QuickMessage (igual campanha)
+          // Salvar dados do template
+          console.log("📋 [TEMPLATE-DEBUG] Valores do template antes de salvar:", {
+            id: selectedMessage.id,
+            shortcode: selectedMessage.shortcode,
+            metaID: selectedMessage.metaID,
+            templateName: selectedMessage.templateName,
+            tipo_id: typeof selectedMessage.id,
+            tipo_shortcode: typeof selectedMessage.shortcode,
+            tipo_metaID: typeof selectedMessage.metaID,
+            tipo_templateName: typeof selectedMessage.templateName
+          });
+          
+          // ✅ Garantir que templateName seja definido (ordem de prioridade)
+          let finalTemplateName = 
+              selectedMessage.templateName || // Primeiro: valor pré-definido
+              selectedMessage.shortcode ||  // Segundo: shortcode (mais comum)
+              selectedMessage.name ||       // Terceiro: nome direto
+              selectedMessage.metaID?.toString() || // Quarto: metaID como fallback
+              selectedMessage.id?.toString() || // Quinto: ID como último recurso
+              "unknown_template";          // Último: valor padrão
+          
+          console.log("📋 [TEMPLATE-DEBUG] Nome final do template:", finalTemplateName);
+          
+          const templateData = {
+            templateId: selectedMessage.id?.toString() || selectedMessage.metaID?.toString(), // ✅ ID da QuickMessage (igual campanha)
+            templateName: finalTemplateName, // ✅ Nome definitivo do template
             language: selectedMessage.language || "pt_BR",
             components: selectedMessage.components || []
-          });
+          };
+          
+          // ✅ Verificação adicional para garantir que templateName está definido
+          if (!templateData.templateName) {
+            console.warn("❌ templateName está indefinido - usando ID como fallback");
+            templateData.templateName = templateData.templateId?.toString() || "template_" + Date.now();
+          }
+          
+          console.log("📋 [TEMPLATE-DEBUG] Template data para salvar:", templateData);
+          setSelectedTemplate(templateData);
 
-          // Preencher campo body com o texto do template (preview)
-          setFieldValue("body", selectedMessage.message || "");
+          // NÃO preencher o campo body para templates (campo fica desabilitado)
+          // apenas limpar qualquer conteúdo anterior
+          setFieldValue("body", "");
           
           console.log("✅ Template configurado:", {
             metaId: selectedMessage.metaID,
+            templateId: templateData.templateId, 
+            templateName: finalTemplateName, // ✅ Nome final do template
             language: selectedMessage.language,
-            components: selectedMessage.components
+            components: selectedMessage.components?.length || 0
           });
+          
+          console.timeEnd('handleQuickMessageDropdownSelect');
+          console.groupEnd();
         } else {
           // Mensagem normal (não template)
           console.log("✅ Preenchendo campo body com:", selectedMessage.message);
@@ -853,7 +1013,7 @@ const ScheduleModal = ({
         <Formik
           initialValues={schedule}
           enableReinitialize={true}
-          validationSchema={ScheduleSchema}
+          validationSchema={scheduleSchema}
           onSubmit={(values, actions) => {
             setTimeout(() => {
               handleSaveSchedule(values);
@@ -957,10 +1117,14 @@ const ScheduleModal = ({
                     name="body"
                     inputRef={messageInputRef}
                     error={touched.body && Boolean(errors.body)}
-                    helperText={touched.body && errors.body}
+                    helperText={!!selectedTemplate || isOfficialConnection 
+                      ? "Campo desabilitado para templates e API Oficial" 
+                      : touched.body && errors.body
+                    }
                     variant="outlined"
                     margin="dense"
                     fullWidth
+                    disabled={!!selectedTemplate || isOfficialConnection}
                   />
                 </div>
 

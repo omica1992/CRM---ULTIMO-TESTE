@@ -6,7 +6,7 @@ import logger from "./utils/logger";
 import campaignLogger from "./utils/campaignLogger";
 import moment from "moment";
 import Schedule from "./models/Schedule";
-import { Op, QueryTypes, Sequelize } from "sequelize";
+import { Op, Sequelize, fn, col, literal, QueryTypes } from "sequelize";
 import GetDefaultWhatsApp from "./helpers/GetDefaultWhatsApp";
 import Campaign from "./models/Campaign";
 import Queues from "./models/Queue";
@@ -157,6 +157,11 @@ async function handleVerifyReminders(job) {
           model: QuickMessage, 
           as: "template",
           required: false,
+          // ✅ CORREÇÃO: Usar expressão literal com função cast_to_int_safe para resolver incompatibilidade
+          on: {
+            id: literal(`cast_to_int_safe("Schedule"."templateMetaId") = "template"."id"`)
+          },
+          // Não usar filtro de isTemplate aqui - essa coluna não existe na tabela QuickMessages
           include: [{ model: QuickMessageComponent, as: "components" }]
         }
       ],
@@ -190,6 +195,7 @@ async function handleVerifyReminders(job) {
 
 async function handleVerifySchedules(job) {
   try {
+    // ✅ CORREÇÃO: Cast do templateMetaId para INTEGER ao fazer JOIN
     const { count, rows: schedules } = await Schedule.findAndCountAll({
       where: {
         status: "PENDENTE",
@@ -206,6 +212,11 @@ async function handleVerifySchedules(job) {
           model: QuickMessage, 
           as: "template",
           required: false,
+          // ✅ CORREÇÃO: Usar expressão literal com função cast_to_int_safe para resolver incompatibilidade
+          on: {
+            id: literal(`cast_to_int_safe("Schedule"."templateMetaId") = "template"."id"`)
+          },
+          // Não usar filtro de isTemplate aqui - essa coluna não existe na tabela QuickMessages
           include: [{ model: QuickMessageComponent, as: "components" }]
         }
       ],
@@ -363,18 +374,71 @@ async function handleSendScheduledMessage(job) {
           return cleanComp;
         });
 
-        // ✅ Buscar shortcode do template (igual à campanha)
-        if (!schedule.template) {
-          throw new Error(`Template ${schedule.templateMetaId} não encontrado`);
-        }
+        // ✅ CORREÇÃO PARA CAMPANHAS: Usar o metaID diretamente como nome do template 
+        // para templates da API Oficial, em vez de buscar na tabela QuickMessages
+        const isMetaApiId = schedule.templateMetaId && schedule.templateMetaId.length > 10;
+        
+        // ✅ CORREÇÃO: Buscar nome do template apropriado para uso com a API Oficial
+let templateRecord = schedule.template;
+let templateName = schedule.templateName || ""; // ✅ Primeiro tentar usar o nome salvo no agendamento
+let templateLanguage = schedule.templateLanguage || "pt_BR";
 
-        const templateData: IMetaMessageTemplate = {
-          name: schedule.template.shortcode, // ✅ Igual à campanha
-          language: {
-            code: schedule.templateLanguage || schedule.template.language || "pt_BR"
-          },
-          components: cleanComponents
-        };
+// ✅ Se não tiver templateName salvo no agendamento, tentar obter de outras fontes
+if (!templateName) {
+  // Verificar se é ID da Meta API (IDs longos, geralmente >10 caracteres)
+  const isMetaApiId = schedule.templateMetaId && schedule.templateMetaId.length > 10;
+  
+  // Se o templateRecord já estiver carregado, usar seu shortcode
+  if (templateRecord) {
+    templateName = templateRecord.shortcode;
+    templateLanguage = templateRecord.language || templateLanguage;
+    logger.info(`✅ [SCHEDULE-QUEUE] Usando template já carregado: ${templateName}`);
+  }
+  // Se não tiver template carregado, tentar buscar no banco
+  else if (!isMetaApiId) {
+    try {
+      // Para IDs curtos, tentar buscar no banco por compatibilidade
+      templateRecord = await QuickMessage.findByPk(schedule.templateMetaId, {
+        include: [{ model: QuickMessageComponent, as: "components" }]
+      });
+      
+      if (templateRecord) {
+        templateName = templateRecord.shortcode;
+        templateLanguage = templateRecord.language || templateLanguage;
+        logger.info(`✅ [SCHEDULE-QUEUE] Template local encontrado: ${templateName}`);
+        
+        // ✅ Salvar o nome do template no agendamento para futuras execuções
+        if (scheduleRecord) {
+          await scheduleRecord.update({ templateName: templateName });
+          logger.info(`✅ [SCHEDULE-QUEUE] Nome do template salvo no agendamento: ${templateName}`);
+        }
+      } else {
+        logger.warn(`❗ [SCHEDULE-QUEUE] Template não encontrado no banco`);
+      }
+    } catch (err) {
+      logger.warn(`❗ [SCHEDULE-QUEUE] Erro ao buscar template: ${err.message}`);
+    }
+  }
+  
+  // Se ainda não tiver nome, usar o proprio ID como fallback
+  if (!templateName) {
+    templateName = schedule.templateMetaId;
+    logger.info(`📋 [SCHEDULE-QUEUE] Usando ID como nome do template: ${templateName}`);
+  }
+} else {
+  logger.info(`📋 [SCHEDULE-QUEUE] Usando nome do template já salvo no agendamento: ${templateName}`);
+}
+
+// Montar dados do template usando o nome apropriado 
+const templateData: IMetaMessageTemplate = {
+  name: templateName,
+  language: {
+    code: templateLanguage
+  },
+  components: cleanComponents
+};
+
+logger.info(`📋 [SCHEDULE-QUEUE] Enviando template: name=${templateName}, language=${templateLanguage}`);
 
         const payload: ISendMessageOficial = {
           type: 'template',
@@ -502,18 +566,72 @@ async function handleSendScheduledMessage(job) {
           return cleanComp;
         });
 
-        // ✅ Buscar shortcode do template (igual à campanha)
-        if (!schedule.template) {
-          throw new Error(`Template ${schedule.templateMetaId} não encontrado`);
-        }
+        // ✅ CORREÇÃO PARA CAMPANHAS: Usar o metaID diretamente como nome do template 
+        // para templates da API Oficial, em vez de buscar na tabela QuickMessages
+        const isMetaApiId = schedule.templateMetaId && schedule.templateMetaId.length > 10;
+        
+        // Opcionalmente tentar buscar o template no banco (apenas para logs)
+        // ✅ CORREÇÃO: Buscar nome do template apropriado para uso com a API Oficial
+let templateRecord = schedule.template;
+let templateName = schedule.templateName || ""; // ✅ Primeiro tentar usar o nome salvo no agendamento
+let templateLanguage = schedule.templateLanguage || "pt_BR";
 
-        const templateData: IMetaMessageTemplate = {
-          name: schedule.template.shortcode, // ✅ Igual à campanha
-          language: {
-            code: schedule.templateLanguage || schedule.template.language || "pt_BR"
-          },
-          components: cleanComponents
-        };
+// ✅ Se não tiver templateName salvo no agendamento, tentar obter de outras fontes
+if (!templateName) {
+  // Verificar se é ID da Meta API (IDs longos, geralmente >10 caracteres)
+  const isMetaApiId = schedule.templateMetaId && schedule.templateMetaId.length > 10;
+  
+  // Se o templateRecord já estiver carregado, usar seu shortcode
+  if (templateRecord) {
+    templateName = templateRecord.shortcode;
+    templateLanguage = templateRecord.language || templateLanguage;
+    logger.info(`✅ [SCHEDULE-QUEUE] Usando template já carregado: ${templateName}`);
+  }
+  // Se não tiver template carregado, tentar buscar no banco
+  else if (!isMetaApiId) {
+    try {
+      // Para IDs curtos, tentar buscar no banco por compatibilidade
+      templateRecord = await QuickMessage.findByPk(schedule.templateMetaId, {
+        include: [{ model: QuickMessageComponent, as: "components" }]
+      });
+      
+      if (templateRecord) {
+        templateName = templateRecord.shortcode;
+        templateLanguage = templateRecord.language || templateLanguage;
+        logger.info(`✅ [SCHEDULE-QUEUE] Template local encontrado: ${templateName}`);
+        
+        // ✅ Salvar o nome do template no agendamento para futuras execuções
+        if (scheduleRecord) {
+          await scheduleRecord.update({ templateName: templateName });
+          logger.info(`✅ [SCHEDULE-QUEUE] Nome do template salvo no agendamento: ${templateName}`);
+        }
+      } else {
+        logger.warn(`❗ [SCHEDULE-QUEUE] Template não encontrado no banco`);
+      }
+    } catch (err) {
+      logger.warn(`❗ [SCHEDULE-QUEUE] Erro ao buscar template: ${err.message}`);
+    }
+  }
+  
+  // Se ainda não tiver nome, usar o proprio ID como fallback
+  if (!templateName) {
+    templateName = schedule.templateMetaId;
+    logger.info(`📋 [SCHEDULE-QUEUE] Usando ID como nome do template: ${templateName}`);
+  }
+} else {
+  logger.info(`📋 [SCHEDULE-QUEUE] Usando nome do template já salvo no agendamento: ${templateName}`);
+}
+
+// Montar dados do template usando o nome apropriado 
+const templateData: IMetaMessageTemplate = {
+  name: templateName,
+  language: {
+    code: templateLanguage
+  },
+  components: cleanComponents
+};
+
+logger.info(`📋 [SCHEDULE-QUEUE] Enviando template: name=${templateName}, language=${templateLanguage}`);
 
         const payload: ISendMessageOficial = {
           type: 'template',

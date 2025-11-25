@@ -21,7 +21,26 @@ import Queue from "./Queue";
 import ScheduleUser from "./ScheduleUser";
 import QuickMessage from "./QuickMessage";
 
-@Table
+@Table({
+  hooks: {
+    beforeCreate: (instance: any) => {
+      // Log antes de criar
+      if (instance.isTemplate) {
+        console.log(`💻 [MODEL-HOOK] Criando agendamento com template:`);
+        console.log(` - templateMetaId: "${instance.templateMetaId || ''}"`);
+        console.log(` - templateName: "${instance.templateName || ''}"`);
+      }
+    },
+    beforeUpdate: (instance: any) => {
+      // Log antes de atualizar
+      if (instance.isTemplate) {
+        console.log(`💻 [MODEL-HOOK] Atualizando agendamento com template:`);
+        console.log(` - templateMetaId: "${instance.templateMetaId || ''}"`);
+        console.log(` - templateName: "${instance.templateName || ''}"`);
+      }
+    }
+  }
+})
 class Schedule extends Model<Schedule> {
   @PrimaryKey
   @AutoIncrement
@@ -145,6 +164,9 @@ class Schedule extends Model<Schedule> {
   templateMetaId: string; // ID do template (QuickMessage) - ✅ CORREÇÃO: String para aceitar IDs grandes da Meta
 
   @Column
+  templateName: string; // ✅ Nome do template (shortcode) como usado na API da Meta
+
+  @Column
   templateLanguage: string;
 
   @Column(DataType.JSON)
@@ -154,7 +176,13 @@ class Schedule extends Model<Schedule> {
   @Column
   isTemplate: boolean;
 
-  @BelongsTo(() => QuickMessage, "templateMetaId")
+  // ✅ CORREÇÃO: Associação com QuickMessage usando configuração personalizada
+  @BelongsTo(() => QuickMessage, {
+    foreignKey: "templateMetaId",
+    targetKey: "id",
+    constraints: false // Desabilitar constraints para evitar erros de tipo
+    // Removido scope de isTemplate - essa coluna não existe na tabela QuickMessages
+  })
   template: QuickMessage;
 
   // Relacionamento many-to-many com usuários

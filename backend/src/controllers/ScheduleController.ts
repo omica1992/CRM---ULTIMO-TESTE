@@ -59,6 +59,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     reminderMessage,
     // ✅ Campos de template da API Oficial
     templateMetaId,
+    templateName,  // ✅ Extrair templateName explicitamente
     templateLanguage,
     templateComponents,
     isTemplate
@@ -67,12 +68,23 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   // ✅ Log para debug de templates
   if (isTemplate) {
-    console.log("📋 [CONTROLLER] Template detectado:", {
-      isTemplate,
-      templateMetaId,
-      templateLanguage,
-      hasComponents: !!templateComponents
-    });
+    console.log(`📋 [CONTROLLER-CREATE] ================================================`);
+    console.log("📋 [CONTROLLER-CREATE] Template detectado!");
+    console.log("📋 [CONTROLLER-CREATE] Valores recebidos:");
+    console.log(` - templateMetaId: "${templateMetaId || ''}" (${typeof templateMetaId})`);
+    console.log(` - templateName: "${templateName || ''}" (${typeof templateName})`);
+    console.log(` - templateLanguage: "${templateLanguage || ''}"`);
+    console.log(` - isTemplate: ${isTemplate}`);
+    console.log(` - hasComponents: ${!!templateComponents}`);
+    
+    // Verificar se templateName está sendo enviado corretamente
+    if (!templateName) {
+      console.log(`⚠️ [CONTROLLER-CREATE] ALERTA: templateName NÃO recebido ou está vazio!`);
+    } else {
+      console.log(`✅ [CONTROLLER-CREATE] templateName recebido corretamente: "${templateName}"`);
+    }
+    
+    console.log(`📋 [CONTROLLER-CREATE] ================================================`);
   }
 
   const schedule = await CreateService({
@@ -98,6 +110,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     reminderMessage,
     // ✅ Incluir campos de template
     templateMetaId,
+    templateName, // ✅ Usar variável já extraída
     templateLanguage,
     templateComponents,
     isTemplate
@@ -133,6 +146,25 @@ export const update = async (
   const { scheduleId } = req.params;
   const scheduleData = req.body;
   const { companyId } = req.user;
+  
+  // ✅ Log para debug de templates na atualização
+  if (scheduleData.isTemplate) {
+    console.log(`📋 [CONTROLLER-UPDATE] ================================================`);
+    console.log(`📋 [CONTROLLER-UPDATE] Atualizando Schedule ID ${scheduleId} com template`);
+    console.log(`📋 [CONTROLLER-UPDATE] Valores recebidos:`);
+    console.log(` - templateMetaId: "${scheduleData.templateMetaId || ''}" (${typeof scheduleData.templateMetaId})`);
+    console.log(` - templateName: "${scheduleData.templateName || ''}" (${typeof scheduleData.templateName})`);
+    console.log(` - templateLanguage: "${scheduleData.templateLanguage || ''}"`);
+    console.log(` - isTemplate: ${scheduleData.isTemplate}`);
+    console.log(` - hasComponents: ${!!scheduleData.templateComponents}`);
+    
+    // Verificar se templateName está sendo enviado corretamente
+    if (!scheduleData.templateName) {
+      console.log(`⚠️ [CONTROLLER-UPDATE] ALERTA: templateName NÃO recebido no corpo da requisição!`);
+    }
+    
+    console.log(`📋 [CONTROLLER-UPDATE] ================================================`);
+  }
 
   const schedule = await UpdateService({ scheduleData, id: scheduleId, companyId });
 

@@ -1,0 +1,24 @@
+// Adicione essa parte depois da declaração do estado selectedTemplate (linha 143)
+
+  // Schema dinâmico com validação condicional para mensagem - MOVIDO PARA DEPOIS DA INICIALIZAÇÃO DE selectedTemplate
+  const scheduleSchema = useMemo(() => {
+    return baseScheduleSchema.shape({
+      body: Yup.string().when(['selectedTemplate', 'whatsappId'], {
+        is: (isTemplate, whatsappId) => {
+          // Verificar se é template ou conexão da API Oficial
+          const isSelectedTemplate = !!selectedTemplate;
+          const whatsapp = whatsapps.find(w => w.id?.toString() === selectedWhatsapps?.toString());
+          const isApiOficial = whatsapp && (
+            whatsapp.provider === "oficial" || 
+            whatsapp.provider === "beta" ||
+            whatsapp.channel === "whatsapp-oficial" || 
+            whatsapp.channel === "whatsapp_oficial"
+          );
+          console.log('Validando mensagem:', { isTemplate, isSelectedTemplate, isApiOficial, selectedWhatsapps });
+          return isSelectedTemplate || isApiOficial;
+        },
+        then: Yup.string().nullable(), // Opcional para templates ou API Oficial
+        otherwise: Yup.string().min(5, "Mensagem muito curta").required("Obrigatório")
+      })
+    });
+  }, [selectedTemplate, whatsapps, selectedWhatsapps]);
