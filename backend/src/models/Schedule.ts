@@ -142,7 +142,7 @@ class Schedule extends Model<Schedule> {
   // ✅ Campos para templates da API Oficial
   @ForeignKey(() => QuickMessage)
   @Column
-  templateMetaId: number; // ID do template (QuickMessage)
+  templateMetaId: string; // ID do template (QuickMessage) - ✅ CORREÇÃO: String para aceitar IDs grandes da Meta
 
   @Column
   templateLanguage: string;

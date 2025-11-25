@@ -211,6 +211,18 @@ const CampaignModal = ({
   const [availableTemplates, setAvailableTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  
+  // Monitorar mudanças no selectedTemplate
+  React.useEffect(() => {
+    if (selectedTemplate) {
+      console.log("Template selecionado:", {
+        id: selectedTemplate.id,
+        name: selectedTemplate.name,
+        shortcode: selectedTemplate.shortcode,
+        language: selectedTemplate.language
+      });
+    }
+  }, [selectedTemplate]);
   const [isWhatsAppOficial, setIsWhatsAppOficial] = useState(false);
 
   // Opções para dias da semana
@@ -842,7 +854,7 @@ const handleSaveCampaign = async (values) => {
                           disabled={!campaignEditable || availableTemplates.length === 0}
                         >
                           {selectedTemplate
-                            ? `Template: ${selectedTemplate.shortcode}`
+                            ? `Template: ${selectedTemplate.name || selectedTemplate.shortcode || selectedTemplate.id}`
                             : availableTemplates.length === 0
                             ? "Nenhum template disponível"
                             : "Selecionar Template da Meta"
@@ -851,7 +863,7 @@ const handleSaveCampaign = async (values) => {
                         {selectedTemplate && (
                           <Box mt={1}>
                             <Chip
-                              label={`${selectedTemplate.shortcode} (${selectedTemplate.language})`}
+                              label={`${selectedTemplate.name || selectedTemplate.shortcode || selectedTemplate.id} (${selectedTemplate.language || 'pt_BR'})`}
                               onDelete={() => {
                                 setSelectedTemplate(null);
                                 setFieldValue("templateId", null);

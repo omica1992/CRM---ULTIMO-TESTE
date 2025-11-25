@@ -160,50 +160,64 @@ const ScheduleModal = ({
     }
   }, []);
 
-  // Buscar quickMessages quando o modal abrir
+  // Buscar quickMessages quando o modal abrir ou o WhatsApp mudar
   useEffect(() => {
     if (open && user?.companyId) {
       fetchQuickMessages();
     }
-  }, [open, user?.companyId, user?.id]);
+  }, [open, user?.companyId, user?.id, selectedWhatsapps]); // ✅ CORREÇÃO: Recarregar quando o WhatsApp muda
 
   const fetchQuickMessages = async () => {
     setLoadingQuickMessages(true);
     try {
-      console.log(" Buscando quickMessages com params:", {
-        companyId: user?.companyId,
-        userId: user?.id,
-        isOficial: "true" // Incluir templates da API Oficial
-      });
+      // ✅ CORREÇÃO 1: Buscar templates da API e mensagens rápidas separadamente
+      const [quickMessagesResponse, templatesResponse] = await Promise.all([
+        // 1. Buscar quick messages (respostas rápidas)
+        api.get("/quick-messages/list", {
+          params: {
+            companyId: user?.companyId,
+            userId: user?.id,
+            isOficial: "false" // Apenas respostas rápidas normais
+          }
+        }),
+        // 2. Buscar templates da API Oficial (endpoint correto)
+        // ✅ CORREÇÃO: Só buscar templates se tiver um WhatsApp selecionado para evitar erro
+        selectedWhatsapps ? 
+          api.get(`/templates`, {
+            params: {
+              whatsappId: selectedWhatsapps
+            }
+          }) : 
+          // Retornar objeto vazio para manter a estrutura da Promise quando não há WhatsApp
+          Promise.resolve({ data: { data: [] } })
+      ]);
 
-      const { data } = await api.get("/quick-messages/list", {
-        params: {
-          companyId: user?.companyId,
-          userId: user?.id,
-          isOficial: "true" // Buscar TODOS (mensagens normais + templates)
-        }
-      });
+      // Mensagens rápidas
+      const quickMessages = quickMessagesResponse.data || [];
+      console.log("✅ Respostas rápidas carregadas:", quickMessages.length);
 
-      console.log(" Resposta da API quickMessages (com templates):", data);
-      console.log(" Total de quickMessages:", data?.length || 0);
+      // Templates da Meta API
+      const templates = templatesResponse.data?.data || [];
+      console.log("✅ Templates Meta carregados:", templates.length);
+
+      // Converter templates para formato compatível com quick messages
+      const formattedTemplates = templates.map(template => ({
+        id: template.id,
+        shortcode: template.name,
+        message: template.components?.find(c => c.type === 'BODY')?.text || 'Template sem conteúdo',
+        isOficial: true,
+        metaID: template.id,
+        language: template.language,
+        components: template.components
+      }));
+
+      // Combinar ambas as fontes
+      const combinedMessages = [...quickMessages, ...formattedTemplates];
+      console.log("✅ Total de mensagens combinadas:", combinedMessages.length);
       
-      // Log detalhado de cada quickMessage
-      if (data && data.length > 0) {
-        data.forEach((qm, index) => {
-          console.log(` QuickMessage ${index + 1}:`, {
-            id: qm.id,
-            shortcode: qm.shortcode,
-            isOficial: qm.isOficial,
-            metaID: qm.metaID,
-            language: qm.language,
-            hasComponents: !!qm.components
-          });
-        });
-      }
-      
-      setQuickMessages(data || []);
+      setQuickMessages(combinedMessages || []);
     } catch (err) {
-      console.error(" Erro ao buscar respostas rápidas:", err);
+      console.error("❌ Erro ao buscar respostas rápidas ou templates:", err);
       toastError(err);
       setQuickMessages([]);
     } finally {
@@ -561,6 +575,12 @@ const ScheduleModal = ({
 
   const handleSaveSchedule = async (values) => {
     try {
+      // Validar que whatsappId foi fornecido
+      if (!selectedWhatsapps) {
+        toast.error("Selecione uma conexão WhatsApp válida");
+        return;
+      }
+
       // ✅ Se múltiplos contatos, criar um agendamento para cada
       if (selectedContacts.length > 1) {
         console.log(`📅 Criando ${selectedContacts.length} agendamentos...`);
@@ -599,10 +619,17 @@ const ScheduleModal = ({
         
         toast.success(`${selectedContacts.length} agendamentos criados com sucesso!`);
       } else {
+        // Validar que pelo menos um contato foi selecionado
+        if (!currentContact?.id && !scheduleId) {
+          toast.error("Selecione um contato para o agendamento");
+          return;
+        }
+        
         // ✅ Lógica original para um contato ou edição
         const scheduleData = {
           ...values,
           userId: user.id,
+          contactId: currentContact?.id, // Garantir que contactId está definido
           whatsappId: selectedWhatsapps,
           ticketUserId: selectedUser?.id || null,
           queueId: selectedQueue || null,
@@ -1008,11 +1035,13 @@ const ScheduleModal = ({
                         id="whatsappIds"
                         name="whatsappIds"
                         required
-                        error={touched.whatsappId && Boolean(errors.whatsappId)}
+                        error={!selectedWhatsapps} // ✅ Mostrar erro visual quando não há WhatsApp selecionado
                         value={selectedWhatsapps}
-                        onChange={(event) =>
-                          setSelectedWhatsapps(event.target.value)
-                        }
+                        onChange={(event) => {
+                          setSelectedWhatsapps(event.target.value);
+                          // ✅ Forçar atualização dos templates quando o WhatsApp é alterado
+                          if (event.target.value) fetchQuickMessages();
+                        }}
                       >
                         {whatsapps &&
                           whatsapps.map((whatsapp) => (

@@ -4136,16 +4136,6 @@ const handleMessage = async (
         currentSchedule &&
         currentSchedule.inActivity === true
       ) {
-        logger.info(`[WBOT MESSAGE LISTENER - BACK TO HOURS] Limpando isOutOfHour do ticket ${ticket.id} - voltou ao expediente`);
-        await ticket.update({ isOutOfHour: false });
-      }
-
-      if (
-        !msg.key.fromMe &&
-        settings.scheduleType &&
-        (!ticket.isGroup || whatsapp.groupAsTicket === "enabled") &&
-        !["open", "group"].includes(ticket.status)
-      ) {
         /**
          * Tratamento para envio de mensagem quando a empresa está fora do expediente
          */
@@ -4170,7 +4160,7 @@ const handleMessage = async (
 
           if (whatsapp.timeUseBotQueues !== "0") {
             if (
-              ticket.isOutOfHour === false &&
+              !ticket.isOutOfHour &&
               ticketTraking.chatbotAt !== null
             ) {
               await ticketTraking.update({
@@ -4230,9 +4220,12 @@ const handleMessage = async (
             amountUsedBotQueues: ticket.amountUsedBotQueues + 1
           };
 
-          // ✅ CORREÇÃO: Verificar configuração da empresa para marcar ticket como fora de expediente
+          // CORREÇÃO: Verificar configuração da empresa para marcar ticket como fora de expediente
           if (settings?.closeTicketOutOfHours) {
-            ticketUpdate.isOutOfHour = true;
+            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Fechando ticket ${ticket.id} (configuração habilitada)`);
+            // Mantém comportamento padrão - ticket fica aberto mas marcado como isOutOfHour
+          } else {
+            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (configuração desabilitada)`);
           }
 
           await ticket.update(ticketUpdate);
@@ -4245,337 +4238,15 @@ const handleMessage = async (
       console.log(e);
     }
 
-    if (!msg.key.fromMe && !ticket.imported && !isGroup && ticket.isBot !== false) {
-      // Verificar se ticket.integrationId existe antes de continuar
-      if (!ticket.integrationId) {
-        logger.info("[HANDLE MESSAGE] Ticket sem integração, pulando verificação de campanhas");
-      } else {
-        console.log("[HANDLE MESSAGE] Verificando campanhas de fluxo...");
-
-        const contactForCampaign = await ShowContactService(
-          ticket.contactId,
-          ticket.companyId
-        );
-
-        try {
-          const queueIntegrations = await ShowQueueIntegrationService(
-            ticket.integrationId,
-            companyId
-          );
-
-          // ✅ EXECUTAR CAMPANHA APENAS UMA VEZ
-          campaignExecuted = await flowbuilderIntegration(
-            msg,
-            wbot,
-            companyId,
-            queueIntegrations,
-            ticket,
-            contactForCampaign,
-            null,
-            null
-          );
-
-          if (campaignExecuted) {
-            console.log("[RDS-4121 - HANDLE MESSAGE] ✅ Campanha executada, parando outros fluxos");
-            return;
-          }
-        } catch (error) {
-          console.error("[RDS-4125 HANDLE MESSAGE] Erro ao verificar campanhas:", error);
-        }
-      }
-    }
-
-
-    // ✅ PRIORIDADE 1: Verificar se ticket está em modo IA (permanente ou temporário)
-    // ✅ CORRIGIDO: IA deve parar quando ticket é aceito (status = "open" ou isBot = false)
-    if (!msg.key.fromMe && ticket.useIntegration && ticket.status !== "open" && ticket.isBot !== false) {
-      const dataWebhook = ticket.dataWebhook as any;
-      const isAIMode = dataWebhook?.type === "openai" || dataWebhook?.type === "gemini";
-
-      if (isAIMode && dataWebhook?.settings) {
-        logger.info(`[AI MODE] Processando mensagem em modo ${dataWebhook.type} - ticket ${ticket.id}`);
-
-        try {
-          const aiSettings = {
-            ...dataWebhook.settings,
-            provider: dataWebhook.type
-          };
-
-          // ✅ VERIFICAR SE É A PRIMEIRA RESPOSTA DO USUÁRIO APÓS BOAS-VINDAS
-          if (dataWebhook.awaitingUserResponse) {
-            logger.info(`[AI SERVICE] Primeira resposta do usuário para ${dataWebhook.type} - iniciando conversa - ticket ${ticket.id}`);
-
-            // ✅ REMOVER FLAG - AGORA A CONVERSA ESTÁ ATIVA
-            await ticket.update({
-              dataWebhook: {
-                ...dataWebhook,
-                awaitingUserResponse: false
-              }
-            });
-          }
-
-          // ✅ PROCESSAR MENSAGEM ATRAVÉS DA IA
-          await handleOpenAiFlow(
-            aiSettings,
-            msg,
-            wbot,
-            ticket,
-            contact,
-            mediaSent,
-            ticketTraking
-          );
-
-          return; // ✅ IMPORTANTE: RETORNAR PARA NÃO PROCESSAR OUTRAS LÓGICAS
-
-        } catch (error) {
-          logger.error("[AI MODE] Erro ao processar modo IA:", error);
-        }
-      }
-    }
-
-    const wasProcessedByTemporaryAI = await checkTemporaryAI(wbot, ticket, contact, msgContact, null, ticketTraking, msg);
-    if (wasProcessedByTemporaryAI) {
-      return;
-    }
-
-    if (
-      !msg.key.fromMe &&
-      (ticket.dataWebhook as any)?.waitingInput === true &&
-      (ticket.dataWebhook as any)?.inputVariableName
-    ) {
-      logger.info(`[INPUT NODE] Processando resposta para nó de input - ticket ${ticket.id}`);
-      try {
-        console.log("[inputNode] Processando resposta para nó de input");
-        const body = getBodyMessage(msg);
-        // @ts-ignore
-        const inputVariableName = (ticket.dataWebhook as any).inputVariableName;
-        // @ts-ignore
-        const inputIdentifier =
-          (ticket.dataWebhook as any).inputIdentifier ||
-          `${ticket.id}_${inputVariableName}`;
-
-        global.flowVariables = global.flowVariables || {};
-        global.flowVariables[inputVariableName] = body;
-        global.flowVariables[inputIdentifier] = body; // Salvar com o identificador também
-
-        const nextNode = global.flowVariables[`${inputIdentifier}_next`];
-
-        // delete global.flowVariables[`${inputIdentifier}_next`];
-
-        await ticket.update({
-          dataWebhook: {
-            ...ticket.dataWebhook,
-            waitingInput: false,
-            inputProcessed: true,
-            inputVariableName: null,
-            inputIdentifier: null,
-            lastInputValue: body
-          }
-        });
-
-        if (nextNode && ticket.flowStopped) {
-          const flow = await FlowBuilderModel.findOne({
-            where: { id: ticket.flowStopped }
-          });
-
-          if (flow) {
-            const nodes: INodes[] = flow.flow["nodes"];
-            const connections: IConnections[] = flow.flow["connections"];
-
-            const mountDataContact = {
-              number: contact.number,
-              name: contact.name,
-              email: contact.email
-            };
-
-            await ActionsWebhookService(
-              whatsapp.id,
-              parseInt(ticket.flowStopped),
-              ticket.companyId,
-              nodes,
-              connections,
-              nextNode,
-              null,
-              "",
-              ticket.hashFlowId || "",
-              null,
-              ticket.id,
-              mountDataContact,
-              true // inputResponded true somete para node  input
-            );
-
-            return;
-          }
-        }
-      } catch (error) {
-        console.error(
-          "[inputNode] Erro ao processar resposta do nó de input:",
-          error
-        );
-      }
-    }
-
-    if (
-      !msg.key.fromMe &&
-      !ticket.fromMe &&
-      ticket.flowStopped &&
-      ticket.flowWebhook &&
-      !isNaN(parseInt(ticket.lastMessage))
-    ) {
-      await flowBuilderQueue(
-        ticket,
-        msg,
-        wbot,
-        whatsapp,
-        companyId,
-        contact,
-        isFirstMsg
-      );
-    }
-
-
-    //openai na conexao
-    if (
-      ticket.status !== "open" &&
-      !ticket.imported &&
-      !ticket.queue &&
-      !isGroup &&
-      !msg.key.fromMe &&
-      !ticket.userId &&
-      !isNil(whatsapp.promptId)
-    ) {
-      await handleOpenAi(msg, wbot, ticket, contact, mediaSent, ticketTraking);
-    }
-
-    //integraçao na conexao
-    if (
-      ticket.status !== "open" &&
-      !ticket.imported &&
-      !msg.key.fromMe &&
-      !ticket.isGroup &&
-      !ticket.queue &&
-      !ticket.user &&
-      !isNil(whatsapp.integrationId)
-      //ticket.isBot &&
-      //!isNil(whatsapp.integrationId) &&
-      //ticket.useIntegration
-    ) {
-      const integrations = await ShowQueueIntegrationService(
-        whatsapp.integrationId,
-        companyId
-      );
-
-      await handleMessageIntegration(
-        msg,
-        wbot,
-        companyId,
-        integrations,
-        ticket
-      );
-
-      if (msg.key.fromMe) {
-        await ticket.update({
-          typebotSessionTime: moment().toDate(),
-          useIntegration: true,
-          integrationId: integrations.id
-        });
-      } else {
-        await ticket.update({
-          useIntegration: true,
-          integrationId: integrations.id
-        });
-      }
-
-      return;
-    }
-
-    if (
-      !ticket.imported &&
-      !msg.key.fromMe &&
-      !ticket.isGroup &&
-      !ticket.userId &&
-      ticket.integrationId &&
-      ticket.useIntegration
-    ) {
-      const integrations = await ShowQueueIntegrationService(
-        ticket.integrationId,
-        companyId
-      );
-
-      await handleMessageIntegration(
-        msg,
-        wbot,
-        companyId,
-        integrations,
-        ticket
-      );
-      if (msg.key.fromMe) {
-        await ticket.update({
-          typebotSessionTime: moment().toDate()
-        });
-      }
-    }
-
-    if (
-      !ticket.imported &&
-      !ticket.queue &&
-      (!ticket.isGroup || whatsapp.groupAsTicket === "enabled") &&
-      !msg.key.fromMe &&
-      !ticket.userId &&
-      whatsapp.queues.length >= 1 &&
-      !ticket.useIntegration
-    ) {
-      // console.log("antes do verifyqueue")
-      await verifyQueue(wbot, msg, ticket, contact, settings, ticketTraking);
-
-      if (ticketTraking.chatbotAt === null) {
-        await ticketTraking.update({
-          chatbotAt: moment().toDate()
-        });
-      }
-    }
-
-    if (ticket.queueId > 0) {
-      await ticketTraking.update({
-        queueId: ticket.queueId
-      });
-    }
-
-    // Verificação se aceita audio do contato
-    if (
-      getTypeMessage(msg) === "audioMessage" &&
-      !msg.key.fromMe &&
-      (!ticket.isGroup || whatsapp.groupAsTicket === "enabled") &&
-      (!contact?.acceptAudioMessage ||
-        settings?.acceptAudioMessageContact === "disabled")
-    ) {
-      const sentMessage = await wbot.sendMessage(
-        getJidOf(ticket.contact),
-        {
-          text: `\u200e*Assistente Virtual*:\nInfelizmente não conseguimos escutar nem enviar áudios por este canal de atendimento, por favor, envie uma mensagem de *texto*.`
-        },
-        {
-          quoted: {
-            key: msg.key,
-            message: {
-              extendedTextMessage: msg.message.extendedTextMessage
-            }
-          }
-        }
-      );
-
-      wbot.store(sentMessage);
-
-      await verifyMessage(sentMessage, ticket, contact, ticketTraking);
-    }
-
     try {
       if (
         !msg.key.fromMe &&
         settings?.scheduleType &&
         ticket.queueId !== null &&
         (!ticket.isGroup || whatsapp.groupAsTicket === "enabled") &&
-        ticket.status !== "open"
+        ticket.status !== "open" &&
+        // CORREÇÃO: Não enviar mensagem fora de expediente se já está sendo atendido
+        ticket.userId === null
       ) {
         /**
          * Tratamento para envio de mensagem quando a empresa/fila está fora do expediente

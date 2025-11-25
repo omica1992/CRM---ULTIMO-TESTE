@@ -157,6 +157,10 @@ const BulkTransferTicketsService = async ({
 
       if (userId) {
         updateData.userId = userId;
+        // ✅ CORREÇÃO: Definir status como "open" quando transferido para um atendente
+        // Isso remove da fila de "aguardando"
+        updateData.status = "open";
+        console.log(`[BULK TRANSFER] Alterando status do ticket ${ticket.id} para "open" por ser transferido para usuário`);
       }
 
       if (queueId) {

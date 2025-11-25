@@ -1233,8 +1233,8 @@ const MessageInput = ({
   const handleSendMessage = async () => {
     if (!inputMessage || inputMessage.trim() === "") return;
     
-    // ✅ Verificar se envio está bloqueado
-    if (shouldBlockSending()) {
+    // ✅ Verificar se envio está bloqueado - EXCETO para mensagens internas/privadas
+    if (!privateMessage && !isTicketPending() && shouldBlockSending()) {
       console.warn("🚫 Envio bloqueado - janela de 24h expirada ou ticket fechado");
       return;
     }

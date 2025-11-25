@@ -121,6 +121,15 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
         const components = template?.components || [];
         const extractedVariables = extractVariablesByComponent(components);
 
+        // Log para debug da estrutura do template
+        console.log("Template selecionado no modal:", {
+            id: template.id,
+            name: template.name,
+            shortcode: template.shortcode,
+            language: template.language,
+            components: template.components?.length
+        });
+
         setSelectedTemplate(template);
         setVariables(extractedVariables);
         setRenderedContent(components.map((component) => component?.text).join(`\n`));
@@ -210,6 +219,15 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
             variables: variableValues,
             bodyToSave
         };
+        
+        // Log antes de enviar para o componente pai
+        console.log("Enviando template para o componente pai:", {
+            id: templateWithVariables.id,
+            name: templateWithVariables.name,
+            shortcode: templateWithVariables.shortcode,
+            language: templateWithVariables.language
+        });
+        
         onSelectTemplate(templateWithVariables);
     };
 

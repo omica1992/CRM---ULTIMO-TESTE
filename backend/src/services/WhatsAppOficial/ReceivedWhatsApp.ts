@@ -371,7 +371,11 @@ export class ReceibedWhatsAppService {
                 settings.scheduleType &&
                 !isNil(currentSchedule) &&
                 (!currentSchedule || currentSchedule.inActivity === false) &&
-                !ticket.imported
+                ticket.amountUsedBotQueues < whatsapp.maxUseBotQueues &&
+                whatsapp.outOfHoursMessage !== "" &&
+                !ticket.imported &&
+                // CORREÇÃO: Não enviar mensagem fora de expediente se já está sendo atendido
+                ticket.userId === null
             ) {
                 logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Ticket ${ticket.id} fora de expediente (${settings.scheduleType})`);
 
