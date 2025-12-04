@@ -1093,7 +1093,7 @@ async function handleCopyContactPrefix(value) {
 
         <Grid xs={12} sm={6} md={4} item>
           <FormControl className={classes.selectContainer}>
-            <InputLabel id="closeTicketOutOfHours-label">Marcar ticket como fora de expediente</InputLabel>
+            <InputLabel id="closeTicketOutOfHours-label">Encerrar ticket fora de expediente</InputLabel>
             <Select
               labelId="closeTicketOutOfHours-label"
               value={closeTicketOutOfHours}
@@ -1105,7 +1105,7 @@ async function handleCopyContactPrefix(value) {
               <MenuItem value={true}>Sim</MenuItem>
             </Select>
             <FormHelperText>
-              {loadingCloseTicketOutOfHours ? "Atualizando..." : "Marca ticket como fora de expediente ao enviar mensagem automática"}
+              {loadingCloseTicketOutOfHours ? "Atualizando..." : "Encerra ticket quando envia mensagem automática"}
             </FormHelperText>
           </FormControl>
         </Grid>

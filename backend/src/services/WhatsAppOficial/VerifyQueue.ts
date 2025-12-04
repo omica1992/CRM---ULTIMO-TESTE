@@ -297,7 +297,10 @@ const verifyQueueOficial = async (
                 // ✅ CORREÇÃO: Verificar configuração da empresa
                 if (settings?.closeTicketOutOfHours) {
                     ticketUpdate.isOutOfHour = true;
+                    ticketUpdate.status = "closed";
+                    logger.info(`[VERIFY QUEUE - OUT OF HOURS] Encerrando ticket ${ticket.id} fora de expediente`);
                 }
+
 
                 await ticket.update(ticketUpdate);
                 return;
@@ -702,7 +705,10 @@ const verifyQueueOficial = async (
                 // ✅ CORREÇÃO: Verificar configuração da empresa
                 if (settings?.closeTicketOutOfHours) {
                     ticketUpdate.isOutOfHour = true;
+                    ticketUpdate.status = "closed";
+                    logger.info(`[VERIFY QUEUE - OUT OF HOURS] Encerrando ticket ${ticket.id} fora de expediente`);
                 }
+
 
                 await ticket.update(ticketUpdate);
                 return;
@@ -1063,3 +1069,4 @@ const verifyQueueOficial = async (
 };
 
 export default verifyQueueOficial;
+

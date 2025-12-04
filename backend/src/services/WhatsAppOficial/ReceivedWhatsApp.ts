@@ -374,8 +374,13 @@ export class ReceibedWhatsAppService {
                 ticket.amountUsedBotQueues < whatsapp.maxUseBotQueues &&
                 whatsapp.outOfHoursMessage !== "" &&
                 !ticket.imported &&
-                // CORREÇÃO: Não enviar mensagem fora de expediente se já está sendo atendido
-                ticket.userId === null
+                // CORREÇÃO: Não enviar mensagem fora de expediente se:
+                // - Já está sendo atendido (ticket.userId !== null)
+                // - Está em fila pendente (ticket.status === "pending" && ticket.queueId !== null)
+                // - Está sendo atendido por integração (ticket.useIntegration === true)
+                ticket.userId === null &&
+                !(ticket.status === "pending" && ticket.queueId !== null) &&
+                ticket.useIntegration !== true
             ) {
                 logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Ticket ${ticket.id} fora de expediente (${settings.scheduleType})`);
 
@@ -438,12 +443,13 @@ export class ReceibedWhatsAppService {
                     amountUsedBotQueues: ticket.amountUsedBotQueues + 1
                 };
 
-                // ✅ CORREÇÃO: Verificar configuração da empresa para marcar ticket como fora de expediente
+                // ✅ CORREÇÃO: Verificar configuração da empresa para encerrar ticket fora de expediente
                 if (settings.closeTicketOutOfHours) {
                     ticketUpdate.isOutOfHour = true;
-                    logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Marcando ticket ${ticket.id} como fora de expediente (configuração habilitada)`);
+                    ticketUpdate.status = "closed";
+                    logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Encerrando ticket ${ticket.id} fora de expediente (configuração habilitada)`);
                 } else {
-                    logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Mantendo ticket ${ticket.id} sem marcar como fora de expediente (configuração desabilitada)`);
+                    logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (configuração desabilitada)`);
                 }
 
                 await ticket.update(ticketUpdate);
