@@ -200,6 +200,21 @@ const UpdateTicketService = async ({
               isForwarded: false
             });
             await verifyMessage(msg, ticket, ticket.contact);
+          } else if (
+            ticket.channel === "whatsapp_oficial" || 
+            ticket.channel === "whatsapp-oficial"
+          ) {
+            // ✅ NOVO: Suporte para mensagem de avaliação (NPS) na API Oficial
+            const SendWhatsAppOficialMessage = (await import("../WhatsAppOficial/SendWhatsAppOficialMessage")).default;
+            await SendWhatsAppOficialMessage({
+              body: bodyRatingMessage,
+              ticket,
+              quotedMsg: null,
+              type: 'text',
+              media: null,
+              vCard: null
+            });
+            logger.info(`[UPDATE TICKET] Mensagem de avaliação (NPS) enviada via API Oficial para ticket ${ticket.id}`);
           } else if (["facebook", "instagram"].includes(ticket.channel)) {
             const msg = await sendFacebookMessage({
               body: bodyRatingMessage,
@@ -296,6 +311,23 @@ const UpdateTicketService = async ({
             });
 
             await verifyMessage(sentMessage, ticket, ticket.contact);
+          }
+
+          // ✅ NOVO: Suporte para envio de mensagem de despedida na API Oficial
+          if (
+            (ticket.channel === "whatsapp_oficial" || ticket.channel === "whatsapp-oficial") &&
+            (!ticket.isGroup || groupAsTicket === "enabled")
+          ) {
+            const SendWhatsAppOficialMessage = (await import("../WhatsAppOficial/SendWhatsAppOficialMessage")).default;
+            await SendWhatsAppOficialMessage({
+              body,
+              ticket,
+              quotedMsg: null,
+              type: 'text',
+              media: null,
+              vCard: null
+            });
+            logger.info(`[UPDATE TICKET] Mensagem de despedida enviada via API Oficial para ticket ${ticket.id}`);
           }
 
           if (

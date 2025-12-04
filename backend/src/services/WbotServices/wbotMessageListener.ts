@@ -2246,6 +2246,20 @@ export const handleRating = async (
       await verifyMessage(msg, ticket, ticket.contact, ticketTraking);
     }
 
+    // ✅ NOVO: Suporte para mensagem de agradecimento NPS na API Oficial
+    if (ticket.channel === "whatsapp_oficial" || ticket.channel === "whatsapp-oficial") {
+      const SendWhatsAppOficialMessage = (await import("../WhatsAppOficial/SendWhatsAppOficialMessage")).default;
+      await SendWhatsAppOficialMessage({
+        body,
+        ticket,
+        quotedMsg: null,
+        type: 'text',
+        media: null,
+        vCard: null
+      });
+      logger.info(`[HANDLE RATING] Mensagem de agradecimento NPS enviada via API Oficial para ticket ${ticket.id}`);
+    }
+
     if (["facebook", "instagram"].includes(ticket.channel)) {
       await sendFacebookMessage({ body, ticket });
     }

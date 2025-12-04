@@ -17,7 +17,7 @@ import User from "../../models/User";
 import Ticket from "../../models/Ticket";
 import UpdateTicketService from "../TicketServices/UpdateTicketService";
 import ShowQueueIntegrationService from "../QueueIntegrationServices/ShowQueueIntegrationService";
-import { handleMessageIntegration } from "../WbotServices/wbotMessageListener";
+import { handleMessageIntegration, verifyRating, handleRating } from "../WbotServices/wbotMessageListener";
 import { flowbuilderIntegration } from "../WbotServices/wbotMessageListener";
 import ShowContactService from "../ContactServices/ShowContactService";
 import SendWhatsAppMessage from "../WbotServices/SendWhatsAppMessage";
@@ -345,6 +345,80 @@ export class ReceibedWhatsAppService {
             await ticket.update({ lastMessage: message.type === "contacts" ? "Contato" : !!message?.text ? message?.text : '', unreadMessages: ticket.unreadMessages + 1 })
 
             await verifyMessageOficial(message, ticket, contact, companyId, fileName, fromNumber, data, quoteMessageId);
+
+            // ✅ NOVO: Tratamento para avaliação NPS (API Oficial)
+            if (
+                ticket.status === "nps" &&
+                ticketTraking !== null &&
+                verifyRating(ticketTraking)
+            ) {
+                const bodyMessage = message?.text || '';
+                
+                logger.info(`[WHATSAPP OFICIAL - NPS] Ticket ${ticket.id} aguardando avaliação. Resposta: "${bodyMessage}"`);
+
+                if (!isNaN(parseFloat(bodyMessage))) {
+                    // Resposta é um número válido
+                    const rating = parseFloat(bodyMessage);
+                    logger.info(`[WHATSAPP OFICIAL - NPS] Processando avaliação ${rating} para ticket ${ticket.id}`);
+                    
+                    await handleRating(rating, ticket, ticketTraking);
+
+                    await ticketTraking.update({
+                        ratingAt: moment().toDate(),
+                        finishedAt: moment().toDate(),
+                        rated: true
+                    });
+
+                    logger.info(`[WHATSAPP OFICIAL - NPS] ✅ Avaliação ${rating} salva com sucesso para ticket ${ticket.id}`);
+                    return;
+                } else {
+                    // Resposta inválida - reenviar mensagem de NPS
+                    if (ticket.amountUsedBotQueuesNPS < whatsapp.maxUseBotQueuesNPS) {
+                        logger.warn(`[WHATSAPP OFICIAL - NPS] Resposta inválida "${bodyMessage}" para ticket ${ticket.id}. Reenviando mensagem de NPS.`);
+                        
+                        let bodyErrorRating = `\u200eOpção inválida, tente novamente.\n`;
+                        await SendWhatsAppOficialMessage({
+                            body: bodyErrorRating,
+                            ticket,
+                            quotedMsg: null,
+                            type: 'text',
+                            media: null,
+                            vCard: null
+                        });
+
+                        let bodyRatingMessage = `\u200e${whatsapp.ratingMessage}\n`;
+                        await SendWhatsAppOficialMessage({
+                            body: bodyRatingMessage,
+                            ticket,
+                            quotedMsg: null,
+                            type: 'text',
+                            media: null,
+                            vCard: null
+                        });
+
+                        await ticket.update({
+                            amountUsedBotQueuesNPS: ticket.amountUsedBotQueuesNPS + 1
+                        });
+
+                        logger.info(`[WHATSAPP OFICIAL - NPS] Mensagem de erro e NPS reenviadas. Tentativa ${ticket.amountUsedBotQueuesNPS + 1}/${whatsapp.maxUseBotQueuesNPS}`);
+                    } else {
+                        logger.warn(`[WHATSAPP OFICIAL - NPS] Limite de tentativas atingido para ticket ${ticket.id}. Fechando sem avaliação.`);
+                        
+                        // Fechar ticket sem avaliação após limite de tentativas
+                        await ticket.update({
+                            status: "closed",
+                            amountUsedBotQueuesNPS: 0
+                        });
+
+                        await ticketTraking.update({
+                            finishedAt: moment().toDate(),
+                            ratingAt: moment().toDate()
+                        });
+                    }
+
+                    return;
+                }
+            }
 
             // ✅ TRATATIVA PARA HORÁRIO DE EXPEDIENTE DA EMPRESA/CONEXÃO
             let currentSchedule;
