@@ -1761,27 +1761,10 @@ const verifyQueue = async (
 
         const outOfHoursMessage = queue.outOfHoursMessage;
 
-        if (outOfHoursMessage !== "") {
+        if (outOfHoursMessage !== "" && ticket.amountUsedBotQueues === 0) {
           // console.log("entrei3");
           const body = formatBody(`${outOfHoursMessage}`, ticket);
 
-          const debouncedSentMessage = debounce(
-            async () => {
-              const sentMessage = await wbot.sendMessage(
-                getJidOf(ticket),
-                {
-                  text: body
-                }
-              );
-
-              wbot.store(sentMessage);
-            },
-            1000,
-            ticket.id
-          );
-          debouncedSentMessage();
-
-          //atualiza o contador de vezes que enviou o bot e que foi enviado fora de hora
           const ticketUpdate: any = {
             queueId: queue.id,
             isOutOfHour: true,
@@ -1799,6 +1782,31 @@ const verifyQueue = async (
           }
 
           await ticket.update(ticketUpdate);
+
+          const debouncedSentMessage = debounce(
+            async () => {
+              const sentMessage = await wbot.sendMessage(
+                getJidOf(ticket),
+                {
+                  text: body
+                }
+              );
+
+              wbot.store(sentMessage);
+            },
+            1000,
+            ticket.id
+          );
+          debouncedSentMessage();
+          return;
+        } else if (outOfHoursMessage !== "" && ticket.amountUsedBotQueues > 0) {
+          logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Mensagem de fora de expediente já foi enviada para ticket ${ticket.id}, pulando reenvio`);
+          //atualiza o contador de vezes que enviou o bot e que foi enviado fora de hora
+          await ticket.update({
+            queueId: queue.id,
+            isOutOfHour: true,
+            amountUsedBotQueues: ticket.amountUsedBotQueues + 1
+          });
           return;
         }
         //atualiza o contador de vezes que enviou o bot e que foi enviado fora de hora
@@ -4211,7 +4219,7 @@ const handleMessage = async (
             });
           }
 
-          if (whatsapp.outOfHoursMessage !== "" && !ticket.imported) {
+          if (whatsapp.outOfHoursMessage !== "" && !ticket.imported && ticket.amountUsedBotQueues === 0) {
             // console.log("entrei");
             const body = formatBody(`${whatsapp.outOfHoursMessage}`, ticket);
 
@@ -4229,6 +4237,8 @@ const handleMessage = async (
               ticket.id
             );
             debouncedSentMessage();
+          } else if (whatsapp.outOfHoursMessage !== "" && ticket.amountUsedBotQueues > 0) {
+            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Mensagem de fora de expediente já foi enviada para ticket ${ticket.id}, pulando reenvio`);
           }
 
           //atualiza o contador de vezes que enviou o bot e que foi enviado fora de hora
@@ -4321,7 +4331,7 @@ const handleMessage = async (
 
           const outOfHoursMessage = queue.outOfHoursMessage;
 
-          if (outOfHoursMessage !== "") {
+          if (outOfHoursMessage !== "" && ticket.amountUsedBotQueues === 0) {
             // console.log("entrei2");
             const body = formatBody(`${outOfHoursMessage}`, ticket);
 
@@ -4340,6 +4350,8 @@ const handleMessage = async (
               ticket.id
             );
             debouncedSentMessage();
+          } else if (outOfHoursMessage !== "" && ticket.amountUsedBotQueues > 0) {
+            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS 2] Mensagem de fora de expediente já foi enviada para ticket ${ticket.id}, pulando reenvio`);
           }
           //atualiza o contador de vezes que enviou o bot e que foi enviado fora de hora
           const ticketUpdate: any = {

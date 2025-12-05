@@ -497,8 +497,8 @@ export class ReceibedWhatsAppService {
                     await ticketTraking.update({ chatbotAt: null });
                 }
 
-                // Enviar mensagem de fora de expediente
-                if (whatsapp.outOfHoursMessage !== "" && !ticket.imported) {
+                // Enviar mensagem de fora de expediente (apenas se ainda não foi enviada)
+                if (whatsapp.outOfHoursMessage !== "" && !ticket.imported && ticket.amountUsedBotQueues === 0) {
                     logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Enviando mensagem de fora de expediente para ticket ${ticket.id}`);
                     const body = formatBody(`${whatsapp.outOfHoursMessage}`, ticket);
 
@@ -510,6 +510,8 @@ export class ReceibedWhatsAppService {
                         media: null,
                         vCard: null
                     });
+                } else if (ticket.amountUsedBotQueues > 0) {
+                    logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Mensagem de fora de expediente já foi enviada para ticket ${ticket.id}, pulando reenvio`);
                 }
 
                 // Atualizar ticket - verificar se deve fechar ticket fora de expediente
