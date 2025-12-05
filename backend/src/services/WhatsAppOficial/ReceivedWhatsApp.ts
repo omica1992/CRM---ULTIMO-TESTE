@@ -445,15 +445,14 @@ export class ReceibedWhatsAppService {
                 settings.scheduleType &&
                 !isNil(currentSchedule) &&
                 (!currentSchedule || currentSchedule.inActivity === false) &&
-                ticket.amountUsedBotQueues < whatsapp.maxUseBotQueues &&
                 whatsapp.outOfHoursMessage !== "" &&
                 !ticket.imported &&
-                // CORREÇÃO: Não enviar mensagem fora de expediente se:
+                // ✅ CORREÇÃO: Só enviar UMA VEZ (amountUsedBotQueues === 0)
+                ticket.amountUsedBotQueues === 0 &&
+                // ✅ CORREÇÃO: Só NÃO enviar se:
                 // - Já está sendo atendido (ticket.userId !== null)
-                // - Está em fila pendente (ticket.status === "pending" && ticket.queueId !== null)
-                // - Está sendo atendido por integração (ticket.useIntegration === true)
+                // - Está sendo atendido por integração/bot (ticket.useIntegration === true)
                 ticket.userId === null &&
-                !(ticket.status === "pending" && ticket.queueId !== null) &&
                 ticket.useIntegration !== true
             ) {
                 logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Ticket ${ticket.id} fora de expediente (${settings.scheduleType})`);

@@ -4151,7 +4151,7 @@ const handleMessage = async (
     }
 
     try {
-      // ✅ NOVA FUNCIONALIDADE: Limpar isOutOfHour quando volta ao expediente
+      // ✅ CORREÇÃO: Limpar isOutOfHour quando volta ao expediente
       if (
         !msg.key.fromMe &&
         settings.scheduleType &&
@@ -4160,25 +4160,29 @@ const handleMessage = async (
         currentSchedule &&
         currentSchedule.inActivity === true
       ) {
-        /**
-         * Tratamento para envio de mensagem quando a empresa está fora do expediente
-         */
-        if (
-          (settings.scheduleType === "company" ||
-            settings.scheduleType === "connection") &&
-          !isNil(currentSchedule) &&
-          (!currentSchedule || currentSchedule.inActivity === false)
-        ) {
+        logger.info(`[WBOT MESSAGE LISTENER - BACK TO HOURS] Limpando isOutOfHour do ticket ${ticket.id}`);
+        await ticket.update({ isOutOfHour: false });
+      }
+    } catch (e) {
+      Sentry.captureException(e);
+      console.log(e);
+    }
+
+    try {
+      // ✅ CORREÇÃO: Tratamento para envio de mensagem quando a empresa está fora do expediente
+      if (
+        !msg.key.fromMe &&
+        (settings.scheduleType === "company" ||
+          settings.scheduleType === "connection") &&
+        (!ticket.isGroup || whatsapp.groupAsTicket === "enabled") &&
+        !isNil(currentSchedule) &&
+        currentSchedule.inActivity === false
+      ) {
           if (
             whatsapp.maxUseBotQueues &&
             whatsapp.maxUseBotQueues !== 0 &&
             ticket.amountUsedBotQueues >= whatsapp.maxUseBotQueues
           ) {
-            // await UpdateTicketService({
-            //   ticketData: { queueId: queues[0].id },
-            //   ticketId: ticket.id
-            // });
-
             return;
           }
 
@@ -4259,8 +4263,7 @@ const handleMessage = async (
           await ticket.update(ticketUpdate);
           return;
         }
-      }
-    } catch (e) {
+    } catch (e) {   
       Sentry.captureException(e);
       console.log(e);
     }
