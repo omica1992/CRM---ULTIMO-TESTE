@@ -514,14 +514,16 @@ export class ReceibedWhatsAppService {
 
                 // Atualizar ticket - verificar se deve fechar ticket fora de expediente
                 const ticketUpdate: any = {
+                    isOutOfHour: true,
                     amountUsedBotQueues: ticket.amountUsedBotQueues + 1
                 };
 
-                // ✅ CORREÇÃO: Verificar configuração da empresa para encerrar ticket fora de expediente
-                if (settings.closeTicketOutOfHours) {
-                    ticketUpdate.isOutOfHour = true;
+                // ✅ CORREÇÃO: Fechar ticket se configuração habilitada E não tem atendente
+                if (settings.closeTicketOutOfHours && ticket.userId === null) {
                     ticketUpdate.status = "closed";
                     logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Encerrando ticket ${ticket.id} fora de expediente (configuração habilitada)`);
+                } else if (settings.closeTicketOutOfHours && ticket.userId !== null) {
+                    logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Ticket ${ticket.id} tem atendente, mantendo aberto`);
                 } else {
                     logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (configuração desabilitada)`);
                 }
