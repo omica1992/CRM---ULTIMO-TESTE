@@ -4463,6 +4463,40 @@ const handleMessage = async (
       }, 1000);
     }
 
+    // ✅ FALLBACK: Enviar mensagem "Não entendi" se bot não compreendeu
+    if (
+      ticket.isBot === true &&
+      !ticket.flowWebhook &&
+      !ticket.lastFlowId &&
+      ticket.status === "pending" &&
+      !ticket.userId &&
+      !msg.key.fromMe &&
+      bodyMessage &&
+      bodyMessage.trim() !== ""
+    ) {
+      logger.info(`[WBOT MESSAGE LISTENER - FALLBACK] Bot não compreendeu mensagem do ticket ${ticket.id}, enviando fallback`);
+      
+      const fallbackMessage = "Desculpe, não entendi sua resposta. Por favor, aguarde que em breve um atendente irá lhe responder.";
+      
+      try {
+        await SendWhatsAppMessage({
+          body: fallbackMessage,
+          ticket: ticket,
+          quotedMsg: null
+        });
+
+        // Desabilitar bot para evitar loop
+        await ticket.update({
+          isBot: false,
+          status: "pending"
+        });
+
+        logger.info(`[WBOT MESSAGE LISTENER - FALLBACK] Mensagem de fallback enviada para ticket ${ticket.id}, bot desabilitado`);
+      } catch (error) {
+        logger.error(`[WBOT MESSAGE LISTENER - FALLBACK] Erro ao enviar mensagem de fallback:`, error);
+      }
+    }
+
     await ticket.reload();
 
   } catch (err) {

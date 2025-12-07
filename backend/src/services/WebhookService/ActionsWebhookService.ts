@@ -1605,10 +1605,16 @@ export const ActionsWebhookService = async (
 
             await CreateMessageService({ messageData, companyId });
 
-            // ✅ CORREÇÃO: NÃO retornar - manter ticket aguardando nova resposta
-            // Ticket já está configurado com flowWebhook=true e lastFlowId
-            // Apenas continuar o loop para aguardar próxima mensagem do usuário
-            logger.info(`[MENU NODE] Fallback enviado para ticket ${ticket.id}. Aguardando nova resposta do usuário.`);
+            // ✅ CORREÇÃO: Garantir que ticket permaneça aguardando resposta após fallback
+            await ticketDetails.update({
+              flowWebhook: true,
+              lastFlowId: nodeSelected.id,
+              flowStopped: idFlowDb.toString(),
+              hashFlowId: hashWebhookId,
+              dataWebhook: dataWebhook
+            });
+
+            logger.info(`[MENU NODE] Fallback enviado para ticket ${ticket.id}. Ticket configurado para aguardar nova resposta (flowWebhook=true, lastFlowId=${nodeSelected.id}).`);
             
             // Não fazer return - deixar o loop continuar naturalmente
             // O ticket permanece em estado de aguardando resposta

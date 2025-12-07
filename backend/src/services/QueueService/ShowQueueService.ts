@@ -12,17 +12,24 @@ const ShowQueueService = async (
       id: queueId,
       companyId
     },
-    include: [{
-      model: Chatbot,
-      as: "chatbots",
-      include: [
-        {
-          model: User,
-          as: "user"
-        },
-      ]
-    }
-  ],
+    include: [
+      {
+        model: Chatbot,
+        as: "chatbots",
+        include: [
+          {
+            model: User,
+            as: "user"
+          },
+        ]
+      },
+      {
+        model: User,
+        as: "users",
+        attributes: ["id", "name"],
+        through: { attributes: [] } // Não incluir dados da tabela intermediária UserQueue
+      }
+    ],
     order: [
       [{ model: Chatbot, as: "chatbots" }, "id", "asc"],
       ["id", "ASC"]

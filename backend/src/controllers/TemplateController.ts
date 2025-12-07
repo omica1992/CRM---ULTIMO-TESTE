@@ -7,6 +7,7 @@ import CreateTemplateService from "../services/TemplateService/CreateTemplateSer
 import ShowTemplateService from "../services/TemplateService/ShowTemplateService";
 import UpdateTemplateService from "../services/TemplateService/UpdateTemplateService";
 import DeleteTemplateService from "../services/TemplateService/DeleteTemplateService";
+import UploadTemplateMediaService from "../services/TemplateService/UploadTemplateMediaService";
 
 interface TemplateData {
   name: string;
@@ -147,4 +148,23 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
   });
 
   return res.json({ message: "Template removido com sucesso" });
+};
+
+export const uploadMedia = async (req: Request, res: Response): Promise<Response> => {
+  const { companyId, showTemplates } = req.user;
+
+  if (showTemplates !== "enabled") {
+    throw new AppError("Acesso negado: Você não tem permissão para fazer upload de mídia", 403);
+  }
+
+  if (!req.file) {
+    throw new AppError("Nenhum arquivo foi enviado", 400);
+  }
+
+  const result = await UploadTemplateMediaService({
+    file: req.file,
+    companyId
+  });
+
+  return res.json(result);
 };

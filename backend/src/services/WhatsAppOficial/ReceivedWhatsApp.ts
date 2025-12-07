@@ -31,6 +31,7 @@ import VerifyCurrentSchedule from "../CompanyService/VerifyCurrentSchedule";
 import formatBody from "../../helpers/Mustache";
 import SendWhatsAppOficialMessage from "./SendWhatsAppOficialMessage";
 import flowBuilderQueue from "../WebhookService/flowBuilderQueue";
+import CreateMessageService from "../MessageServices/CreateMessageService";
 
 const mimeToExtension: { [key: string]: string } = {
     'audio/aac': 'aac',
@@ -885,6 +886,57 @@ export class ReceibedWhatsAppService {
                             logger.error("[WHATSAPP OFICIAL] ❌ Erro ao limpar estado do ticket:", cleanupError);
                         }
                     }
+                }
+            }
+
+            // ✅ FALLBACK: Enviar mensagem "Não entendi" se bot não compreendeu
+            if (
+                ticket.isBot === true &&
+                !ticket.flowWebhook &&
+                !ticket.lastFlowId &&
+                !campaignExecuted &&
+                ticket.status === "pending" &&
+                !ticket.userId &&
+                message.text &&
+                message.text.trim() !== ""
+            ) {
+                logger.info(`[WHATSAPP OFICIAL - FALLBACK] Bot não compreendeu mensagem do ticket ${ticket.id}, enviando fallback`);
+                
+                const fallbackMessage = "Desculpe, não entendi sua resposta. Por favor, aguarde que em breve um atendente irá lhe responder.";
+                
+                try {
+                    await SendWhatsAppOficialMessage({
+                        body: fallbackMessage,
+                        ticket: ticket,
+                        quotedMsg: null,
+                        type: 'text',
+                        media: null,
+                        vCard: null
+                    });
+
+                    // Salvar mensagem no banco
+                    await CreateMessageService({
+                        messageData: {
+                            wid: `fallback-${Date.now()}`,
+                            ticketId: ticket.id,
+                            body: fallbackMessage,
+                            fromMe: true,
+                            read: true,
+                            mediaType: 'conversation',
+                            ack: 1
+                        },
+                        companyId
+                    });
+
+                    // Desabilitar bot para evitar loop
+                    await ticket.update({
+                        isBot: false,
+                        status: "pending"
+                    });
+
+                    logger.info(`[WHATSAPP OFICIAL - FALLBACK] Mensagem de fallback enviada para ticket ${ticket.id}, bot desabilitado`);
+                } catch (error) {
+                    logger.error(`[WHATSAPP OFICIAL - FALLBACK] Erro ao enviar mensagem de fallback:`, error);
                 }
             }
 

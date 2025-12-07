@@ -1,4 +1,5 @@
 import Queue from "../../models/Queue";
+import User from "../../models/User";
 
 interface Request {
   companyId: number;
@@ -9,6 +10,14 @@ const ListQueuesService = async ({ companyId }: Request): Promise<Queue[]> => {
     where: {
       companyId
     },
+    include: [
+      {
+        model: User,
+        as: "users",
+        attributes: ["id", "name"],
+        through: { attributes: [] } // Não incluir dados da tabela intermediária UserQueue
+      }
+    ],
     order: [["orderQueue", "ASC"]],
   });
 
