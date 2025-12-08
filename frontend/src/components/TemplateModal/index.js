@@ -21,13 +21,16 @@ import {
     FormHelperText,
     Accordion,
     AccordionSummary,
-    AccordionDetails
+    AccordionDetails,
+    CircularProgress
 } from "@material-ui/core";
 import {
     Close as CloseIcon,
     Add as AddIcon,
     Delete as DeleteIcon,
-    ExpandMore as ExpandMoreIcon
+    ExpandMore as ExpandMoreIcon,
+    CloudUpload as CloudUploadIcon,
+    Image as ImageIcon
 } from "@material-ui/icons";
 import { makeStyles } from "@material-ui/core/styles";
 import { Formik, Form, Field, FieldArray } from "formik";
@@ -71,6 +74,29 @@ const useStyles = makeStyles((theme) => ({
     },
     exampleField: {
         marginTop: theme.spacing(1)
+    },
+    uploadButton: {
+        marginTop: theme.spacing(2)
+    },
+    imagePreview: {
+        marginTop: theme.spacing(2),
+        maxWidth: '100%',
+        maxHeight: 200,
+        objectFit: 'contain',
+        border: `1px solid ${theme.palette.divider}`,
+        borderRadius: 4
+    },
+    uploadBox: {
+        marginTop: theme.spacing(2),
+        padding: theme.spacing(2),
+        border: `2px dashed ${theme.palette.divider}`,
+        borderRadius: 4,
+        textAlign: 'center',
+        cursor: 'pointer',
+        '&:hover': {
+            borderColor: theme.palette.primary.main,
+            backgroundColor: theme.palette.action.hover
+        }
     }
 }));
 
@@ -115,6 +141,7 @@ const buttonTypes = [
 const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
     const classes = useStyles();
     const [loading, setLoading] = useState(false);
+    const [uploadingMedia, setUploadingMedia] = useState(false);
     const [initialValues, setInitialValues] = useState({
         name: "",
         category: "",
@@ -209,6 +236,51 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
         const buttons = [...(component.buttons || [])];
         buttons.splice(buttonIndex, 1);
         setFieldValue(`components[${index}].buttons`, buttons);
+    };
+
+    const handleMediaUpload = async (event, index, setFieldValue) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        // Validar tipo de arquivo
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'application/pdf'];
+        if (!allowedTypes.includes(file.type)) {
+            toast.error('Tipo de arquivo não suportado. Use: JPEG, PNG, GIF, WEBP, MP4 ou PDF');
+            return;
+        }
+
+        // Validar tamanho (5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error('Arquivo muito grande. Tamanho máximo: 5MB');
+            return;
+        }
+
+        try {
+            setUploadingMedia(true);
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const { data } = await api.post('/templates/upload-media', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            // Determinar o formato baseado no tipo de arquivo
+            let format = 'IMAGE';
+            if (file.type.startsWith('video/')) format = 'VIDEO';
+            if (file.type === 'application/pdf') format = 'DOCUMENT';
+
+            // Atualizar o componente com a URL da mídia
+            setFieldValue(`components[${index}].format`, format);
+            setFieldValue(`components[${index}].example`, {
+                header_handle: [data.publicUrl]
+            });
+
+            toast.success('Mídia enviada com sucesso!');
+        } catch (err) {
+            toastError(err);
+        } finally {
+            setUploadingMedia(false);
+        }
     };
 
     return (
@@ -356,19 +428,90 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                                                         </IconButton>
                                                     </Box>
 
-                                                    <Field name={`components[${index}].text`}>
-                                                        {({ field }) => (
-                                                            <TextField
-                                                                {...field}
-                                                                label="Texto"
-                                                                fullWidth
-                                                                multiline
-                                                                rows={3}
-                                                                helperText={`Use {1}, {2} para parâmetros posicionais ou {nome}, {data} para nomeados`}
-                                                                style={{ marginTop: 16 }}
+                                                    {/* Upload de Mídia para HEADER */}
+                                                    {component.type === 'HEADER' && (
+                                                        <Box mt={2}>
+                                                            <Typography variant="subtitle2" gutterBottom>
+                                                                Mídia do Cabeçalho (Opcional)
+                                                            </Typography>
+                                                            <input
+                                                                accept="image/*,video/mp4,application/pdf"
+                                                                style={{ display: 'none' }}
+                                                                id={`media-upload-${index}`}
+                                                                type="file"
+                                                                onChange={(e) => handleMediaUpload(e, index, setFieldValue)}
+                                                                disabled={uploadingMedia}
                                                             />
-                                                        )}
-                                                    </Field>
+                                                            <label htmlFor={`media-upload-${index}`}>
+                                                                <Box className={classes.uploadBox}>
+                                                                    {uploadingMedia ? (
+                                                                        <CircularProgress size={24} />
+                                                                    ) : (
+                                                                        <>
+                                                                            <CloudUploadIcon style={{ fontSize: 48, color: '#999' }} />
+                                                                            <Typography variant="body2" color="textSecondary">
+                                                                                Clique para fazer upload de imagem, vídeo ou documento
+                                                                            </Typography>
+                                                                            <Typography variant="caption" color="textSecondary">
+                                                                                Formatos: JPEG, PNG, GIF, WEBP, MP4, PDF (máx 5MB)
+                                                                            </Typography>
+                                                                        </>
+                                                                    )}
+                                                                </Box>
+                                                            </label>
+
+                                                            {/* Preview da mídia */}
+                                                            {component.example?.header_handle?.[0] && (
+                                                                <Box mt={2}>
+                                                                    <Typography variant="caption" color="textSecondary" gutterBottom>
+                                                                        Mídia carregada:
+                                                                    </Typography>
+                                                                    {component.format === 'IMAGE' && (
+                                                                        <img 
+                                                                            src={component.example.header_handle[0]} 
+                                                                            alt="Preview" 
+                                                                            className={classes.imagePreview}
+                                                                        />
+                                                                    )}
+                                                                    {component.format === 'VIDEO' && (
+                                                                        <video 
+                                                                            src={component.example.header_handle[0]} 
+                                                                            controls 
+                                                                            className={classes.imagePreview}
+                                                                        />
+                                                                    )}
+                                                                    {component.format === 'DOCUMENT' && (
+                                                                        <Box display="flex" alignItems="center" mt={1}>
+                                                                            <ImageIcon />
+                                                                            <Typography variant="body2" style={{ marginLeft: 8 }}>
+                                                                                {component.example.header_handle[0].split('/').pop()}
+                                                                            </Typography>
+                                                                        </Box>
+                                                                    )}
+                                                                    <Typography variant="caption" display="block" color="textSecondary" style={{ wordBreak: 'break-all' }}>
+                                                                        {component.example.header_handle[0]}
+                                                                    </Typography>
+                                                                </Box>
+                                                            )}
+                                                        </Box>
+                                                    )}
+
+                                                    {/* Campo de texto (para todos os tipos exceto HEADER com mídia) */}
+                                                    {(component.type !== 'HEADER' || !component.format) && (
+                                                        <Field name={`components[${index}].text`}>
+                                                            {({ field }) => (
+                                                                <TextField
+                                                                    {...field}
+                                                                    label="Texto"
+                                                                    fullWidth
+                                                                    multiline
+                                                                    rows={3}
+                                                                    helperText={`Use {1}, {2} para parâmetros posicionais ou {nome}, {data} para nomeados`}
+                                                                    style={{ marginTop: 16 }}
+                                                                />
+                                                            )}
+                                                        </Field>
+                                                    )}
 
                                                     {component.type === 'BUTTONS' && (
                                                         <Box mt={2}>
