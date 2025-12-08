@@ -73,9 +73,10 @@ const FlowBuilderAttendantModal = ({ open, onSave, data, onUpdate, close }) => {
         try {
           const user = data.data.user;
 
-          const { data: result } = await api.get("/users");
+          // ✅ CORREÇÃO: Usar /users/list para retornar TODOS os usuários
+          const { data: result } = await api.get("/users/list");
 
-          setUsers(result.users);
+          setUsers(result);
           setSelectedUser(user.id);
 
           setActiveModal(true);
@@ -86,8 +87,9 @@ const FlowBuilderAttendantModal = ({ open, onSave, data, onUpdate, close }) => {
     } else if (open === "create") {
       (async () => {
         try {
-          const { data: result } = await api.get("/users");
-          setUsers(result.users);
+          // ✅ CORREÇÃO: Usar /users/list para retornar TODOS os usuários
+          const { data: result } = await api.get("/users/list");
+          setUsers(result);
 
           setSelectedUser("");
           setActiveModal(true);

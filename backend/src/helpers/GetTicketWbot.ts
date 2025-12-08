@@ -13,8 +13,17 @@ const GetTicketWbot = async (ticket: Ticket): Promise<Session> => {
 
   // ✅ CORREÇÃO: Verificar se é API Oficial antes de tentar usar wbot
   let whatsapp = ticket.whatsapp;
-  if (!whatsapp) {
-    whatsapp = await Whatsapp.findByPk(ticket.whatsappId);
+  if (!whatsapp && ticket.whatsappId) {
+    // Validar que whatsappId é um número válido
+    const whatsappIdNumber = typeof ticket.whatsappId === 'string' 
+      ? parseInt(ticket.whatsappId, 10) 
+      : ticket.whatsappId;
+    
+    if (isNaN(whatsappIdNumber)) {
+      throw new AppError(`WhatsApp ID inválido: ${ticket.whatsappId}`);
+    }
+    
+    whatsapp = await Whatsapp.findByPk(whatsappIdNumber);
   }
 
   if (whatsapp) {

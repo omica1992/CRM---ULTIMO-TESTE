@@ -31,13 +31,19 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     throw new AppError("Acesso negado: Você não tem permissão para acessar templates", 403);
   }
 
-  if (!whatsappId) {
-    throw new AppError("WhatsApp ID é obrigatório");
+  if (!whatsappId || whatsappId === "null" || whatsappId === "undefined") {
+    throw new AppError("WhatsApp ID é obrigatório", 400);
+  }
+
+  const whatsappIdNumber = parseInt(whatsappId as string, 10);
+  
+  if (isNaN(whatsappIdNumber)) {
+    throw new AppError("WhatsApp ID inválido", 400);
   }
 
   const templates = await ListTemplatesService({
     companyId,
-    whatsappId: Number(whatsappId)
+    whatsappId: whatsappIdNumber
   });
 
   return res.json(templates);

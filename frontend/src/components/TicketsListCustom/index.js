@@ -232,7 +232,7 @@ const TicketsListCustom = (props) => {
         setPageNumber(1);
     }, [status, searchParam, dispatch, showAll, tags, users, forceSearch, selectedQueueIds, whatsappIds, statusFilter, sortTickets, searchOnMessages]);
 
-    const { tickets, hasMore, loading } = useTickets({
+    const { tickets, hasMore, loading, count } = useTickets({
         pageNumber,
         searchParam,
         status,
@@ -382,12 +382,13 @@ const TicketsListCustom = (props) => {
 
     useEffect(() => {
         if (typeof updateCount === "function") {
-            updateCount(ticketsList.length);
+            // ✅ CORREÇÃO: Usar count total da API em vez de ticketsList.length
+            updateCount(count || ticketsList.length);
         }
         // Atualizar tickets disponíveis para seleção múltipla
         updateAvailableTickets(ticketsList);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [ticketsList]);
+    }, [ticketsList, count]);
 
     const loadMore = () => {
         setPageNumber((prevState) => prevState + 1);

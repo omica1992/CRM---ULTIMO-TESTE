@@ -152,10 +152,19 @@ const UpdateTicketService = async ({
     }
 
     // ✅ CORRIGIDO: Desabilitar integração quando ticket é aceito por um usuário
+    // ⚠️ IMPORTANTE: NÃO desabilitar isBot se ticket está em fluxo ativo (flowWebhook)
     if (userId && userId !== oldUserId && status === "open") {
       logger.info(`[TICKET ACCEPTED] Ticket ${ticketId} aceito por usuário ${userId} - desabilitando integração`);
-      isBot = false;
-      useIntegration = false;
+      
+      // Verificar se ticket está em fluxo ativo
+      if (ticket.flowWebhook && ticket.lastFlowId) {
+        logger.info(`[TICKET ACCEPTED] Ticket ${ticketId} está em fluxo ativo - mantendo isBot=true para continuar fluxo`);
+        // Manter isBot = true para continuar fluxo
+      } else {
+        isBot = false;
+      }
+      
+      useIntegration = false; // Sempre desabilitar integrações externas (Typebot, n8n)
     }
 
     const ticketTraking = await FindOrCreateATicketTrakingService({

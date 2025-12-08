@@ -582,8 +582,8 @@ const MessageInput = ({
       console.log("🔍 Verificando templates - useWhatsappOfficial:", useWhatsappOfficial, "whatsappId:", whatsappId);
       
       // ✅ CORREÇÃO: Buscar templates da Meta API, não quick-messages
-      if (!whatsappId) {
-        console.log("⚠️ Sem whatsappId para buscar templates");
+      if (!whatsappId || whatsappId === "null" || whatsappId === "undefined" || isNaN(whatsappId)) {
+        console.log("⚠️ whatsappId inválido para buscar templates:", whatsappId);
         setTemplates([]);
         return;
       }
@@ -600,7 +600,7 @@ const MessageInput = ({
       }
     }
     
-    if (useWhatsappOfficial && whatsappId) {
+    if (useWhatsappOfficial && whatsappId && whatsappId !== "null" && whatsappId !== "undefined") {
       fetchTemplates();
     } else {
       console.log("⏭️ Não buscando templates - useWhatsappOfficial:", useWhatsappOfficial, "whatsappId:", whatsappId);

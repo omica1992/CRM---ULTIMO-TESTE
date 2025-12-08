@@ -2941,29 +2941,30 @@ export const flowbuilderIntegration = async (
   }
 
   // *** FLUXOS WEBHOOK EXISTENTES (lógica original) ***
-  if (ticket.flowWebhook && ticket.hashFlowId) {
+  // ✅ CORREÇÃO: Permitir processamento mesmo sem hashFlowId (para flowStopped)
+  if (ticket.flowWebhook && (ticket.hashFlowId || ticket.flowStopped)) {
     console.log(
       `[FLOW WEBHOOK] Processando fluxo webhook existente para ticket ${ticket.id}`
     );
 
-    console.log("ticket.flowWebhook", ticket.flowWebhook);
-    console.log("ticket.hashFlowId", ticket.hashFlowId);
-
-    // Validação para evitar erro de hash_id undefined
-    if (!ticket.hashFlowId) {
-      console.error(
-        `[FLOW WEBHOOK] ❌ Erro: ticket.hashFlowId é undefined para ticket ${ticket.id}`
-      );
-      return false;
-    }
+    console.log("[FLOW WEBHOOK DEBUG] ticket.flowWebhook", ticket.flowWebhook);
+    console.log("[FLOW WEBHOOK DEBUG] ticket.hashFlowId", ticket.hashFlowId);
+    console.log("[FLOW WEBHOOK DEBUG] ticket.flowStopped", ticket.flowStopped);
+    console.log("[FLOW WEBHOOK DEBUG] ticket.lastFlowId", ticket.lastFlowId);
+    console.log("[FLOW WEBHOOK DEBUG] body recebido", body);
 
     try {
-      const webhook = await WebhookModel.findOne({
-        where: {
-          company_id: ticket.companyId,
-          hash_id: ticket.hashFlowId
-        }
-      });
+      let webhook = null;
+      
+      // ✅ CORREÇÃO: Só buscar webhook se hashFlowId existir
+      if (ticket.hashFlowId) {
+        webhook = await WebhookModel.findOne({
+          where: {
+            company_id: ticket.companyId,
+            hash_id: ticket.hashFlowId
+          }
+        });
+      }
 
       if (webhook && webhook.config["details"]) {
         console.log(
@@ -4426,33 +4427,42 @@ const handleMessage = async (
               ticket.companyId
             );
 
-            // Verificar se existe integrationId antes de prosseguir
+            // ✅ CORREÇÃO: Verificar integrationId OU flowIdNotPhrase
             try {
-              if (!whatsapp.integrationId) {
-                logger.info("[RDS-4573 - DEBUG] whatsapp.integrationId não está definido para a conexão WhatsApp ID: " + whatsapp.id);
-                return; // Encerrar execução se não houver integrationId
+              if (whatsapp.integrationId) {
+                const queueIntegrations = await ShowQueueIntegrationService(
+                  whatsapp.integrationId,
+                  companyId
+                );
+
+                // DEBUG - Verificar tipo de integração para diagnóstico
+                logger.info(`[RDS-FLOW-DEBUG] Iniciando flowbuilder para ticket ${ticket.id}, integração tipo: ${queueIntegrations?.type || 'indefinido'}`);
+
+                // ✅ VERIFICAÇÃO FINAL APENAS SE NECESSÁRIO
+                await flowbuilderIntegration(
+                  msg,
+                  wbot,
+                  companyId,
+                  queueIntegrations,
+                  ticket,
+                  contactForCampaign
+                );
+
+                // DEBUG - Verificar se flowbuilder foi executado com sucesso
+                logger.info(`[RDS-FLOW-DEBUG] flowbuilderIntegration executado para ticket ${ticket.id}`);
+              } else {
+                // ✅ NOVO: Tentar executar flowIdNotPhrase se não houver integrationId
+                logger.info(`[RDS-FLOW-DEBUG] Sem integrationId para conexão ${whatsapp.id}, tentando flowIdNotPhrase`);
+                
+                await flowbuilderIntegration(
+                  msg,
+                  wbot,
+                  companyId,
+                  null, // Sem integração de fila
+                  ticket,
+                  contactForCampaign
+                );
               }
-
-              const queueIntegrations = await ShowQueueIntegrationService(
-                whatsapp.integrationId,
-                companyId
-              );
-
-              // DEBUG - Verificar tipo de integração para diagnóstico
-              logger.info(`[RDS-FLOW-DEBUG] Iniciando flowbuilder para ticket ${ticket.id}, integração tipo: ${queueIntegrations?.type || 'indefinido'}`);
-
-              // ✅ VERIFICAÇÃO FINAL APENAS SE NECESSÁRIO
-              await flowbuilderIntegration(
-                msg,
-                wbot,
-                companyId,
-                queueIntegrations,
-                ticket,
-                contactForCampaign
-              );
-
-              // DEBUG - Verificar se flowbuilder foi executado com sucesso
-              logger.info(`[RDS-FLOW-DEBUG] flowbuilderIntegration executado para ticket ${ticket.id}`);
             } catch (integrationError) {
               logger.error("[RDS-4573 - INTEGRATION ERROR] Erro ao processar integração:", integrationError);
             }

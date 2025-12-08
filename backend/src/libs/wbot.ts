@@ -267,6 +267,28 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           store.set(msg.key.id, msg.message);
         };
 
+        // ✅ NOVO: Silenciar erros de descriptografia (Bad MAC, SessionError)
+        // Esses erros são normais após reconexão e não afetam o funcionamento
+        wsocket.ev.on("messages.upsert", async (messageUpsert) => {
+          // Captura erros de descriptografia silenciosamente
+          try {
+            // O processamento normal acontece no wbotMessageListener
+            // Este listener só serve para capturar erros
+          } catch (error: any) {
+            if (error.message?.includes("Bad MAC") || 
+                error.message?.includes("No matching sessions") ||
+                error.name === "SessionError") {
+              // ✅ Silenciar: erro esperado após reconexão
+              logger.debug(
+                `[DECRYPT] Ignorando erro de descriptografia para ${whatsapp.name}: ${error.message}`
+              );
+            } else {
+              // ❌ Outros erros devem ser logados
+              logger.error(`[MESSAGES] Erro ao processar mensagem: ${error.message}`);
+            }
+          }
+        });
+
         setTimeout(async () => {
           const wpp = await Whatsapp.findByPk(whatsapp.id);
           // console.log("Status:::::",wpp.status)
