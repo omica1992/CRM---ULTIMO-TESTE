@@ -4248,6 +4248,7 @@ const handleMessage = async (
 
           //atualiza o contador de vezes que enviou o bot e que foi enviado fora de hora
           const ticketUpdate: any = {
+            isOutOfHour: true,
             amountUsedBotQueues: ticket.amountUsedBotQueues + 1
           };
 

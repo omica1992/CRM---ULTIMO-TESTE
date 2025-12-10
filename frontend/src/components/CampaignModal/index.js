@@ -320,13 +320,9 @@ const CampaignModal = ({
     }
   }, []);
 
+  // ✅ CORREÇÃO: Carregar todos os usuários ao abrir o modal
   useEffect(() => {
-    if (searchParam.length < 3) {
-      setLoading(false);
-      setSelectedQueue("");
-      return;
-    }
-    const delayDebounceFn = setTimeout(() => {
+    if (open) {
       setLoading(true);
       const fetchUsers = async () => {
         try {
@@ -339,9 +335,18 @@ const CampaignModal = ({
         }
       };
       fetchUsers();
-    }, 500);
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchParam]);
+    }
+  }, [open]);
+
+  // Filtrar usuários localmente quando digitar
+  useEffect(() => {
+    if (searchParam.length > 0 && options.length > 0) {
+      const filtered = options.filter(user => 
+        user.name.toLowerCase().includes(searchParam.toLowerCase())
+      );
+      // Não precisa fazer nada, o Autocomplete já filtra automaticamente
+    }
+  }, [searchParam, options]);
 
   useEffect(() => {
     if (isMounted.current) {
