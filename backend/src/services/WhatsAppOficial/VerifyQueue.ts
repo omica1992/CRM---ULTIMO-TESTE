@@ -21,6 +21,7 @@ import CreateLogTicketService from "../TicketServices/CreateLogTicketService";
 import { IMetaMessageinteractive, IMetaMessageinteractiveActionSections, IMetaMessageinteractiveActionSectionsRows } from "../../libs/whatsAppOficial/IWhatsAppOficial.interfaces";
 import ShowQueueIntegrationService from "../QueueIntegrationServices/ShowQueueIntegrationService";
 import { handleMessageIntegration } from "../WbotServices/wbotMessageListener";
+import { getIO } from "../../libs/socket";
 
 
 const verifyQueueOficial = async (
@@ -301,8 +302,17 @@ const verifyQueueOficial = async (
                     logger.info(`[VERIFY QUEUE - OUT OF HOURS] Encerrando ticket ${ticket.id} fora de expediente`);
                 }
 
-
                 await ticket.update(ticketUpdate);
+
+                // ✅ CORREÇÃO: Emitir evento de socket quando ticket é fechado
+                if (ticketUpdate.status === "closed") {
+                    const io = getIO();
+                    io.of(String(companyId)).emit(`company-${companyId}-ticket`, {
+                        action: "delete",
+                        ticketId: ticket.id
+                    });
+                }
+
                 return;
             }
 
@@ -709,8 +719,17 @@ const verifyQueueOficial = async (
                     logger.info(`[VERIFY QUEUE - OUT OF HOURS] Encerrando ticket ${ticket.id} fora de expediente`);
                 }
 
-
                 await ticket.update(ticketUpdate);
+
+                // ✅ CORREÇÃO: Emitir evento de socket quando ticket é fechado
+                if (ticketUpdate.status === "closed") {
+                    const io = getIO();
+                    io.of(String(companyId)).emit(`company-${companyId}-ticket`, {
+                        action: "delete",
+                        ticketId: ticket.id
+                    });
+                }
+
                 return;
             }
 

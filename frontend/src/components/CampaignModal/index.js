@@ -202,7 +202,6 @@ const CampaignModal = ({
   const [queues, setQueues] = useState([]);
   const [allQueues, setAllQueues] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [searchParam, setSearchParam] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedQueue, setSelectedQueue] = useState(null);
   const { findAll: findAllQueues } = useQueues();
@@ -320,16 +319,18 @@ const CampaignModal = ({
     }
   }, []);
 
-  // ✅ CORREÇÃO: Carregar todos os usuários ao abrir o modal
+  // ✅ CORREÇÃO: Carregar TODOS os usuários ao abrir o modal (sem paginação)
   useEffect(() => {
     if (open) {
       setLoading(true);
       const fetchUsers = async () => {
         try {
-          const { data } = await api.get("/users/");
-          setOptions(data.users);
+          const { data } = await api.get("/users/list");
+          console.log(`[CAMPAIGN MODAL] Carregados ${data.length} usuários:`, data.map(u => u.name));
+          setOptions(data);
           setLoading(false);
         } catch (err) {
+          console.error('[CAMPAIGN MODAL] Erro ao carregar usuários:', err);
           setLoading(false);
           toastError(err);
         }
@@ -337,16 +338,6 @@ const CampaignModal = ({
       fetchUsers();
     }
   }, [open]);
-
-  // Filtrar usuários localmente quando digitar
-  useEffect(() => {
-    if (searchParam.length > 0 && options.length > 0) {
-      const filtered = options.filter(user => 
-        user.name.toLowerCase().includes(searchParam.toLowerCase())
-      );
-      // Não precisa fazer nada, o Autocomplete já filtra automaticamente
-    }
-  }, [searchParam, options]);
 
   useEffect(() => {
     if (isMounted.current) {
@@ -1182,7 +1173,6 @@ const handleSaveCampaign = async (values) => {
                           {...params}
                           label={i18n.t("transferTicketModal.fieldLabel")}
                           variant="outlined"
-                          onChange={(e) => setSearchParam(e.target.value)}
                           InputProps={{
                             ...params.InputProps,
                             endAdornment: (

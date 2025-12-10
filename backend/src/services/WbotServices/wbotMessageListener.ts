@@ -1783,6 +1783,15 @@ const verifyQueue = async (
 
           await ticket.update(ticketUpdate);
 
+          // ✅ CORREÇÃO: Emitir evento de socket quando ticket é fechado
+          if (ticketUpdate.status === "closed") {
+            const io = getIO();
+            io.of(String(companyId)).emit(`company-${companyId}-ticket`, {
+              action: "delete",
+              ticketId: ticket.id
+            });
+          }
+
           const debouncedSentMessage = debounce(
             async () => {
               const sentMessage = await wbot.sendMessage(
@@ -4263,9 +4272,19 @@ const handleMessage = async (
           }
 
           await ticket.update(ticketUpdate);
+
+          // ✅ CORREÇÃO: Emitir evento de socket quando ticket é fechado
+          if (ticketUpdate.status === "closed") {
+            const io = getIO();
+            io.of(String(companyId)).emit(`company-${companyId}-ticket`, {
+              action: "delete",
+              ticketId: ticket.id
+            });
+          }
+
           return;
         }
-    } catch (e) {   
+    } catch (e) {
       Sentry.captureException(e);
       console.log(e);
     }
@@ -4375,6 +4394,16 @@ const handleMessage = async (
           }
 
           await ticket.update(ticketUpdate);
+
+          // ✅ CORREÇÃO: Emitir evento de socket quando ticket é fechado
+          if (ticketUpdate.status === "closed") {
+            const io = getIO();
+            io.of(String(companyId)).emit(`company-${companyId}-ticket`, {
+              action: "delete",
+              ticketId: ticket.id
+            });
+          }
+
           return;
         }
       }

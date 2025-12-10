@@ -532,6 +532,15 @@ export class ReceibedWhatsAppService {
 
                 await ticket.update(ticketUpdate);
 
+                // ✅ CORREÇÃO: Emitir evento de socket quando ticket é fechado
+                if (ticketUpdate.status === "closed") {
+                    const io = getIO();
+                    io.of(String(companyId)).emit(`company-${companyId}-ticket`, {
+                        action: "delete",
+                        ticketId: ticket.id
+                    });
+                }
+
                 await ticketTraking.update({
                     chatbotAt: moment().toDate()
                 });
