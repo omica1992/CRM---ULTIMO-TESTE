@@ -60,6 +60,29 @@ const CreateTemplateService = async (data: Request) => {
 
     console.log(`[CREATE TEMPLATE] Nome original: "${templateData.name}" → Nome convertido: "${templateName}"`);
 
+    // Validar URLs de mídia antes de processar
+    for (let i = 0; i < templateData.components.length; i++) {
+      const comp = templateData.components[i];
+      if (comp.type === 'HEADER' && comp.example?.header_handle && comp.example.header_handle.length > 0) {
+        const mediaUrl = comp.example.header_handle[0];
+        
+        if (!mediaUrl.startsWith('https://')) {
+          console.warn(`[CREATE TEMPLATE] ⚠️ URL da mídia não é HTTPS: ${mediaUrl}`);
+          console.warn(`[CREATE TEMPLATE] A Meta pode rejeitar URLs HTTP. Configure BACKEND_URL com HTTPS em produção.`);
+        }
+        
+        // Testar se a URL é acessível
+        try {
+          console.log(`[CREATE TEMPLATE] Testando acessibilidade da URL: ${mediaUrl}`);
+          const testResponse = await axios.head(mediaUrl, { timeout: 5000 });
+          console.log(`[CREATE TEMPLATE] ✅ URL acessível - Status: ${testResponse.status}, Content-Type: ${testResponse.headers['content-type']}`);
+        } catch (error: any) {
+          console.error(`[CREATE TEMPLATE] ❌ URL não acessível: ${error.message}`);
+          throw new AppError(`A URL da mídia não está acessível: ${mediaUrl}. Verifique se o arquivo existe e está público.`, 400);
+        }
+      }
+    }
+
     // Limpar dados antes de enviar
     const cleanedData: any = {
       name: templateName,
