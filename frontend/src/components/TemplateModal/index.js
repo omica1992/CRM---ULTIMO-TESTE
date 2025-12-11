@@ -227,8 +227,21 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
             for (let i = 0; i < values.components.length; i++) {
                 const component = values.components[i];
                 
-                // HEADER com mídia não precisa de texto
-                if (component.type === 'HEADER' && component.format) {
+                // HEADER com formato de mídia precisa ter example.header_handle
+                if (component.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(component.format)) {
+                    if (!component.example?.header_handle || !Array.isArray(component.example.header_handle) || component.example.header_handle.length === 0) {
+                        toast.error(`O cabeçalho com ${component.format === 'IMAGE' ? 'imagem' : component.format === 'VIDEO' ? 'vídeo' : 'documento'} precisa ter a mídia carregada`);
+                        return;
+                    }
+                    continue; // Não precisa de texto
+                }
+                
+                // HEADER com formato TEXT ou sem formato precisa de texto
+                if (component.type === 'HEADER' && (!component.format || component.format === 'TEXT')) {
+                    if (!component.text || component.text.trim() === '') {
+                        toast.error('O cabeçalho precisa ter texto ou mídia');
+                        return;
+                    }
                     continue;
                 }
                 
@@ -240,6 +253,8 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
             }
 
             setLoading(true);
+            
+            console.log('[TEMPLATE MODAL] Enviando template:', JSON.stringify(values, null, 2));
             
             if (templateId) {
                 await api.put(`/templates/${whatsappId}/${templateId}`, values);
@@ -324,6 +339,11 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
             setFieldValue(`components[${index}].format`, format);
             setFieldValue(`components[${index}].example`, {
                 header_handle: [data.publicUrl]
+            });
+
+            console.log('[TEMPLATE MODAL] Componente atualizado:', {
+                format,
+                example: { header_handle: [data.publicUrl] }
             });
 
             toast.success('Mídia enviada com sucesso!');
@@ -490,6 +510,16 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                                                             <Typography variant="caption" color="textSecondary" display="block" gutterBottom>
                                                                 ℹ️ O cabeçalho pode ter OU texto OU mídia, nunca os dois. Ao adicionar mídia, o campo de texto será ocultado.
                                                             </Typography>
+                                                            
+                                                            {/* Alerta se tem formato mas não tem mídia */}
+                                                            {component.format && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(component.format) && 
+                                                             (!component.example?.header_handle || component.example.header_handle.length === 0) && (
+                                                                <Box mt={1} mb={1} p={1} bgcolor="#fff3cd" borderRadius={4}>
+                                                                    <Typography variant="caption" style={{ color: '#856404' }}>
+                                                                        ⚠️ Formato {component.format} selecionado mas mídia não carregada. Faça upload da mídia abaixo.
+                                                                    </Typography>
+                                                                </Box>
+                                                            )}
                                                             <input
                                                                 accept="image/*,video/mp4,application/pdf"
                                                                 style={{ display: 'none' }}
