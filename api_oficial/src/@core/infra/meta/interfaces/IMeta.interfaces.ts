@@ -155,9 +155,9 @@ export interface IMetaMessageContactsUrls {
 
 export interface IMetaMessageinteractive {
   type: 'button' | 'list';
-  header: IMetaMessageinteractiveHeader;
+  header?: IMetaMessageinteractiveHeader;  // ✅ Opcional
   body: IMetaMessageinteractiveBody;
-  footer: IMetaMessageinteractiveFooter;
+  footer?: IMetaMessageinteractiveFooter;  // ✅ Opcional
   action: IMetaMessageinteractiveAction;
 }
 

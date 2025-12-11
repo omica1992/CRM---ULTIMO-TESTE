@@ -5,6 +5,10 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_LINK")
+  // ✅ Configuração de pool de conexões
+  // connection_limit: máximo de conexões simultâneas (padrão: ilimitado)
+  // pool_timeout: tempo de espera por uma conexão (padrão: 10s)
+  relationMode = "prisma"
 }
 
 model company {

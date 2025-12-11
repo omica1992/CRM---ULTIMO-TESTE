@@ -316,7 +316,8 @@ export class ReceibedWhatsAppService {
                 }
 
                 // Escrever arquivo binário (buffer já está decodificado de base64)
-                writeFileSync(`${folder}/${fileName}`, buffer, { encoding: 'base64' });
+                // ✅ CORREÇÃO: Cast para Uint8Array para compatibilidade de tipos
+                writeFileSync(`${folder}/${fileName}`, new Uint8Array(buffer));
             }
             const settings = await CompaniesSettings.findOne({
                 where: { companyId }
@@ -551,15 +552,17 @@ export class ReceibedWhatsAppService {
 
             logger.info(`[WHATSAPP OFICIAL - DEBUG] *** CHEGOU NA VERIFICAÇÃO DE FILA - ticket ${ticket.id} ***`);
             logger.info(`[WHATSAPP OFICIAL - DEBUG] Verificando condições para verifyQueue - ticket ${ticket.id}:`);
-            logger.info(`[WHATSAPP OFICIAL - DEBUG] - imported: ${ticket.imported}, queue: ${!!ticket.queue}, isGroup: ${ticket.isGroup}, userId: ${ticket.userId}, queues.length: ${whatsapp?.queues?.length}, useIntegration: ${ticket.useIntegration}`);
+            logger.info(`[WHATSAPP OFICIAL - DEBUG] - imported: ${ticket.imported}, queue: ${!!ticket.queue}, isGroup: ${ticket.isGroup}, userId: ${ticket.userId}, queues.length: ${whatsapp?.queues?.length}, useIntegration: ${ticket.useIntegration}, whatsapp.integrationId: ${whatsapp.integrationId}`);
             
+            // ✅ CORREÇÃO: Não executar chatbot de filas se conexão tem integração (igual ao Baileys)
             if (
                 !ticket.imported &&
                 !ticket.queue &&
                 (!ticket.isGroup || whatsapp.groupAsTicket === "enabled") &&
                 !ticket.userId &&
                 whatsapp?.queues?.length >= 1 &&
-                !ticket.useIntegration
+                !ticket.useIntegration &&
+                !whatsapp.integrationId  // ✅ Não executar se conexão tem integração configurada
             ) {
                 // console.log("antes do verifyqueue")
                 logger.info(`[WHATSAPP OFICIAL - DEBUG] Chamando verifyQueueOficial para ticket ${ticket.id}`);
@@ -785,8 +788,14 @@ export class ReceibedWhatsAppService {
             }
 
             // ✅ VERIFICAÇÃO DE CAMPANHAS E FLUXOS (mesma lógica do wbotMessageListener)
-            if (!ticket.imported && !ticket.isGroup && ticket.isBot !== false) {
-                logger.info(`[WHATSAPP OFICIAL - FLOW] 🔍 Iniciando verificação de campanhas para ticket ${ticket.id}`);
+            // ✅ CORREÇÃO: Adicionar verificação de status "pending" (igual ao Baileys)
+            if (
+                !ticket.imported && 
+                !ticket.isGroup && 
+                ticket.status === "pending" &&  // ✅ Só executar em tickets pendentes
+                ticket.isBot !== false
+            ) {
+                logger.info(`[WHATSAPP OFICIAL - FLOW] 🔍 Iniciando verificação de campanhas para ticket ${ticket.id} (status: ${ticket.status})`);
                 
                 // Verificar se ticket.integrationId existe antes de continuar
                 if (!ticket.integrationId) {
@@ -1129,17 +1138,20 @@ export class ReceibedWhatsAppService {
 
                             // Verificar se existe integrationId antes de prosseguir
                             try {
-                                if (!whatsapp.integrationId) {
-                                    logger.info(`[WHATSAPP OFICIAL - FLOW] ⚠️ whatsapp.integrationId não definido para conexão ${whatsapp.id}, encerrando verificação final`);
-                                    return; // Encerrar execução se não houver integrationId
-                                }
+                                let queueIntegrations = null;
                                 
-                                logger.info(`[WHATSAPP OFICIAL - FLOW] 🔎 Conexão ${whatsapp.id} possui integrationId, buscando integrações...`);
-
-                                const queueIntegrations = await ShowQueueIntegrationService(
-                                    whatsapp.integrationId,
-                                    companyId
-                                );
+                                if (!whatsapp.integrationId) {
+                                    logger.info(`[WHATSAPP OFICIAL - FLOW] ⚠️ whatsapp.integrationId não definido para conexão ${whatsapp.id}, tentando flowIdNotPhrase (igual ao Baileys)`);
+                                    // ✅ CORREÇÃO: Tentar executar flowIdNotPhrase mesmo sem integrationId (igual ao Baileys)
+                                    queueIntegrations = null; // Sem integração, vai tentar flowIdNotPhrase
+                                } else {
+                                    logger.info(`[WHATSAPP OFICIAL - FLOW] 🔎 Conexão ${whatsapp.id} possui integrationId, buscando integrações...`);
+                                    
+                                    queueIntegrations = await ShowQueueIntegrationService(
+                                        whatsapp.integrationId,
+                                        companyId
+                                    );
+                                }
 
                                 logger.info(`[WHATSAPP OFICIAL - FLOW] 🚀 Chamando flowbuilderIntegration (verificação final) para ticket ${ticket.id}, integração tipo: ${queueIntegrations?.type || 'indefinido'}`);
 
@@ -1183,7 +1195,12 @@ export class ReceibedWhatsAppService {
                     }
                 }, 1000); // Aguardar 1 segundo para garantir que outros processamentos terminaram
             } else {
-                logger.info(`[WHATSAPP OFICIAL - FLOW] ⏭️ Pulando verificação final para ticket ${ticket.id} - Razão: ${campaignExecuted ? 'campanha já executada' : ticket.imported ? 'ticket importado' : ticket.isGroup ? 'é grupo' : ticket.status !== 'pending' ? `status=${ticket.status}` : 'desconhecida'}`);
+                const skipReason = campaignExecuted ? 'campanha já executada' 
+                    : ticket.imported ? 'ticket importado' 
+                    : ticket.isGroup ? 'é grupo' 
+                    : ticket.status !== 'pending' ? `status=${ticket.status} (esperado: pending)` 
+                    : 'desconhecida';
+                logger.info(`[WHATSAPP OFICIAL - FLOW] ⏭️ Pulando verificação final para ticket ${ticket.id} - Razão: ${skipReason}`);
             }
 
         } catch (error) {

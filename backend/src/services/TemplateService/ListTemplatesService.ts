@@ -56,15 +56,18 @@ const ListTemplatesService = async ({ companyId, whatsappId }: Request): Promise
     });
 
     // ✅ Log detalhado dos templates retornados
-    if (response.data && Array.isArray(response.data)) {
-      console.log(`[TEMPLATES] ✅ Encontrados ${response.data.length} templates`);
+    // A API retorna { data: [...], paging: {...} }
+    const templates = response.data?.data || response.data;
+    
+    if (templates && Array.isArray(templates)) {
+      console.log(`[TEMPLATES] ✅ Encontrados ${templates.length} templates`);
       
-      if (response.data.length > 0) {
+      if (templates.length > 0) {
         // Mostrar estrutura do primeiro template
-        const firstTemplate = response.data[0];
+        const firstTemplate = templates[0];
         console.log(`[TEMPLATES] ✅ Amostra de template:`);
         console.log(`[TEMPLATES] - id: ${firstTemplate.id}`);
-        console.log(`[TEMPLATES] - name: ${firstTemplate.name}`); // ✅ Nome/shortcode do template
+        console.log(`[TEMPLATES] - name: ${firstTemplate.name}`);
         console.log(`[TEMPLATES] - status: ${firstTemplate.status}`);
         console.log(`[TEMPLATES] - category: ${firstTemplate.category}`);
         console.log(`[TEMPLATES] - language: ${firstTemplate.language}`);
@@ -73,7 +76,8 @@ const ListTemplatesService = async ({ companyId, whatsappId }: Request): Promise
       console.log(`[TEMPLATES] ❌ Resposta não contém array de templates:`, response.data);
     }
 
-    return response.data;
+    // ✅ Retornar apenas o array de templates, não o objeto completo
+    return templates;
   } catch (error: any) {
     console.error("Erro ao buscar templates:", error.response?.data || error.message);
     throw new AppError(`Erro ao buscar templates: ${error.response?.data?.message || error.message}`, 500);
