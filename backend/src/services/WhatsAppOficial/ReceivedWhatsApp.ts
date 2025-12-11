@@ -679,13 +679,24 @@ export class ReceibedWhatsAppService {
             }
 
             // 🔄 TRATATIVA 2: RETOMAR FLUXO INTERROMPIDO (flowBuilderQueue) - IGUAL AO BAILEYS
+            // ✅ CORREÇÃO: Adicionar flag para evitar processamento duplicado
+            const isProcessingFlow = (global as any)[`processing_flow_${ticket.id}`];
+            
             if (
                 ticket.flowStopped &&
                 ticket.flowWebhook &&
                 ticket.lastFlowId &&
                 !isNaN(parseInt(ticket.lastMessage))
             ) {
+                if (isProcessingFlow) {
+                    logger.info(`[WHATSAPP OFICIAL - FLOW QUEUE] ⏭️ Pulando processamento - ticket ${ticket.id} já está sendo processado`);
+                    return; // ✅ Sair imediatamente se já está processando
+                }
+                
                 logger.info(`[WHATSAPP OFICIAL - FLOW QUEUE] Retomando fluxo interrompido - ticket ${ticket.id}, flow ${ticket.flowStopped}`);
+                
+                // ✅ Marcar como processando
+                (global as any)[`processing_flow_${ticket.id}`] = true;
                 
                 try {
                     // Criar mensagem simulada para compatibilidade com flowBuilderQueue
@@ -712,9 +723,16 @@ export class ReceibedWhatsAppService {
                     );
 
                     logger.info(`[WHATSAPP OFICIAL - FLOW QUEUE] ✅ Fluxo interrompido retomado com sucesso`);
+                    
+                    // ✅ Limpar flag de processamento
+                    delete (global as any)[`processing_flow_${ticket.id}`];
+                    
                     return; // ✅ CORREÇÃO: Sair após processar fluxo para evitar duplicação
                 } catch (error) {
                     logger.error(`[WHATSAPP OFICIAL - FLOW QUEUE] ❌ Erro ao retomar fluxo interrompido:`, error);
+                    
+                    // ✅ Limpar flag mesmo em caso de erro
+                    delete (global as any)[`processing_flow_${ticket.id}`];
                     
                     // ✅ FALLBACK: Tentar salvar mensagem básica
                     try {

@@ -433,9 +433,12 @@ export const ActionsWebhookService = async (
 
         if (execFn === "") {
           console.log("UPDATE5...");
-          nodeSelected = {
-            type: "menu"
-          };
+          // ✅ CORREÇÃO: Buscar o nó completo em vez de criar um objeto vazio
+          nodeSelected = nodes.filter(node => node.id === next)[0];
+          if (!nodeSelected) {
+            logger.error(`[MENU NODE] Nó ${next} não encontrado após resposta inválida`);
+            break;
+          }
         } else {
           console.log("UPDATE6...");
           nodeSelected = nodes.filter(node => node.id === execFn)[0];
@@ -1525,7 +1528,18 @@ export const ActionsWebhookService = async (
                 ticket: ticketDetails,
                 quotedMsg: null
               });
+              
+              // ✅ Baileys: Salvar mensagem manualmente
+              const messageData: MessageData = {
+                wid: randomString(50),
+                ticketId: ticket.id,
+                body: exitMessage,
+                fromMe: true,
+                read: true
+              };
+              await CreateMessageService({ messageData, companyId });
             } else if (whatsapp.channel === "whatsapp_oficial") {
+              // ✅ API Oficial: SendWhatsAppOficialMessage já salva a mensagem automaticamente
               await SendWhatsAppOficialMessage({
                 body: exitMessage,
                 ticket: ticketDetails,
@@ -1534,17 +1548,8 @@ export const ActionsWebhookService = async (
                 media: null,
                 vCard: null
               });
+              // ✅ NÃO chamar CreateMessageService - evita duplicação!
             }
-
-            const messageData: MessageData = {
-              wid: randomString(50),
-              ticketId: ticket.id,
-              body: exitMessage,
-              fromMe: true,
-              read: true
-            };
-
-            await CreateMessageService({ messageData, companyId });
 
             await ticketDetails.update({
               flowWebhook: false,
@@ -1569,6 +1574,12 @@ export const ActionsWebhookService = async (
           if (execFn === undefined) {
             console.log(`[MENU NODE] Opção inválida: "${pressKey}". Enviando mensagem de fallback.`);
 
+            // ✅ CORREÇÃO: Verificar se nodeSelected.data e arrayOption existem
+            if (!nodeSelected || !nodeSelected.data || !nodeSelected.data.arrayOption) {
+              logger.error(`[MENU NODE] Erro: nodeSelected.data.arrayOption não existe para ticket ${ticket?.id}`);
+              break;
+            }
+
             let optionsText = "";
             nodeSelected.data.arrayOption.forEach(item => {
               optionsText += `[${item.number}] ${item.value}\n`;
@@ -1584,7 +1595,18 @@ export const ActionsWebhookService = async (
                 ticket: ticketDetails,
                 quotedMsg: null
               });
+              
+              // ✅ Baileys: Salvar mensagem manualmente
+              const messageData: MessageData = {
+                wid: randomString(50),
+                ticketId: ticket.id,
+                body: fallbackMessage,
+                fromMe: true,
+                read: true
+              };
+              await CreateMessageService({ messageData, companyId });
             } else if (whatsapp.channel === "whatsapp_oficial") {
+              // ✅ API Oficial: SendWhatsAppOficialMessage já salva a mensagem automaticamente
               await SendWhatsAppOficialMessage({
                 body: fallbackMessage,
                 ticket: ticketDetails,
@@ -1593,17 +1615,8 @@ export const ActionsWebhookService = async (
                 media: null,
                 vCard: null
               });
+              // ✅ NÃO chamar CreateMessageService - evita duplicação!
             }
-
-            const messageData: MessageData = {
-              wid: randomString(50),
-              ticketId: ticket.id,
-              body: fallbackMessage,
-              fromMe: true,
-              read: true
-            };
-
-            await CreateMessageService({ messageData, companyId });
 
             // ✅ CORREÇÃO: Garantir que ticket permaneça aguardando resposta após fallback
             await ticketDetails.update({
@@ -1616,9 +1629,9 @@ export const ActionsWebhookService = async (
 
             logger.info(`[MENU NODE] Fallback enviado para ticket ${ticket.id}. Ticket configurado para aguardar nova resposta (flowWebhook=true, lastFlowId=${nodeSelected.id}).`);
             
-            // Não fazer return - deixar o loop continuar naturalmente
+            // ✅ CORREÇÃO: Retornar imediatamente para evitar duplicação
             // O ticket permanece em estado de aguardando resposta
-            break; // ✅ Sai do loop atual mas mantém o fluxo ativo
+            return "fallback_sent"; // ✅ Sai completamente para evitar reprocessamento
           }
 
           pressKey = "999";
@@ -1632,6 +1645,12 @@ export const ActionsWebhookService = async (
           }
         } else {
           // console.log(`[MENU NODE] Criando menu sem pressKey`);
+
+          // ✅ CORREÇÃO: Verificar se nodeSelected.data e arrayOption existem
+          if (!nodeSelected || !nodeSelected.data || !nodeSelected.data.arrayOption) {
+            logger.error(`[MENU NODE] Erro: nodeSelected.data.arrayOption não existe ao criar menu para ticket ${ticket?.id}`);
+            break;
+          }
 
           let optionsMenu = "";
           nodeSelected.data.arrayOption.map(item => {
