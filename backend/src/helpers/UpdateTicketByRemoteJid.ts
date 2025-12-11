@@ -68,10 +68,18 @@ export const updateTicketByRemoteJid = async (remoteJid: string, queue: number, 
 
     const io = getIO();
 
-    // io.to(oldStatus).emit(`company-${ticket.companyId}-ticket`, {
-    //   action: "delete",
-    //   ticketId: ticket.id
-    // });
+    // ✅ CORREÇÃO: Emitir DELETE quando status/usuário/fila mudam
+    if (
+      oldStatus !== statusText ||
+      oldUserId !== user ||
+      ticket.queueId !== queue
+    ) {
+      io.of(ticket.companyId.toString())
+        .emit(`company-${ticket.companyId}-ticket`, {
+          action: "delete",
+          ticketId: ticket.id
+        });
+    }
 
     io.of(ticket.companyId.toString())
       // .to(ticket.id.toString())

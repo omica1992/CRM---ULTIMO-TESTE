@@ -382,8 +382,8 @@ const TicketsListCustom = (props) => {
 
     useEffect(() => {
         if (typeof updateCount === "function") {
-            // ✅ CORREÇÃO: Usar count total da API em vez de ticketsList.length
-            updateCount(count || ticketsList.length);
+            // ✅ CORREÇÃO: Usar ticketsList.length em tempo real para refletir mudanças via socket
+            updateCount(ticketsList.length);
         }
         // Atualizar tickets disponíveis para seleção múltipla
         updateAvailableTickets(ticketsList);
