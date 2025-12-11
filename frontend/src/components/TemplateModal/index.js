@@ -34,7 +34,6 @@ import {
 } from "@material-ui/icons";
 import { makeStyles } from "@material-ui/core/styles";
 import { Formik, Form, Field, FieldArray } from "formik";
-import * as Yup from "yup";
 import { i18n } from "../../translate/i18n";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
@@ -99,19 +98,6 @@ const useStyles = makeStyles((theme) => ({
         }
     }
 }));
-
-const templateSchema = Yup.object().shape({
-    name: Yup.string()
-        .required("Nome é obrigatório")
-        .matches(
-            /^[a-z0-9_]+$/,
-            "Nome deve conter apenas letras minúsculas, números e underscore (_)"
-        )
-        .max(512, "Nome deve ter no máximo 512 caracteres"),
-    category: Yup.string().required("Categoria é obrigatória"),
-    language: Yup.string().required("Idioma é obrigatório"),
-    components: Yup.array().min(1, "Pelo menos um componente é necessário")
-});
 
 const componentTypes = [
     { value: 'HEADER', label: 'Cabeçalho' },
@@ -196,6 +182,63 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
 
     const handleSubmit = async (values) => {
         try {
+            // Validação do nome
+            if (!values.name || values.name.trim() === '') {
+                toast.error("Nome do template é obrigatório");
+                return;
+            }
+
+            if (!/^[a-z0-9_]+$/.test(values.name)) {
+                toast.error("Nome deve conter apenas letras minúsculas, números e underscore (_)");
+                return;
+            }
+
+            if (values.name.length > 512) {
+                toast.error("Nome deve ter no máximo 512 caracteres");
+                return;
+            }
+
+            // Validação da categoria
+            if (!values.category) {
+                toast.error("Categoria é obrigatória");
+                return;
+            }
+
+            // Validação do idioma
+            if (!values.language) {
+                toast.error("Idioma é obrigatório");
+                return;
+            }
+
+            // Validação manual dos componentes
+            if (!values.components || values.components.length === 0) {
+                toast.error("Adicione pelo menos um componente ao template");
+                return;
+            }
+
+            // Verificar se tem pelo menos um BODY
+            const hasBody = values.components.some(c => c.type === 'BODY');
+            if (!hasBody) {
+                toast.error("O template deve ter pelo menos um componente BODY");
+                return;
+            }
+
+            // Validar cada componente
+            for (let i = 0; i < values.components.length; i++) {
+                const component = values.components[i];
+                
+                // HEADER com mídia não precisa de texto
+                if (component.type === 'HEADER' && component.format) {
+                    continue;
+                }
+                
+                // Outros componentes precisam de texto
+                if (!component.text || component.text.trim() === '') {
+                    toast.error(`O componente ${componentTypes.find(t => t.value === component.type)?.label || component.type} precisa de texto`);
+                    return;
+                }
+            }
+
             setLoading(true);
             
             if (templateId) {
@@ -260,9 +303,17 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
             const formData = new FormData();
             formData.append('file', file);
 
+            console.log('[TEMPLATE MODAL] Enviando arquivo:', {
+                name: file.name,
+                type: file.type,
+                size: file.size
+            });
+
             const { data } = await api.post('/templates/upload-media', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
+
+            console.log('[TEMPLATE MODAL] Upload bem-sucedido:', data);
 
             // Determinar o formato baseado no tipo de arquivo
             let format = 'IMAGE';
@@ -277,6 +328,8 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
 
             toast.success('Mídia enviada com sucesso!');
         } catch (err) {
+            console.error('[TEMPLATE MODAL] Erro no upload:', err);
+            console.error('[TEMPLATE MODAL] Detalhes do erro:', err.response?.data);
             toastError(err);
         } finally {
             setUploadingMedia(false);
@@ -304,9 +357,9 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
 
             <Formik
                 initialValues={initialValues}
-                validationSchema={templateSchema}
                 onSubmit={handleSubmit}
                 enableReinitialize
+                validate={() => ({})}
             >
                 {({ values, errors, touched, setFieldValue }) => (
                     <Form>
@@ -434,6 +487,9 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                                                             <Typography variant="subtitle2" gutterBottom>
                                                                 Mídia do Cabeçalho (Opcional)
                                                             </Typography>
+                                                            <Typography variant="caption" color="textSecondary" display="block" gutterBottom>
+                                                                ℹ️ O cabeçalho pode ter OU texto OU mídia, nunca os dois. Ao adicionar mídia, o campo de texto será ocultado.
+                                                            </Typography>
                                                             <input
                                                                 accept="image/*,video/mp4,application/pdf"
                                                                 style={{ display: 'none' }}
@@ -463,9 +519,22 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                                                             {/* Preview da mídia */}
                                                             {component.example?.header_handle?.[0] && (
                                                                 <Box mt={2}>
-                                                                    <Typography variant="caption" color="textSecondary" gutterBottom>
-                                                                        Mídia carregada:
-                                                                    </Typography>
+                                                                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                                                                        <Typography variant="caption" color="textSecondary">
+                                                                            Mídia carregada:
+                                                                        </Typography>
+                                                                        <Button
+                                                                            size="small"
+                                                                            color="secondary"
+                                                                            startIcon={<DeleteIcon />}
+                                                                            onClick={() => {
+                                                                                setFieldValue(`components[${index}].format`, null);
+                                                                                setFieldValue(`components[${index}].example`, null);
+                                                                            }}
+                                                                        >
+                                                                            Remover Mídia
+                                                                        </Button>
+                                                                    </Box>
                                                                     {component.format === 'IMAGE' && (
                                                                         <img 
                                                                             src={component.example.header_handle[0]} 

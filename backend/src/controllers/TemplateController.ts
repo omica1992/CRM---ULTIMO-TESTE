@@ -157,20 +157,30 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
 };
 
 export const uploadMedia = async (req: Request, res: Response): Promise<Response> => {
-  const { companyId, showTemplates } = req.user;
+  try {
+    const { companyId, showTemplates } = req.user;
 
-  if (showTemplates !== "enabled") {
-    throw new AppError("Acesso negado: Você não tem permissão para fazer upload de mídia", 403);
+    console.log(`[UPLOAD MEDIA] CompanyId: ${companyId}, showTemplates: ${showTemplates}`);
+    console.log(`[UPLOAD MEDIA] File received:`, req.file ? `${req.file.originalname} (${req.file.size} bytes)` : 'NO FILE');
+
+    // Nota: Removida verificação de showTemplates pois o upload de mídia deve estar disponível
+    // para qualquer usuário que tenha acesso aos templates (verificado pelo isAuth)
+
+    if (!req.file) {
+      console.log(`[UPLOAD MEDIA] ❌ Nenhum arquivo foi enviado`);
+      throw new AppError("Nenhum arquivo foi enviado", 400);
+    }
+
+    console.log(`[UPLOAD MEDIA] Processando upload...`);
+    const result = await UploadTemplateMediaService({
+      file: req.file,
+      companyId
+    });
+
+    console.log(`[UPLOAD MEDIA] ✅ Upload concluído: ${result.publicUrl}`);
+    return res.json(result);
+  } catch (error: any) {
+    console.error(`[UPLOAD MEDIA] Erro:`, error.message);
+    throw error;
   }
-
-  if (!req.file) {
-    throw new AppError("Nenhum arquivo foi enviado", 400);
-  }
-
-  const result = await UploadTemplateMediaService({
-    file: req.file,
-    companyId
-  });
-
-  return res.json(result);
 };

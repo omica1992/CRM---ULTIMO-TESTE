@@ -19,6 +19,8 @@ const UploadTemplateMediaService = async ({
   companyId
 }: Request): Promise<Response> => {
   try {
+    console.log(`[UPLOAD SERVICE] Iniciando upload - File: ${file.originalname}, Type: ${file.mimetype}, Size: ${file.size}`);
+    
     // Validar tipo de arquivo
     const allowedMimeTypes = [
       'image/jpeg',
@@ -31,11 +33,15 @@ const UploadTemplateMediaService = async ({
     ];
 
     if (!allowedMimeTypes.includes(file.mimetype)) {
+      console.log(`[UPLOAD SERVICE] ❌ Tipo de arquivo não suportado: ${file.mimetype}`);
       throw new AppError(
         "Tipo de arquivo não suportado. Use: JPEG, PNG, GIF, WEBP, MP4 ou PDF",
         400
       );
     }
+    
+    console.log(`[UPLOAD SERVICE] ✅ Tipo de arquivo válido`);
+
 
     // Validar tamanho (max 5MB)
     const maxSize = 5 * 1024 * 1024; // 5MB

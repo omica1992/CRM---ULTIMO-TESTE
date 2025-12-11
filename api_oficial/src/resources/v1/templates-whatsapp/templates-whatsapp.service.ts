@@ -199,9 +199,24 @@ export class TemplatesWhatsappService {
         throw new Error(`Componente ${index} tem tipo inválido: ${comp.type}`);
       }
 
-      // HEADER precisa de format se existir
-      if (comp.type === 'HEADER' && !comp.format) {
-        throw new Error(`Componente HEADER precisa ter formato (TEXT, IMAGE, VIDEO, DOCUMENT)`);
+      // HEADER com formato de mídia precisa de example.header_handle
+      // HEADER com formato TEXT precisa de text
+      if (comp.type === 'HEADER') {
+        if (!comp.format) {
+          throw new Error(`Componente HEADER precisa ter formato (TEXT, IMAGE, VIDEO, DOCUMENT)`);
+        }
+        
+        // Se for mídia (IMAGE, VIDEO, DOCUMENT), precisa de example.header_handle
+        if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(comp.format)) {
+          if (!comp.example?.header_handle || !Array.isArray(comp.example.header_handle) || comp.example.header_handle.length === 0) {
+            throw new Error(`Componente HEADER com formato ${comp.format} precisa ter mídia (example.header_handle)`);
+          }
+        }
+        
+        // Se for TEXT, precisa de text
+        if (comp.format === 'TEXT' && !comp.text) {
+          throw new Error(`Componente HEADER com formato TEXT precisa ter texto`);
+        }
       }
 
       // BODY e FOOTER precisam de text
