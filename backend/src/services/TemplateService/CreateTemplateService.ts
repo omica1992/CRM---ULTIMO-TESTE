@@ -112,12 +112,17 @@ const CreateTemplateService = async (data: Request) => {
           cleanedComp.text = comp.text;
         }
         
-        // ✅ CORREÇÃO: Adicionar example se existir
+        // ✅ CORREÇÃO: Adicionar example se existir e não estiver vazio
         if (comp.example && Object.keys(comp.example).length > 0) {
-          // Para BODY: verificar se tem body_text
-          if (comp.type === 'BODY' && comp.example.body_text && comp.example.body_text.length > 0) {
-            cleanedComp.example = comp.example;
-            console.log(`[CREATE TEMPLATE] BODY com example.body_text`);
+          // Para BODY: verificar se tem body_text COM CONTEÚDO
+          if (comp.type === 'BODY' && comp.example.body_text) {
+            // ✅ Só adicionar se body_text for array com elementos
+            if (Array.isArray(comp.example.body_text) && comp.example.body_text.length > 0) {
+              cleanedComp.example = comp.example;
+              console.log(`[CREATE TEMPLATE] BODY com example.body_text:`, comp.example.body_text);
+            } else {
+              console.log(`[CREATE TEMPLATE] BODY sem variáveis - removendo example vazio`);
+            }
           }
           // Para HEADER: verificar se tem header_handle (mídia)
           else if (comp.type === 'HEADER' && comp.example.header_handle) {

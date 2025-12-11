@@ -136,8 +136,8 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
         components: [
             {
                 type: "BODY",
-                text: "",
-                example: { body_text: [] }
+                text: ""
+                // ✅ Não criar example vazio - será adicionado apenas se houver variáveis
             }
         ]
     });
@@ -154,8 +154,8 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                 components: [
                     {
                         type: "BODY",
-                        text: "",
-                        example: { body_text: [] }
+                        text: ""
+                        // ✅ Não criar example vazio
                     }
                 ]
             });
@@ -276,8 +276,8 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
     const addComponent = (push) => {
         push({
             type: "BODY",
-            text: "",
-            example: { body_text: [] }
+            text: ""
+            // ✅ Não criar example vazio - será adicionado apenas se houver variáveis
         });
     };
 
