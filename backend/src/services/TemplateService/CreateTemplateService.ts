@@ -65,7 +65,15 @@ const CreateTemplateService = async (data: Request) => {
       name: templateName,
       category: templateData.category,
       language: templateData.language,
-      components: templateData.components.map((comp: TemplateComponent) => {
+      components: templateData.components.map((comp: TemplateComponent, index: number) => {
+        console.log(`[CREATE TEMPLATE] Processando componente ${index}:`, {
+          type: comp.type,
+          format: comp.format,
+          hasText: !!comp.text,
+          hasExample: !!comp.example,
+          exampleKeys: comp.example ? Object.keys(comp.example) : []
+        });
+
         const cleanedComp: any = {
           type: comp.type
         };
@@ -73,6 +81,7 @@ const CreateTemplateService = async (data: Request) => {
         // Adicionar format apenas para HEADER se necessário
         if (comp.format && comp.type === 'HEADER') {
           cleanedComp.format = comp.format;
+          console.log(`[CREATE TEMPLATE] HEADER com formato: ${comp.format}`);
         }
         
         // Adicionar text apenas se existir
@@ -80,9 +89,18 @@ const CreateTemplateService = async (data: Request) => {
           cleanedComp.text = comp.text;
         }
         
-        // Adicionar example apenas se existir e não estiver vazio
-        if (comp.example && comp.example.body_text && comp.example.body_text.length > 0) {
-          cleanedComp.example = comp.example;
+        // Adicionar example se existir (body_text para BODY, header_handle para HEADER com mídia)
+        if (comp.example) {
+          // Para BODY: verificar se tem body_text
+          if (comp.type === 'BODY' && comp.example.body_text && comp.example.body_text.length > 0) {
+            cleanedComp.example = comp.example;
+            console.log(`[CREATE TEMPLATE] BODY com example.body_text`);
+          }
+          // Para HEADER: verificar se tem header_handle (mídia)
+          else if (comp.type === 'HEADER' && comp.example.header_handle && comp.example.header_handle.length > 0) {
+            cleanedComp.example = comp.example;
+            console.log(`[CREATE TEMPLATE] ✅ HEADER com example.header_handle:`, comp.example.header_handle);
+          }
         }
         
         // Adicionar buttons apenas se existir
@@ -90,6 +108,7 @@ const CreateTemplateService = async (data: Request) => {
           cleanedComp.buttons = comp.buttons;
         }
         
+        console.log(`[CREATE TEMPLATE] Componente ${index} limpo:`, cleanedComp);
         return cleanedComp;
       })
     };
