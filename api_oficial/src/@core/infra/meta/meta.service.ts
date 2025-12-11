@@ -206,6 +206,43 @@ export class MetaService {
     }
   }
 
+  async uploadMedia(phoneNumberId: string, token: string, fileUrl: string, mimeType: string) {
+    try {
+      this.logger.log(`[META] Fazendo upload de mídia: ${fileUrl}`);
+      
+      // Baixar o arquivo da URL
+      const fileResponse = await axios.get(fileUrl, { responseType: 'arraybuffer' });
+      const fileBuffer = Buffer.from(fileResponse.data);
+      
+      // Criar FormData
+      const FormData = require('form-data');
+      const formData = new FormData();
+      formData.append('file', fileBuffer, {
+        filename: fileUrl.split('/').pop(),
+        contentType: mimeType
+      });
+      formData.append('messaging_product', 'whatsapp');
+      
+      // Upload para a Meta
+      const response = await axios.post(
+        `${this.urlMeta}/${phoneNumberId}/media`,
+        formData,
+        {
+          headers: {
+            ...formData.getHeaders(),
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      
+      this.logger.log(`[META] ✅ Mídia enviada com sucesso. ID: ${response.data.id}`);
+      return response.data.id;
+    } catch (error: any) {
+      this.logger.error(`[META] Erro ao fazer upload de mídia: ${error.message}`);
+      throw error;
+    }
+  }
+
   async createTemplate(wabaId: string, token: string, templateData: ICreateTemplateData) {
     try {
       const headers = {

@@ -55,6 +55,42 @@ export class TemplatesWhatsappService {
       // Validar dados do template
       this.validateTemplateData(templateData);
 
+      // ✅ CORREÇÃO: Para templates, a Meta API exige URL pública acessível
+      // O upload de mídia retorna ID que só funciona para mensagens diretas
+      // Para templates, devemos manter a URL pública no header_handle
+      for (let i = 0; i < templateData.components.length; i++) {
+        const comp = templateData.components[i];
+        
+        if (comp.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(comp.format) && comp.example?.header_handle) {
+          const mediaUrl = comp.example.header_handle[0];
+          
+          this.logger.log(`[CREATE TEMPLATE] Validando mídia: ${mediaUrl}`);
+          
+          // ✅ Meta API exige HTTPS para templates
+          if (!mediaUrl.startsWith('https://')) {
+            throw new Error('URL da mídia deve usar HTTPS (não HTTP). A Meta API não aceita URLs HTTP em templates.');
+          }
+          
+          // Verificar se URL é acessível
+          try {
+            const axios = require('axios');
+            const response = await axios.head(mediaUrl, { timeout: 5000 });
+            
+            if (response.status !== 200) {
+              throw new Error(`URL da mídia retornou status ${response.status}`);
+            }
+            
+            this.logger.log(`[CREATE TEMPLATE] ✅ Mídia validada e acessível: ${mediaUrl}`);
+          } catch (error: any) {
+            this.logger.error(`[CREATE TEMPLATE] Erro ao validar mídia: ${error.message}`);
+            throw new Error(`URL da mídia não está acessível: ${error.message}`);
+          }
+          
+          // ✅ Manter URL pública (não fazer upload)
+          // A Meta API valida e baixa a mídia diretamente da URL fornecida
+        }
+      }
+
       const result = await this.metaService.createTemplate(
         conexao.waba_id,
         conexao.send_token,

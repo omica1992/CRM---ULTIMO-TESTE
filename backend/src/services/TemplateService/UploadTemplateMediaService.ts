@@ -74,8 +74,21 @@ const UploadTemplateMediaService = async ({
     // Salvar arquivo
     await fs.writeFile(filePath, file.buffer as any);
 
-    // Gerar URL pública
-    const baseUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
+    // ✅ CORREÇÃO: Gerar URL pública com HTTPS (Meta API exige)
+    let baseUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
+    
+    // Se for localhost, alertar que precisa usar HTTPS em produção
+    if (baseUrl.startsWith('http://localhost') || baseUrl.startsWith('http://127.0.0.1')) {
+      console.warn(`[UPLOAD TEMPLATE MEDIA] ⚠️ ATENÇÃO: URL localhost detectada. Templates com mídia NÃO funcionarão!`);
+      console.warn(`[UPLOAD TEMPLATE MEDIA] ⚠️ Configure BACKEND_URL com domínio HTTPS no .env`);
+      console.warn(`[UPLOAD TEMPLATE MEDIA] ⚠️ Exemplo: BACKEND_URL=https://seu-dominio.com`);
+    }
+    
+    // Garantir que URL usa HTTPS (exceto localhost para desenvolvimento)
+    if (!baseUrl.startsWith('http://localhost') && !baseUrl.startsWith('http://127.0.0.1')) {
+      baseUrl = baseUrl.replace('http://', 'https://');
+    }
+    
     const publicUrl = `${baseUrl}/public/template-media/${companyId}/${filename}`;
 
     console.log(`[UPLOAD TEMPLATE MEDIA] Arquivo salvo: ${filename}`);

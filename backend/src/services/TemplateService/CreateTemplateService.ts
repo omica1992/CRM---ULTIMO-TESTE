@@ -112,17 +112,33 @@ const CreateTemplateService = async (data: Request) => {
           cleanedComp.text = comp.text;
         }
         
-        // Adicionar example se existir (body_text para BODY, header_handle para HEADER com mídia)
-        if (comp.example) {
+        // ✅ CORREÇÃO: Adicionar example se existir
+        if (comp.example && Object.keys(comp.example).length > 0) {
           // Para BODY: verificar se tem body_text
           if (comp.type === 'BODY' && comp.example.body_text && comp.example.body_text.length > 0) {
             cleanedComp.example = comp.example;
             console.log(`[CREATE TEMPLATE] BODY com example.body_text`);
           }
           // Para HEADER: verificar se tem header_handle (mídia)
-          else if (comp.type === 'HEADER' && comp.example.header_handle && comp.example.header_handle.length > 0) {
+          else if (comp.type === 'HEADER' && comp.example.header_handle) {
+            // ✅ Garantir que header_handle é array
+            if (Array.isArray(comp.example.header_handle) && comp.example.header_handle.length > 0) {
+              cleanedComp.example = comp.example;
+              console.log(`[CREATE TEMPLATE] ✅ HEADER com example.header_handle:`, comp.example.header_handle);
+            } else if (typeof comp.example.header_handle === 'string') {
+              // ✅ Se vier como string, converter para array
+              cleanedComp.example = {
+                header_handle: [comp.example.header_handle]
+              };
+              console.log(`[CREATE TEMPLATE] ✅ HEADER com example.header_handle (convertido para array):`, cleanedComp.example.header_handle);
+            } else {
+              console.warn(`[CREATE TEMPLATE] ⚠️ HEADER com header_handle inválido:`, comp.example.header_handle);
+            }
+          }
+          // ✅ Para outros casos, preservar example
+          else if (!cleanedComp.example) {
             cleanedComp.example = comp.example;
-            console.log(`[CREATE TEMPLATE] ✅ HEADER com example.header_handle:`, comp.example.header_handle);
+            console.log(`[CREATE TEMPLATE] Example preservado para ${comp.type}:`, comp.example);
           }
         }
         
