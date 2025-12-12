@@ -7,9 +7,8 @@ import UploadToMetaService from "./UploadToMetaService";
 interface Request {
   file: Express.Multer.File;
   companyId: number;
-  uploadToMeta?: boolean; // Se true, faz upload para Meta API
-  accessToken?: string; // Token de acesso da Meta
-  whatsappBusinessAccountId?: string; // ID da conta WhatsApp Business
+  uploadToMeta?: boolean; // Se true, faz upload para Meta API via api_oficial
+  whatsappToken?: string; // Token do whatsapp para identificar conexão no api_oficial
 }
 
 interface Response {
@@ -23,8 +22,7 @@ const UploadTemplateMediaService = async ({
   file,
   companyId,
   uploadToMeta = false,
-  accessToken,
-  whatsappBusinessAccountId
+  whatsappToken
 }: Request): Promise<Response> => {
   try {
     console.log(`[UPLOAD SERVICE] Iniciando upload - File: ${file.originalname}, Type: ${file.mimetype}, Size: ${file.size}`);
@@ -104,17 +102,16 @@ const UploadTemplateMediaService = async ({
 
     let metaHandle: string | undefined;
 
-    // Se solicitado, fazer upload para Meta API
-    if (uploadToMeta && accessToken && whatsappBusinessAccountId) {
-      console.log(`[UPLOAD TEMPLATE MEDIA] 🚀 Fazendo upload para Meta API...`);
+    // Se solicitado, fazer upload para Meta API via api_oficial
+    if (uploadToMeta && whatsappToken) {
+      console.log(`[UPLOAD TEMPLATE MEDIA] 🚀 Fazendo upload para Meta API via api_oficial...`);
       
       try {
         const metaUploadResult = await UploadToMetaService({
           fileBuffer: file.buffer,
           fileName: file.originalname,
           mimeType: file.mimetype,
-          accessToken,
-          whatsappBusinessAccountId
+          whatsappToken
         });
         
         metaHandle = metaUploadResult.handle;
@@ -123,16 +120,15 @@ const UploadTemplateMediaService = async ({
         console.error(`[UPLOAD TEMPLATE MEDIA] ❌ Erro ao fazer upload para Meta:`, error.message);
         console.error(`[UPLOAD TEMPLATE MEDIA] Stack trace:`, error.stack);
         if (error.response) {
-          console.error(`[UPLOAD TEMPLATE MEDIA] Resposta da Meta:`, JSON.stringify(error.response.data, null, 2));
+          console.error(`[UPLOAD TEMPLATE MEDIA] Resposta:`, JSON.stringify(error.response.data, null, 2));
         }
         // Não falhar se upload para Meta falhar - ainda temos a URL local
         console.warn(`[UPLOAD TEMPLATE MEDIA] ⚠️ Continuando com URL local apenas`);
       }
     } else {
-      console.log(`[UPLOAD TEMPLATE MEDIA] ℹ️ Upload para Meta não solicitado ou credenciais faltando:`, {
+      console.log(`[UPLOAD TEMPLATE MEDIA] ℹ️ Upload para Meta não solicitado ou token faltando:`, {
         uploadToMeta,
-        hasAccessToken: !!accessToken,
-        hasWabaId: !!whatsappBusinessAccountId
+        hasWhatsappToken: !!whatsappToken
       });
     }
 

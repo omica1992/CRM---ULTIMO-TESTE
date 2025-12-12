@@ -1,12 +1,12 @@
 import axios from "axios";
+import FormData from "form-data";
 import AppError from "../../errors/AppError";
 
 interface Request {
   fileBuffer: Buffer;
   fileName: string;
   mimeType: string;
-  accessToken: string;
-  whatsappBusinessAccountId: string;
+  whatsappToken: string; // Token do whatsapp (usado para identificar a conexão no api_oficial)
 }
 
 interface Response {
@@ -15,9 +15,8 @@ interface Response {
 }
 
 /**
- * Faz upload de mídia usando a Resumable Upload API da Meta
- * Documentação: https://developers.facebook.com/docs/graph-api/guides/upload
- * API Version: v24.0 (2025)
+ * Faz upload de mídia usando o api_oficial que gerencia as credenciais corretas
+ * O api_oficial usa o waba_id e send_token corretos do próprio banco de dados
  * 
  * Este é o método CORRETO para obter um handle de mídia para templates
  */
@@ -25,79 +24,49 @@ const UploadToMetaService = async ({
   fileBuffer,
   fileName,
   mimeType,
-  accessToken,
-  whatsappBusinessAccountId
+  whatsappToken
 }: Request): Promise<Response> => {
   try {
-    console.log(`[UPLOAD TO META] 📤 Iniciando upload para Meta API`);
+    console.log(`[UPLOAD TO META] 📤 Iniciando upload via API Oficial`);
     console.log(`[UPLOAD TO META] Arquivo: ${fileName}`);
     console.log(`[UPLOAD TO META] Tipo: ${mimeType}`);
     console.log(`[UPLOAD TO META] Tamanho: ${fileBuffer.length} bytes`);
-    console.log(`[UPLOAD TO META] WABA ID: ${whatsappBusinessAccountId}`);
+    console.log(`[UPLOAD TO META] Token: ${whatsappToken}`);
 
-    // Passo 1: Criar sessão de upload
-    console.log(`[UPLOAD TO META] 🔄 Passo 1: Criando sessão de upload...`);
-    
-    const sessionPayload = {
-      file_length: fileBuffer.length,
-      file_type: mimeType,
-      access_token: accessToken
-    };
-    
-    console.log(`[UPLOAD TO META] 📋 Payload da sessão:`, JSON.stringify(sessionPayload, null, 2));
-    
-    const sessionResponse = await axios.post(
-      `https://graph.facebook.com/v24.0/${whatsappBusinessAccountId}/uploads`,
-      sessionPayload,
-      {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      }
-    );
+    // Criar FormData para enviar o arquivo
+    const formData = new FormData();
+    formData.append('file', fileBuffer, {
+      filename: fileName,
+      contentType: mimeType
+    });
 
-    console.log(`[UPLOAD TO META] ✅ Sessão criada com sucesso`);
-    console.log(`[UPLOAD TO META] 📋 Resposta da sessão:`, JSON.stringify(sessionResponse.data, null, 2));
+    const apiOficialUrl = process.env.URL_API_OFICIAL || 'http://localhost:3005';
+    const uploadUrl = `${apiOficialUrl}/v1/templates-whatsapp/upload-media/${whatsappToken}`;
 
-    const uploadSessionId = sessionResponse.data.id;
-    const handle = sessionResponse.data.h;
+    console.log(`[UPLOAD TO META] 🔄 Enviando para: ${uploadUrl}`);
 
-    if (!uploadSessionId) {
-      throw new AppError("Meta API não retornou ID da sessão de upload", 500);
-    }
-
-    // Passo 2: Fazer upload do arquivo
-    console.log(`[UPLOAD TO META] 🔄 Passo 2: Fazendo upload do arquivo...`);
-    console.log(`[UPLOAD TO META] Upload Session ID: ${uploadSessionId}`);
-    
-    const uploadResponse = await axios.post(
-      `https://graph.facebook.com/v24.0/${uploadSessionId}`,
-      fileBuffer,
-      {
-        headers: {
-          'Authorization': `OAuth ${accessToken}`,
-          'file_offset': '0',
-          'Content-Type': 'application/octet-stream'
-        },
-        maxBodyLength: Infinity,
-        maxContentLength: Infinity
-      }
-    );
+    const response = await axios.post(uploadUrl, formData, {
+      headers: {
+        ...formData.getHeaders(),
+        'Authorization': `Bearer ${process.env.TOKEN_API_OFICIAL}`
+      },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity
+    });
 
     console.log(`[UPLOAD TO META] ✅ Upload concluído com sucesso`);
-    console.log(`[UPLOAD TO META] 📋 Resposta do upload:`, JSON.stringify(uploadResponse.data, null, 2));
+    console.log(`[UPLOAD TO META] 📋 Resposta:`, JSON.stringify(response.data, null, 2));
 
-    // O handle pode vir na resposta da sessão ou do upload
-    const finalHandle = handle || uploadResponse.data.h;
+    const { handle, uploadSessionId } = response.data;
 
-    if (!finalHandle) {
-      throw new AppError("Meta API não retornou handle da mídia", 500);
+    if (!handle) {
+      throw new AppError("API Oficial não retornou handle da mídia", 500);
     }
 
-    console.log(`[UPLOAD TO META] 🎉 Handle gerado: ${finalHandle}`);
+    console.log(`[UPLOAD TO META] 🎉 Handle gerado: ${handle}`);
 
     return {
-      handle: finalHandle,
+      handle,
       uploadSessionId
     };
   } catch (error: any) {
@@ -106,11 +75,10 @@ const UploadToMetaService = async ({
     if (error.response) {
       console.error(`[UPLOAD TO META] Status: ${error.response.status}`);
       console.error(`[UPLOAD TO META] Resposta:`, JSON.stringify(error.response.data, null, 2));
-      console.error(`[UPLOAD TO META] Headers:`, JSON.stringify(error.response.headers, null, 2));
     }
 
     throw new AppError(
-      `Erro ao fazer upload para Meta: ${error.response?.data?.error?.message || error.message}`,
+      `Erro ao fazer upload via API Oficial: ${error.response?.data?.message || error.message}`,
       error.response?.status || 500
     );
   }

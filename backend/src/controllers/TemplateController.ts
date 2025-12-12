@@ -160,13 +160,12 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
 export const uploadMedia = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { companyId, showTemplates } = req.user;
-    const { uploadToMeta, accessToken, whatsappBusinessAccountId } = req.body;
+    const { uploadToMeta, whatsappToken } = req.body;
 
     console.log(`[UPLOAD MEDIA] CompanyId: ${companyId}, showTemplates: ${showTemplates}`);
     console.log(`[UPLOAD MEDIA] File received:`, req.file ? `${req.file.originalname} (${req.file.size} bytes)` : 'NO FILE');
     console.log(`[UPLOAD MEDIA] Upload to Meta:`, uploadToMeta === 'true' ? 'SIM' : 'NÃO');
-    console.log(`[UPLOAD MEDIA] Access Token:`, accessToken ? `${accessToken.substring(0, 20)}...` : 'NÃO FORNECIDO');
-    console.log(`[UPLOAD MEDIA] WABA ID:`, whatsappBusinessAccountId || 'NÃO FORNECIDO');
+    console.log(`[UPLOAD MEDIA] Whatsapp Token:`, whatsappToken || 'NÃO FORNECIDO');
 
     // Nota: Removida verificação de showTemplates pois o upload de mídia deve estar disponível
     // para qualquer usuário que tenha acesso aos templates (verificado pelo isAuth)
@@ -181,8 +180,7 @@ export const uploadMedia = async (req: Request, res: Response): Promise<Response
       file: req.file,
       companyId,
       uploadToMeta: uploadToMeta === 'true',
-      accessToken: accessToken || undefined,
-      whatsappBusinessAccountId: whatsappBusinessAccountId || undefined
+      whatsappToken: whatsappToken || undefined
     });
 
     console.log(`[UPLOAD MEDIA] ✅ Upload concluído: ${result.publicUrl}`);

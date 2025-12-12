@@ -326,44 +326,29 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
             
             console.log('[TEMPLATE MODAL] 📋 Resposta completa da API /whatsapp:', whatsappData);
             
-            // ✅ CORREÇÃO: Usar send_token como fallback se tokenMeta estiver vazio
-            const accessToken = whatsappData.tokenMeta || whatsappData.send_token;
-            
-            // ✅ Usar phone_number_id como fallback se waba_id não funcionar
-            const businessAccountId = whatsappData.waba_id || whatsappData.phone_number_id;
+            // ✅ Usar o token da conexão (api_oficial vai buscar credenciais corretas do próprio banco)
+            const whatsappToken = whatsappData.token;
             
             console.log('[TEMPLATE MODAL] 📋 Dados da conexão:', {
-                hasTokenMeta: !!whatsappData.tokenMeta,
-                hasSendToken: !!whatsappData.send_token,
-                hasWabaId: !!whatsappData.waba_id,
-                hasPhoneNumberId: !!whatsappData.phone_number_id,
-                accessToken: accessToken ? `${accessToken.substring(0, 20)}...` : 'VAZIO',
-                waba_id: whatsappData.waba_id || 'VAZIO',
-                phone_number_id: whatsappData.phone_number_id || 'VAZIO',
-                businessAccountId: businessAccountId || 'VAZIO',
+                hasToken: !!whatsappToken,
+                token: whatsappToken || 'VAZIO',
                 provider: whatsappData.provider,
                 channel: whatsappData.channel
             });
             
-            if (accessToken && businessAccountId) {
-                formData.append('accessToken', accessToken);
-                formData.append('whatsappBusinessAccountId', businessAccountId);
-                console.log('[TEMPLATE MODAL] 🚀 Upload para Meta API habilitado');
-                console.log('[TEMPLATE MODAL] 🔑 Usando token:', whatsappData.tokenMeta ? 'tokenMeta' : 'send_token (fallback)');
-                console.log('[TEMPLATE MODAL] 🆔 Usando ID:', whatsappData.waba_id ? 'waba_id' : 'phone_number_id (fallback)');
+            if (whatsappToken) {
+                formData.append('whatsappToken', whatsappToken);
+                console.log('[TEMPLATE MODAL] 🚀 Upload para Meta API habilitado via api_oficial');
+                console.log('[TEMPLATE MODAL] 🔑 Token da conexão:', whatsappToken);
             } else {
-                console.warn('[TEMPLATE MODAL] ⚠️ Dados da Meta não encontrados, usando apenas upload local');
-                console.warn('[TEMPLATE MODAL] ⚠️ Faltando:', {
-                    accessToken: !accessToken ? 'SIM' : 'OK',
-                    businessAccountId: !businessAccountId ? 'SIM' : 'OK'
-                });
+                console.warn('[TEMPLATE MODAL] ⚠️ Token da conexão não encontrado, usando apenas upload local');
             }
 
             console.log('[TEMPLATE MODAL] Enviando arquivo:', {
                 name: file.name,
                 type: file.type,
                 size: file.size,
-                uploadToMeta: !!(accessToken && whatsappData.waba_id)
+                uploadToMeta: !!whatsappToken
             });
 
             const { data } = await api.post('/templates/upload-media', formData, {

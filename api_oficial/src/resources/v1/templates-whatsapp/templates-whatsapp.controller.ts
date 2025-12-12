@@ -6,7 +6,10 @@ import {
   Patch,
   Param,
   Delete,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { TemplatesWhatsappService } from './templates-whatsapp.service';
 import {
   ApiBearerAuth,
@@ -93,5 +96,23 @@ export class TemplatesWhatsappController {
   })
   delete(@Param('token') token: string, @Param('templateName') templateName: string) {
     return this.service.delete(token, templateName);
+  }
+
+  @Post('upload-media/:token')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Faz upload de mídia para Meta API e retorna o handle' })
+  @ApiResponse({
+    status: 200,
+    description: 'Upload realizado com sucesso, retorna handle da Meta',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Erro ao fazer upload',
+  })
+  uploadMedia(
+    @Param('token') token: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.service.uploadMedia(token, file);
   }
 }

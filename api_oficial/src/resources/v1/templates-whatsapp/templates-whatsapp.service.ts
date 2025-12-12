@@ -299,4 +299,121 @@ export class TemplatesWhatsappService {
     this.logger.log(`[VALIDATE] ✅ Template validado com sucesso`);
   }
 
+  async uploadMedia(token: string, file: Express.Multer.File) {
+    try {
+      this.logger.log(`[UPLOAD MEDIA] 📤 Iniciando upload para Meta API`);
+      this.logger.log(`[UPLOAD MEDIA] Arquivo: ${file.originalname}`);
+      this.logger.log(`[UPLOAD MEDIA] Tipo: ${file.mimetype}`);
+      this.logger.log(`[UPLOAD MEDIA] Tamanho: ${file.size} bytes`);
+
+      const conexao =
+        await this.whatsappOficial.prisma.whatsappOficial.findUnique({
+          where: {
+            token_mult100: token,
+            deleted_at: null,
+          },
+        });
+
+      if (!conexao) {
+        this.logger.error(`Nenhuma conexão existente com este token ${token}`);
+        throw new Error(`Nenhuma conexão existente com este token ${token}`);
+      }
+
+      this.logger.log(`[UPLOAD MEDIA] WABA ID: ${conexao.waba_id}`);
+      this.logger.log(`[UPLOAD MEDIA] Phone Number ID: ${conexao.phone_number_id}`);
+
+      // Usar phone_number_id para upload (funciona melhor que waba_id)
+      const uploadId = conexao.phone_number_id || conexao.waba_id;
+
+      if (!uploadId) {
+        throw new Error('Nenhum ID de upload disponível (phone_number_id ou waba_id)');
+      }
+
+      this.logger.log(`[UPLOAD MEDIA] Usando ID para upload: ${uploadId}`);
+
+      // Passo 1: Criar sessão de upload
+      this.logger.log(`[UPLOAD MEDIA] 🔄 Passo 1: Criando sessão de upload...`);
+
+      const axios = require('axios');
+      
+      const sessionPayload = {
+        file_length: file.size,
+        file_type: file.mimetype,
+        access_token: conexao.send_token,
+      };
+
+      this.logger.log(`[UPLOAD MEDIA] 📋 Payload da sessão:`, JSON.stringify(sessionPayload, null, 2));
+
+      const sessionResponse = await axios.post(
+        `https://graph.facebook.com/v24.0/${uploadId}/uploads`,
+        sessionPayload,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      this.logger.log(`[UPLOAD MEDIA] ✅ Sessão criada com sucesso`);
+      this.logger.log(`[UPLOAD MEDIA] 📋 Resposta da sessão:`, JSON.stringify(sessionResponse.data, null, 2));
+
+      const uploadSessionId = sessionResponse.data.id;
+      const handle = sessionResponse.data.h;
+
+      if (!uploadSessionId) {
+        throw new Error('Meta API não retornou ID da sessão de upload');
+      }
+
+      // Passo 2: Fazer upload do arquivo
+      this.logger.log(`[UPLOAD MEDIA] 🔄 Passo 2: Fazendo upload do arquivo...`);
+      this.logger.log(`[UPLOAD MEDIA] Upload Session ID: ${uploadSessionId}`);
+
+      const uploadResponse = await axios.post(
+        `https://graph.facebook.com/v24.0/${uploadSessionId}`,
+        file.buffer,
+        {
+          headers: {
+            'Authorization': `OAuth ${conexao.send_token}`,
+            'file_offset': '0',
+            'Content-Type': 'application/octet-stream',
+          },
+          maxBodyLength: Infinity,
+          maxContentLength: Infinity,
+        },
+      );
+
+      this.logger.log(`[UPLOAD MEDIA] ✅ Upload concluído com sucesso`);
+      this.logger.log(`[UPLOAD MEDIA] 📋 Resposta do upload:`, JSON.stringify(uploadResponse.data, null, 2));
+
+      // O handle pode vir na resposta da sessão ou do upload
+      const finalHandle = handle || uploadResponse.data.h;
+
+      if (!finalHandle) {
+        throw new Error('Meta API não retornou handle da mídia');
+      }
+
+      this.logger.log(`[UPLOAD MEDIA] 🎉 Handle gerado: ${finalHandle}`);
+
+      return {
+        handle: finalHandle,
+        uploadSessionId,
+        fileName: file.originalname,
+        mimeType: file.mimetype,
+        size: file.size,
+      };
+    } catch (error: any) {
+      this.logger.error(`[UPLOAD MEDIA] ❌ Erro no upload:`, error.message);
+
+      if (error.response) {
+        this.logger.error(`[UPLOAD MEDIA] Status: ${error.response.status}`);
+        this.logger.error(`[UPLOAD MEDIA] Resposta:`, JSON.stringify(error.response.data, null, 2));
+        this.logger.error(`[UPLOAD MEDIA] Headers:`, JSON.stringify(error.response.headers, null, 2));
+      }
+
+      throw new AppError(
+        `Erro ao fazer upload para Meta: ${error.response?.data?.error?.message || error.message}`,
+      );
+    }
+  }
+
 }
