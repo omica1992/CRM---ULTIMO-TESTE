@@ -317,11 +317,53 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
             setUploadingMedia(true);
             const formData = new FormData();
             formData.append('file', file);
+            
+            // ✅ CORREÇÃO: Adicionar parâmetros para upload na Meta API
+            formData.append('uploadToMeta', 'true');
+            
+            // Buscar dados da conexão WhatsApp
+            const { data: whatsappData } = await api.get(`/whatsapp/${whatsappId}`);
+            
+            console.log('[TEMPLATE MODAL] 📋 Resposta completa da API /whatsapp:', whatsappData);
+            
+            // ✅ CORREÇÃO: Usar send_token como fallback se tokenMeta estiver vazio
+            const accessToken = whatsappData.tokenMeta || whatsappData.send_token;
+            
+            // ✅ Usar phone_number_id como fallback se waba_id não funcionar
+            const businessAccountId = whatsappData.waba_id || whatsappData.phone_number_id;
+            
+            console.log('[TEMPLATE MODAL] 📋 Dados da conexão:', {
+                hasTokenMeta: !!whatsappData.tokenMeta,
+                hasSendToken: !!whatsappData.send_token,
+                hasWabaId: !!whatsappData.waba_id,
+                hasPhoneNumberId: !!whatsappData.phone_number_id,
+                accessToken: accessToken ? `${accessToken.substring(0, 20)}...` : 'VAZIO',
+                waba_id: whatsappData.waba_id || 'VAZIO',
+                phone_number_id: whatsappData.phone_number_id || 'VAZIO',
+                businessAccountId: businessAccountId || 'VAZIO',
+                provider: whatsappData.provider,
+                channel: whatsappData.channel
+            });
+            
+            if (accessToken && businessAccountId) {
+                formData.append('accessToken', accessToken);
+                formData.append('whatsappBusinessAccountId', businessAccountId);
+                console.log('[TEMPLATE MODAL] 🚀 Upload para Meta API habilitado');
+                console.log('[TEMPLATE MODAL] 🔑 Usando token:', whatsappData.tokenMeta ? 'tokenMeta' : 'send_token (fallback)');
+                console.log('[TEMPLATE MODAL] 🆔 Usando ID:', whatsappData.waba_id ? 'waba_id' : 'phone_number_id (fallback)');
+            } else {
+                console.warn('[TEMPLATE MODAL] ⚠️ Dados da Meta não encontrados, usando apenas upload local');
+                console.warn('[TEMPLATE MODAL] ⚠️ Faltando:', {
+                    accessToken: !accessToken ? 'SIM' : 'OK',
+                    businessAccountId: !businessAccountId ? 'SIM' : 'OK'
+                });
+            }
 
             console.log('[TEMPLATE MODAL] Enviando arquivo:', {
                 name: file.name,
                 type: file.type,
-                size: file.size
+                size: file.size,
+                uploadToMeta: !!(accessToken && whatsappData.waba_id)
             });
 
             const { data } = await api.post('/templates/upload-media', formData, {
@@ -335,18 +377,29 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
             if (file.type.startsWith('video/')) format = 'VIDEO';
             if (file.type === 'application/pdf') format = 'DOCUMENT';
 
-            // Atualizar o componente com a URL da mídia
+            // ✅ CORREÇÃO: Usar metaHandle se disponível, senão usar publicUrl
+            const handleValue = data.metaHandle || data.publicUrl;
+            
+            if (data.metaHandle) {
+                console.log('[TEMPLATE MODAL] ✅ Usando Meta Handle (CORRETO):', data.metaHandle);
+                toast.success('Mídia enviada com sucesso! Handle da Meta gerado.');
+            } else {
+                console.warn('[TEMPLATE MODAL] ⚠️ Usando URL local (pode não funcionar):', data.publicUrl);
+                toast.warning('Mídia salva localmente. Recomenda-se configurar tokenAPI e wabaId para garantir aprovação.');
+            }
+
+            // Atualizar o componente com o handle ou URL
             setFieldValue(`components[${index}].format`, format);
             setFieldValue(`components[${index}].example`, {
-                header_handle: [data.publicUrl]
+                header_handle: [handleValue]
             });
 
             console.log('[TEMPLATE MODAL] Componente atualizado:', {
                 format,
-                example: { header_handle: [data.publicUrl] }
+                example: { header_handle: [handleValue] },
+                isMetaHandle: !!data.metaHandle
             });
 
-            toast.success('Mídia enviada com sucesso!');
         } catch (err) {
             console.error('[TEMPLATE MODAL] Erro no upload:', err);
             console.error('[TEMPLATE MODAL] Detalhes do erro:', err.response?.data);

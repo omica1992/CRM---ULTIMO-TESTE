@@ -59,6 +59,9 @@ const CreateTemplateService = async (data: Request) => {
       .replace(/^_|_$/g, '');           // Remover underscores do início/fim
 
     console.log(`[CREATE TEMPLATE] Nome original: "${templateData.name}" → Nome convertido: "${templateName}"`);
+    console.log(`[CREATE TEMPLATE] Categoria: ${templateData.category}`);
+    console.log(`[CREATE TEMPLATE] Idioma: ${templateData.language}`);
+    console.log(`[CREATE TEMPLATE] Total de componentes: ${templateData.components.length}`);
 
     // Validar URLs de mídia antes de processar
     for (let i = 0; i < templateData.components.length; i++) {
@@ -128,14 +131,33 @@ const CreateTemplateService = async (data: Request) => {
           else if (comp.type === 'HEADER' && comp.example.header_handle) {
             // ✅ Garantir que header_handle é array
             if (Array.isArray(comp.example.header_handle) && comp.example.header_handle.length > 0) {
+              const handleValue = comp.example.header_handle[0];
+              
+              // Verificar se é handle da Meta (formato: "4:xxxxx") ou URL
+              const isMetaHandle = /^\d+:[a-zA-Z0-9+/=]+$/.test(handleValue);
+              
+              if (isMetaHandle) {
+                console.log(`[CREATE TEMPLATE] ✅ HEADER com Meta Handle (CORRETO):`, handleValue);
+              } else {
+                console.log(`[CREATE TEMPLATE] ⚠️ HEADER com URL (pode não funcionar):`, handleValue);
+                console.log(`[CREATE TEMPLATE] ⚠️ Recomendação: Use upload para Meta API para obter handle correto`);
+              }
+              
               cleanedComp.example = comp.example;
-              console.log(`[CREATE TEMPLATE] ✅ HEADER com example.header_handle:`, comp.example.header_handle);
             } else if (typeof comp.example.header_handle === 'string') {
               // ✅ Se vier como string, converter para array
+              const handleValue = comp.example.header_handle;
+              const isMetaHandle = /^\d+:[a-zA-Z0-9+/=]+$/.test(handleValue);
+              
               cleanedComp.example = {
-                header_handle: [comp.example.header_handle]
+                header_handle: [handleValue]
               };
-              console.log(`[CREATE TEMPLATE] ✅ HEADER com example.header_handle (convertido para array):`, cleanedComp.example.header_handle);
+              
+              if (isMetaHandle) {
+                console.log(`[CREATE TEMPLATE] ✅ HEADER com Meta Handle (convertido para array):`, handleValue);
+              } else {
+                console.log(`[CREATE TEMPLATE] ⚠️ HEADER com URL (convertido para array):`, handleValue);
+              }
             } else {
               console.warn(`[CREATE TEMPLATE] ⚠️ HEADER com header_handle inválido:`, comp.example.header_handle);
             }
@@ -157,9 +179,16 @@ const CreateTemplateService = async (data: Request) => {
       })
     };
     
-    // Log dos dados enviados
-    console.log('[CREATE TEMPLATE] Dados sendo enviados:', JSON.stringify(cleanedData, null, 2));
-    console.log('[CREATE TEMPLATE] URL:', `${process.env.URL_API_OFICIAL}/v1/templates-whatsapp/${whatsapp.token}`);
+    // ========================================
+    // 📋 LOGS DETALHADOS DO PAYLOAD PARA META
+    // ========================================
+    console.log('\n' + '='.repeat(80));
+    console.log('[CREATE TEMPLATE] 📤 PAYLOAD COMPLETO ENVIADO PARA META API');
+    console.log('='.repeat(80));
+    console.log('[CREATE TEMPLATE] 🌐 URL:', `${process.env.URL_API_OFICIAL}/v1/templates-whatsapp/${whatsapp.token}`);
+    console.log('[CREATE TEMPLATE] 📋 Payload JSON:');
+    console.log(JSON.stringify(cleanedData, null, 2));
+    console.log('='.repeat(80) + '\n');
     
     // Criar template via API Oficial
     const response = await axios.post(
@@ -174,6 +203,17 @@ const CreateTemplateService = async (data: Request) => {
     );
 
     const createdTemplate = response.data;
+    
+    // ========================================
+    // 📥 LOGS DA RESPOSTA DA META
+    // ========================================
+    console.log('\n' + '='.repeat(80));
+    console.log('[CREATE TEMPLATE] 📥 RESPOSTA DA META API');
+    console.log('='.repeat(80));
+    console.log('[CREATE TEMPLATE] Status:', response.status);
+    console.log('[CREATE TEMPLATE] Resposta JSON:');
+    console.log(JSON.stringify(createdTemplate, null, 2));
+    console.log('='.repeat(80) + '\n');
 
     // Salvar como QuickMessage para integração com o sistema
     if (createdTemplate.id) {
@@ -219,10 +259,28 @@ const CreateTemplateService = async (data: Request) => {
 
     return createdTemplate;
   } catch (error: any) {
-    console.error("Erro ao criar template:", JSON.stringify(error.response?.data, null, 2) || error.message);
-    console.error("Status:", error.response?.status);
-    console.error("Headers:", error.response?.headers);
-    throw new AppError(`Erro ao criar template: ${error.response?.data?.message || error.message}`, 500);
+    // ========================================
+    // ❌ LOGS DE ERRO DETALHADOS
+    // ========================================
+    console.error('\n' + '='.repeat(80));
+    console.error('[CREATE TEMPLATE] ❌ ERRO AO CRIAR TEMPLATE');
+    console.error('='.repeat(80));
+    console.error('[CREATE TEMPLATE] Mensagem:', error.message);
+    
+    if (error.response) {
+      console.error('[CREATE TEMPLATE] Status HTTP:', error.response.status);
+      console.error('[CREATE TEMPLATE] Resposta da Meta:');
+      console.error(JSON.stringify(error.response.data, null, 2));
+      console.error('[CREATE TEMPLATE] Headers da resposta:');
+      console.error(JSON.stringify(error.response.headers, null, 2));
+    }
+    
+    console.error('='.repeat(80) + '\n');
+    
+    throw new AppError(
+      `Erro ao criar template: ${error.response?.data?.error?.message || error.response?.data?.message || error.message}`,
+      error.response?.status || 500
+    );
   }
 };
 

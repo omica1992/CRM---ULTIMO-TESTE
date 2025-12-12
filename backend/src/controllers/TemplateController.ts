@@ -8,6 +8,7 @@ import ShowTemplateService from "../services/TemplateService/ShowTemplateService
 import UpdateTemplateService from "../services/TemplateService/UpdateTemplateService";
 import DeleteTemplateService from "../services/TemplateService/DeleteTemplateService";
 import UploadTemplateMediaService from "../services/TemplateService/UploadTemplateMediaService";
+import Whatsapp from "../models/Whatsapp";
 
 interface TemplateData {
   name: string;
@@ -159,9 +160,13 @@ export const remove = async (req: Request, res: Response): Promise<Response> => 
 export const uploadMedia = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { companyId, showTemplates } = req.user;
+    const { uploadToMeta, accessToken, whatsappBusinessAccountId } = req.body;
 
     console.log(`[UPLOAD MEDIA] CompanyId: ${companyId}, showTemplates: ${showTemplates}`);
     console.log(`[UPLOAD MEDIA] File received:`, req.file ? `${req.file.originalname} (${req.file.size} bytes)` : 'NO FILE');
+    console.log(`[UPLOAD MEDIA] Upload to Meta:`, uploadToMeta === 'true' ? 'SIM' : 'NÃO');
+    console.log(`[UPLOAD MEDIA] Access Token:`, accessToken ? `${accessToken.substring(0, 20)}...` : 'NÃO FORNECIDO');
+    console.log(`[UPLOAD MEDIA] WABA ID:`, whatsappBusinessAccountId || 'NÃO FORNECIDO');
 
     // Nota: Removida verificação de showTemplates pois o upload de mídia deve estar disponível
     // para qualquer usuário que tenha acesso aos templates (verificado pelo isAuth)
@@ -174,10 +179,17 @@ export const uploadMedia = async (req: Request, res: Response): Promise<Response
     console.log(`[UPLOAD MEDIA] Processando upload...`);
     const result = await UploadTemplateMediaService({
       file: req.file,
-      companyId
+      companyId,
+      uploadToMeta: uploadToMeta === 'true',
+      accessToken: accessToken || undefined,
+      whatsappBusinessAccountId: whatsappBusinessAccountId || undefined
     });
 
     console.log(`[UPLOAD MEDIA] ✅ Upload concluído: ${result.publicUrl}`);
+    if (result.metaHandle) {
+      console.log(`[UPLOAD MEDIA] 🎯 Meta Handle gerado: ${result.metaHandle}`);
+    }
+    
     return res.json(result);
   } catch (error: any) {
     console.error(`[UPLOAD MEDIA] Erro:`, error.message);
