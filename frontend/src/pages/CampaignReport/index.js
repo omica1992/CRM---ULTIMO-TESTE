@@ -329,16 +329,18 @@ const CampaignReport = () => {
               message: item.message ? item.message.substring(0, 50) + (item.message.length > 50 ? '...' : '') : '',
               fullMessage: item.message || '',
               deliveredAt: item.deliveredAt ? datetimeToClient(item.deliveredAt) : null,
+              failedAt: item.failedAt ? datetimeToClient(item.failedAt) : null,
+              errorMessage: item.errorMessage || null,
               createdAt: item.createdAt ? datetimeToClient(item.createdAt) : null,
-              status: item.deliveredAt ? 'delivered' : 'pending'
+              status: item.deliveredAt ? 'delivered' : (item.failedAt ? 'failed' : 'pending')
             }));
             
             setMessageRows(formattedRows);
             
             // Atualizar contadores
             const delivered = shippingData.filter(item => item.deliveredAt).length;
-            const pending = shippingData.length - delivered;
-            const failed = 0; // Adicionar lógica para falhas se disponível na API
+            const failed = shippingData.filter(item => item.failedAt && !item.deliveredAt).length;
+            const pending = shippingData.length - delivered - failed;
             
             // Contar números únicos
             const uniquePhoneNumbers = new Set(shippingData.map(item => item.number)).size;
@@ -385,16 +387,18 @@ const CampaignReport = () => {
           message: item.message ? item.message.substring(0, 50) + (item.message.length > 50 ? '...' : '') : '',
           fullMessage: item.message || '',
           deliveredAt: item.deliveredAt ? datetimeToClient(item.deliveredAt) : null,
+          failedAt: item.failedAt ? datetimeToClient(item.failedAt) : null,
+          errorMessage: item.errorMessage || null,
           createdAt: item.createdAt ? datetimeToClient(item.createdAt) : null,
-          status: item.deliveredAt ? 'delivered' : 'pending'
+          status: item.deliveredAt ? 'delivered' : (item.failedAt ? 'failed' : 'pending')
         }));
         
         setMessageRows(formattedRows);
         
         // Atualizar contadores
         const delivered = shippingData.filter(item => item.deliveredAt).length;
-        const pending = shippingData.length - delivered;
-        const failed = 0; // Adicionar lógica para falhas se disponível na API
+        const failed = shippingData.filter(item => item.failedAt && !item.deliveredAt).length;
+        const pending = shippingData.length - delivered - failed;
         
         // Contar números únicos
         const uniquePhoneNumbers = new Set(shippingData.map(item => item.number)).size;
@@ -501,7 +505,7 @@ const CampaignReport = () => {
       case 'failed':
         return (
           <Chip 
-            label="Falha" 
+            label="Falhou" 
             size="small" 
             icon={<ErrorIcon fontSize="small" />} 
             className={`${classes.statusChip} ${classes.failedChip}`} 

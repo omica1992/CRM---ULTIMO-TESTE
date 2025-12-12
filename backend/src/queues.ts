@@ -1705,6 +1705,8 @@ async function handlePrepareContact(job) {
         }
       );
 
+      logger.info(`[CAMPAIGN-DISPATCH] ➕ Job criado: #${nextJob.id}, Campanha=${campaign.id}, Shipping=${record.id}, Delay=${delay}ms (${Math.round(delay/1000)}s)`);
+
       await record.update({ jobId: String(nextJob.id) });
     }
 
@@ -1717,6 +1719,8 @@ async function handlePrepareContact(job) {
 async function handleDispatchCampaign(job) {
   const { data } = job;
   const { campaignShippingId, campaignId }: DispatchCampaignData = data;
+  
+  logger.info(`[CAMPAIGN-DISPATCH] 🎯 INICIANDO handleDispatchCampaign - Job #${job.id}, Campanha=${campaignId}, Shipping=${campaignShippingId}`);
   
   try {
     const campaign = await getCampaign(campaignId);
@@ -1829,34 +1833,31 @@ async function handleDispatchCampaign(job) {
       if (whatsapp.channel === "whatsapp_oficial" && campaign.templateId) {
         logger.info(`[CAMPAIGN-DISPATCH] 📋 Enviando template da Meta: Campanha=${campaignId}, Template=${campaign.templateId}, Ticket=${ticket.id}, Contato=${campaignShipping.number}`);
         
-        const template = await QuickMessage.findByPk(campaign.templateId, {
-          include: [{ model: QuickMessageComponent, as: "components" }]
-        });
-
-        if (!template) {
-          throw new Error(`Template ${campaign.templateId} não encontrado`);
+        // ✅ CORREÇÃO: Usar dados salvos na campanha em vez de buscar em QuickMessage
+        if (!campaign.templateName || !campaign.templateLanguage) {
+          throw new Error(`Campanha ${campaignId} não possui dados completos do template (templateName ou templateLanguage ausentes)`);
         }
 
-        // Monta estrutura do template (igual ao MessageController)
+        // Monta estrutura do template usando dados da campanha
         let templateData: IMetaMessageTemplate = {
-          name: template.shortcode,
-          language: { code: template.language }
+          name: campaign.templateName,
+          language: { code: campaign.templateLanguage }
         };
 
+        logger.info(`[CAMPAIGN-DISPATCH] Template: name=${campaign.templateName}, language=${campaign.templateLanguage}`);
+
         let buttonsToSave = [];
+
+        // ✅ Usar templateComponents da campanha
+        const templateComponents = campaign.templateComponents || [];
 
         // Processa variáveis se houver (seguindo exatamente o MessageController)
         if (campaign.templateVariables) {
           const variables = JSON.parse(campaign.templateVariables);
 
           if (Object.keys(variables).length > 0) {
-            templateData = {
-              name: template.shortcode,
-              language: { code: template.language }
-            };
-
-            if (Array.isArray(template.components) && template.components.length > 0) {
-              template.components.forEach((component, index) => {
+            if (Array.isArray(templateComponents) && templateComponents.length > 0) {
+              templateComponents.forEach((component, index) => {
                 const componentType = component.type.toLowerCase() as "header" | "body" | "footer" | "button";
                 
                 // Verifique se há variáveis para o componente atual
@@ -1902,7 +1903,7 @@ async function handleDispatchCampaign(job) {
                           });
                         }
                       } else {
-                        if (template.components[index].format === 'IMAGE') {
+                        if (templateComponents[index].format === 'IMAGE') {
                           newComponent.parameters.push({
                             type: "image",
                             image: { link: variables[componentType][key].value }
@@ -1928,9 +1929,9 @@ async function handleDispatchCampaign(job) {
           }
         }
 
-        // Processa botões para salvar (igual ao MessageController)
-        if (template.components.length > 0) {
-          for (const component of template.components) {
+        // Processa botões para salvar usando templateComponents da campanha
+        if (templateComponents.length > 0) {
+          for (const component of templateComponents) {
             if (component.type === 'BUTTONS') {
               buttonsToSave.push(component.buttons);
             }
@@ -1941,7 +1942,7 @@ async function handleDispatchCampaign(job) {
         let bodyToSave = '';
         
         // Prioridade 1: Tentar extrair do BODY do template
-        const bodyComponent = template.components?.find(c => c.type === 'BODY');
+        const bodyComponent = templateComponents?.find(c => c.type === 'BODY');
         if (bodyComponent && bodyComponent.text) {
           bodyToSave = bodyComponent.text;
           logger.info(`[CAMPAIGN-SAVE] Usando texto do BODY do template: ${bodyToSave.substring(0, 50)}...`);
@@ -1955,7 +1956,7 @@ async function handleDispatchCampaign(job) {
         
         // Prioridade 3: Usar HEADER do template
         if (!bodyToSave) {
-          const headerComponent = template.components?.find(c => c.type === 'HEADER');
+          const headerComponent = templateComponents?.find(c => c.type === 'HEADER');
           if (headerComponent && headerComponent.text) {
             bodyToSave = headerComponent.text;
             logger.info(`[CAMPAIGN-SAVE] Usando texto do HEADER do template: ${bodyToSave.substring(0, 50)}...`);
@@ -1964,7 +1965,7 @@ async function handleDispatchCampaign(job) {
         
         // Fallback final: Nome do template
         if (!bodyToSave || bodyToSave.trim() === '') {
-          bodyToSave = `📋 Template: ${template.shortcode}`;
+          bodyToSave = `📋 Template: ${campaign.templateName}`;
           logger.info(`[CAMPAIGN-SAVE] Usando fallback com nome do template: ${bodyToSave}`);
         }
         
@@ -2132,29 +2133,31 @@ async function handleDispatchCampaign(job) {
         // ✅ WhatsApp Oficial SEM ticket mas COM template (envio direto via API Meta)
         logger.info(`[CAMPAIGN-DISPATCH] 📋 Enviando template SEM ticket: Campanha=${campaignId}, Template=${campaign.templateId}, Contato=${campaignShipping.number}`);
         
-        const template = await QuickMessage.findByPk(campaign.templateId, {
-          include: [{ model: QuickMessageComponent, as: "components" }]
-        });
-
-        if (!template) {
-          throw new Error(`Template ${campaign.templateId} não encontrado`);
+        // ✅ CORREÇÃO: Usar dados salvos na campanha em vez de buscar em QuickMessage
+        if (!campaign.templateName || !campaign.templateLanguage) {
+          throw new Error(`Campanha ${campaignId} não possui dados completos do template (templateName ou templateLanguage ausentes)`);
         }
 
-        // Monta estrutura do template (igual ao MessageController)
+        // Monta estrutura do template usando dados da campanha
         let templateData: IMetaMessageTemplate = {
-          name: template.shortcode,
-          language: { code: template.language }
+          name: campaign.templateName,
+          language: { code: campaign.templateLanguage }
         };
 
+        logger.info(`[CAMPAIGN-DISPATCH] Template: name=${campaign.templateName}, language=${campaign.templateLanguage}`);
+
         let buttonsToSave = [];
+
+        // ✅ Usar templateComponents da campanha
+        const templateComponents = campaign.templateComponents || [];
 
         // Processa variáveis se houver
         if (campaign.templateVariables) {
           const variables = JSON.parse(campaign.templateVariables);
 
           if (Object.keys(variables).length > 0) {
-            if (Array.isArray(template.components) && template.components.length > 0) {
-              template.components.forEach((component, index) => {
+            if (Array.isArray(templateComponents) && templateComponents.length > 0) {
+              templateComponents.forEach((component, index) => {
                 const componentType = component.type.toLowerCase() as "header" | "body" | "footer" | "button";
                 
                 if (variables[componentType] && Object.keys(variables[componentType]).length > 0) {
@@ -2197,7 +2200,7 @@ async function handleDispatchCampaign(job) {
                           });
                         }
                       } else {
-                        if (template.components[index].format === 'IMAGE') {
+                        if (templateComponents[index].format === 'IMAGE') {
                           newComponent.parameters.push({
                             type: "image",
                             image: { link: variables[componentType][key].value }
@@ -2222,9 +2225,9 @@ async function handleDispatchCampaign(job) {
           }
         }
 
-        // Processa botões
-        if (template.components.length > 0) {
-          for (const component of template.components) {
+        // Processa botões usando templateComponents da campanha
+        if (templateComponents.length > 0) {
+          for (const component of templateComponents) {
             if (component.type === 'BUTTONS') {
               buttonsToSave.push(component.buttons);
             }
@@ -2311,9 +2314,10 @@ async function handleDispatchCampaign(job) {
       if (failedShipping && !failedShipping.deliveredAt && !failedShipping.failedAt) {
         await failedShipping.update({
           failedAt: moment(),
+          jobId: null, // ✅ CORREÇÃO: Limpar jobId para frontend mostrar como "Falhou" em vez de "Pendente"
           errorMessage: err.message ? err.message.substring(0, 500) : "Erro desconhecido ao enviar mensagem"
         });
-        logger.info(`[CAMPAIGN-ERROR] Falha registrada para CampaignShipping ${data.campaignShippingId}`);
+        logger.info(`[CAMPAIGN-ERROR] Falha registrada para CampaignShipping ${data.campaignShippingId} - jobId limpo`);
       }
     } catch (updateError) {
       logger.error(`[CAMPAIGN-ERROR] Erro ao registrar falha: ${updateError.message}`);
@@ -3339,6 +3343,19 @@ export async function startQueueProcess() {
   campaignQueue.process("PrepareContact", handlePrepareContact);
 
   campaignQueue.process("DispatchCampaign", handleDispatchCampaign);
+
+  campaignQueue.on('failed', (job, err) => {
+    logger.error(`[CAMPAIGN-QUEUE] ❌ Job falhou: ${job.name} #${job.id} - Erro: ${err.message}`);
+    logger.error(`[CAMPAIGN-QUEUE] Stack: ${err.stack}`);
+  });
+
+  campaignQueue.on('stalled', (job) => {
+    logger.warn(`[CAMPAIGN-QUEUE] ⚠️ Job travado: ${job.name} #${job.id}`);
+  });
+
+  campaignQueue.on('error', (error) => {
+    logger.error(`[CAMPAIGN-QUEUE] ❌ Erro na fila: ${error.message}`);
+  });
 
   userMonitor.process("VerifyLoginStatus", handleLoginStatus);
 

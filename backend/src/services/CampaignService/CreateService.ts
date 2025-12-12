@@ -60,6 +60,13 @@ const CreateService = async (data: Data): Promise<Campaign> => {
     data.status = "PROGRAMADA";
   }
 
+  // ✅ DEBUG: Verificar dados do template
+  console.log('[CAMPAIGN CREATE] templateId:', data.templateId);
+  console.log('[CAMPAIGN CREATE] templateName:', data.templateName);
+  console.log('[CAMPAIGN CREATE] templateLanguage:', data.templateLanguage);
+  console.log('[CAMPAIGN CREATE] templateComponents:', data.templateComponents ? 'presente' : 'ausente');
+  console.log('[CAMPAIGN CREATE] templateVariables:', data.templateVariables);
+
   const record = await Campaign.create(data);
 
   await record.reload({

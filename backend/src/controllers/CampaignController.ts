@@ -74,7 +74,10 @@ type StoreData = {
   nextScheduledAt?: Date | null;
   lastExecutedAt?: Date | null;
   // Novos campos para templates Meta
-  templateId?: number | null;
+  templateId?: string | null; // ✅ String para IDs grandes da Meta
+  templateName?: string | null;
+  templateLanguage?: string | null;
+  templateComponents?: any | null; // JSON
   templateVariables?: string | null;
 };
 
@@ -140,7 +143,10 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       otherwise: Yup.number().nullable()
     }),
     // Validação de templates Meta
-    templateId: Yup.number().nullable(),
+    templateId: Yup.string().nullable(), // ✅ String para IDs grandes da Meta
+    templateName: Yup.string().nullable(),
+    templateLanguage: Yup.string().nullable(),
+    templateComponents: Yup.mixed().nullable(), // JSON
     templateVariables: Yup.string().nullable()
   });
 
@@ -175,6 +181,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       recurrenceEndDate,
       maxExecutions,
       templateId,
+      templateName,
+      templateLanguage,
+      templateComponents,
       templateVariables
     }: StoreData = req.body;
 
@@ -185,6 +194,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       recurrenceDaysOfWeekType: typeof recurrenceDaysOfWeek,
       recurrenceDaysOfWeekIsArray: Array.isArray(recurrenceDaysOfWeek),
       templateId,
+      templateName,
+      templateLanguage,
+      templateComponents: templateComponents ? 'presente' : 'ausente',
       templateVariables
     });
 
@@ -239,13 +251,19 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       status: "PROGRAMADA",
       // Adicionar campos de recorrência processados
       ...processedRecurrenceData,
-      // Adicionar campos de template
+      // Adicionar campos de template Meta
       templateId: templateId || null,
+      templateName: templateName || null,
+      templateLanguage: templateLanguage || null,
+      templateComponents: templateComponents || null,
       templateVariables: templateVariables || null
     };
 
     console.log('[Campaign Store] Template sendo salvo:', {
       templateId: processedData.templateId,
+      templateName: processedData.templateName,
+      templateLanguage: processedData.templateLanguage,
+      templateComponents: processedData.templateComponents ? 'presente' : 'ausente',
       templateVariables: processedData.templateVariables
     });
 
@@ -328,7 +346,13 @@ export const update = async (req: Request, res: Response): Promise<Response> => 
       is: true,
       then: Yup.number().min(1).nullable(),
       otherwise: Yup.number().nullable()
-    })
+    }),
+    // Validação de templates Meta
+    templateId: Yup.string().nullable(),
+    templateName: Yup.string().nullable(),
+    templateLanguage: Yup.string().nullable(),
+    templateComponents: Yup.mixed().nullable(),
+    templateVariables: Yup.string().nullable()
   });
 
   try {
@@ -360,7 +384,12 @@ export const update = async (req: Request, res: Response): Promise<Response> => 
       recurrenceDaysOfWeek,
       recurrenceDayOfMonth,
       recurrenceEndDate,
-      maxExecutions
+      maxExecutions,
+      templateId,
+      templateName,
+      templateLanguage,
+      templateComponents,
+      templateVariables
     }: StoreData = req.body;
 
     console.log('[Campaign Update] Dados recebidos:', {
@@ -416,7 +445,13 @@ export const update = async (req: Request, res: Response): Promise<Response> => 
       openTicket,
       companyId,
       // Adicionar campos de recorrência processados
-      ...processedRecurrenceData
+      ...processedRecurrenceData,
+      // Adicionar campos de template Meta
+      templateId: templateId || null,
+      templateName: templateName || null,
+      templateLanguage: templateLanguage || null,
+      templateComponents: templateComponents || null,
+      templateVariables: templateVariables || null
     };
 
     await schema.validate(processedData);

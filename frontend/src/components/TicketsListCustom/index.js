@@ -219,6 +219,7 @@ const TicketsListCustom = (props) => {
     const classes = useStyles();
     const [pageNumber, setPageNumber] = useState(1);
     let [ticketsList, dispatch] = useReducer(reducer, []);
+    const [totalCount, setTotalCount] = useState(0); // ✅ Estado separado para contador total
     //   const socketManager = useContext(SocketContext);
     const { user, socket } = useContext(AuthContext);
     const { updateAvailableTickets } = useAvailableTickets();
@@ -269,6 +270,13 @@ const TicketsListCustom = (props) => {
 
     }, [tickets]);
 
+    // ✅ Atualizar totalCount quando count do backend mudar
+    useEffect(() => {
+        if (count !== undefined && count !== null) {
+            setTotalCount(count);
+        }
+    }, [count]);
+
     useEffect(() => {
         const shouldUpdateTicket = ticket => {
             return (!ticket?.userId || ticket?.userId === user?.id || showAll) &&
@@ -294,6 +302,13 @@ const TicketsListCustom = (props) => {
             // console.log(shouldUpdateTicket(data.ticket))
             if (data.action === "update" &&
                 shouldUpdateTicket(data.ticket) && data.ticket.status === status) {
+                
+                // ✅ Verificar se é ticket novo (não existe na lista)
+                const ticketExists = ticketsList.find(t => t.id === data.ticket.id);
+                if (!ticketExists) {
+                    setTotalCount(prev => prev + 1); // Incrementar contador
+                }
+                
                 dispatch({
                     type: "UPDATE_TICKET",
                     payload: data.ticket,
@@ -309,6 +324,12 @@ const TicketsListCustom = (props) => {
             //     });
             // }
             if (data.action === "update" && notBelongsToUserQueues(data.ticket)) {
+                // ✅ Verificar se ticket existe antes de decrementar
+                const ticketExists = ticketsList.find(t => t.id === data.ticket.id);
+                if (ticketExists) {
+                    setTotalCount(prev => Math.max(0, prev - 1)); // Decrementar contador
+                }
+                
                 dispatch({
                     type: "DELETE_TICKET", payload: data.ticket?.id, status: status,
                     sortDir: sortTickets
@@ -316,6 +337,12 @@ const TicketsListCustom = (props) => {
             }
 
             if (data.action === "delete") {
+                // ✅ Verificar se ticket existe antes de decrementar
+                const ticketExists = ticketsList.find(t => t.id === data?.ticketId);
+                if (ticketExists) {
+                    setTotalCount(prev => Math.max(0, prev - 1)); // Decrementar contador
+                }
+                
                 dispatch({
                     type: "DELETE_TICKET", payload: data?.ticketId, status: status,
                     sortDir: sortTickets
@@ -327,6 +354,13 @@ const TicketsListCustom = (props) => {
         const onCompanyAppMessageTicketsList = (data) => {
             if (data.action === "create" &&
                 shouldUpdateTicket(data.ticket) && data.ticket.status === status) {
+                
+                // ✅ Verificar se é ticket novo (não existe na lista)
+                const ticketExists = ticketsList.find(t => t.id === data.ticket.id);
+                if (!ticketExists) {
+                    setTotalCount(prev => prev + 1); // Incrementar contador
+                }
+                
                 dispatch({
                     type: "UPDATE_TICKET_UNREAD_MESSAGES",
                     payload: data.ticket,
@@ -382,13 +416,13 @@ const TicketsListCustom = (props) => {
 
     useEffect(() => {
         if (typeof updateCount === "function") {
-            // ✅ CORREÇÃO: Usar ticketsList.length em tempo real para refletir mudanças via socket
-            updateCount(ticketsList.length);
+            // ✅ CORREÇÃO FINAL: Usar totalCount que combina count do backend + atualizações via socket
+            updateCount(totalCount);
         }
         // Atualizar tickets disponíveis para seleção múltipla
         updateAvailableTickets(ticketsList);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [ticketsList, count]);
+    }, [totalCount, ticketsList]);
 
     const loadMore = () => {
         setPageNumber((prevState) => prevState + 1);
