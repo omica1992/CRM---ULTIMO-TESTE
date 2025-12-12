@@ -57,27 +57,29 @@ const ListTemplatesService = async ({ companyId, whatsappId }: Request): Promise
 
     // ✅ Log detalhado dos templates retornados
     // A API retorna { data: [...], paging: {...} }
-    const templates = response.data?.data || response.data;
+    const result = response.data as IResultTemplates;
+    const templates = result?.data || [];
     
-    if (templates && Array.isArray(templates)) {
-      console.log(`[TEMPLATES] ✅ Encontrados ${templates.length} templates`);
-      
-      if (templates.length > 0) {
-        // Mostrar estrutura do primeiro template
-        const firstTemplate = templates[0];
-        console.log(`[TEMPLATES] ✅ Amostra de template:`);
-        console.log(`[TEMPLATES] - id: ${firstTemplate.id}`);
-        console.log(`[TEMPLATES] - name: ${firstTemplate.name}`);
-        console.log(`[TEMPLATES] - status: ${firstTemplate.status}`);
-        console.log(`[TEMPLATES] - category: ${firstTemplate.category}`);
-        console.log(`[TEMPLATES] - language: ${firstTemplate.language}`);
-      }
-    } else {
-      console.log(`[TEMPLATES] ❌ Resposta não contém array de templates:`, response.data);
+    console.log(`[TEMPLATES] ✅ Encontrados ${templates.length} templates`);
+    console.log(`[TEMPLATES] Estrutura da resposta:`, {
+      hasData: !!result?.data,
+      hasPaging: !!result?.paging,
+      templatesCount: templates.length
+    });
+    
+    if (templates.length > 0) {
+      // Mostrar estrutura do primeiro template
+      const firstTemplate = templates[0];
+      console.log(`[TEMPLATES] ✅ Amostra de template:`);
+      console.log(`[TEMPLATES] - id: ${firstTemplate.id}`);
+      console.log(`[TEMPLATES] - name: ${firstTemplate.name}`);
+      console.log(`[TEMPLATES] - status: ${firstTemplate.status}`);
+      console.log(`[TEMPLATES] - category: ${firstTemplate.category}`);
+      console.log(`[TEMPLATES] - language: ${firstTemplate.language}`);
     }
 
-    // ✅ Retornar apenas o array de templates, não o objeto completo
-    return templates;
+    // ✅ CORREÇÃO: Retornar a estrutura completa { data, paging }
+    return result;
   } catch (error: any) {
     console.error("Erro ao buscar templates:", error.response?.data || error.message);
     throw new AppError(`Erro ao buscar templates: ${error.response?.data?.message || error.message}`, 500);

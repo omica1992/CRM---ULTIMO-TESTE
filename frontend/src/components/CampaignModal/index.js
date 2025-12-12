@@ -104,6 +104,14 @@ const CampaignSchema = Yup.object().shape({
     .min(2, "Too Short!")
     .max(50, "Too Long!")
     .required("Required"),
+  scheduledAt: Yup.date()
+    .test('min-5-minutes', 'O horário deve ser pelo menos 5 minutos no futuro', function(value) {
+      if (!value) return true; // Permite vazio
+      const now = moment();
+      const scheduled = moment(value);
+      const diffMinutes = scheduled.diff(now, 'minutes');
+      return diffMinutes >= 5;
+    }),
   isRecurring: Yup.boolean().default(false),
   recurrenceType: Yup.string().when('isRecurring', {
     is: true,
@@ -448,13 +456,18 @@ const CampaignModal = ({
       
       // ✅ CORREÇÃO: Buscar templates da Meta API, não quick-messages
       if (selectedWhatsapp?.channel === "whatsapp_oficial") {
+        console.log(`[CAMPAIGN MODAL] Buscando templates para whatsappId=${whatsappId}`);
         api.get(`/templates?whatsappId=${whatsappId}`)
           .then(({ data }) => {
-            console.log("📋 Templates Meta carregados para campanha:", data.data?.length || 0);
+            console.log("[CAMPAIGN MODAL] 📋 Templates Meta carregados:", {
+              total: data.data?.length || 0,
+              templates: data.data?.map(t => ({ id: t.id, name: t.name, status: t.status }))
+            });
             setAvailableTemplates(data.data || []);
           })
           .catch(err => {
-            console.error("❌ Erro ao buscar templates:", err);
+            console.error("[CAMPAIGN MODAL] ❌ Erro ao buscar templates:", err.response?.data || err.message);
+            toastError(err);
             setAvailableTemplates([]);
           });
       } else {
@@ -830,6 +843,9 @@ const handleSaveCampaign = async (values) => {
                       variant="outlined"
                       margin="dense"
                       type="datetime-local"
+                      inputProps={{
+                        min: moment().add(5, 'minutes').format('YYYY-MM-DDTHH:mm')
+                      }}
                       InputLabelProps={{
                         shrink: true,
                       }}

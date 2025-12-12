@@ -1747,7 +1747,7 @@ async function handleDispatchCampaign(job) {
     }
 
     logger.info(
-      `Disparo de campanha solicitado: Campanha=${campaignId};Registro=${campaignShippingId};Canal=${whatsapp.channel}`
+      `[CAMPAIGN-DISPATCH] 📤 Disparo solicitado: Campanha=${campaignId}, Registro=${campaignShippingId}, Canal=${whatsapp.channel}, Status=${campaign.status}`
     );
 
     // ✅ Apenas busca wbot se NÃO for WhatsApp Oficial
@@ -1827,7 +1827,7 @@ async function handleDispatchCampaign(job) {
 
       // ✅ Verifica se é WhatsApp Oficial e tem template configurado
       if (whatsapp.channel === "whatsapp_oficial" && campaign.templateId) {
-        logger.info(`Enviando template da Meta para campanha ${campaignId}`);
+        logger.info(`[CAMPAIGN-DISPATCH] 📋 Enviando template da Meta: Campanha=${campaignId}, Template=${campaign.templateId}, Ticket=${ticket.id}, Contato=${campaignShipping.number}`);
         
         const template = await QuickMessage.findByPk(campaign.templateId, {
           include: [{ model: QuickMessageComponent, as: "components" }]
@@ -1977,7 +1977,9 @@ async function handleDispatchCampaign(job) {
         logger.info(`[CAMPAIGN-SAVE] Body final a ser salvo: ${bodyToSave.substring(0, 100)}...`);
 
         // Envia template via API Meta
-        await SendWhatsAppOficialMessage({
+        logger.info(`[CAMPAIGN-DISPATCH] 🚀 Chamando SendWhatsAppOficialMessage - Ticket=${ticket.id}, Template=${templateData.name}`);
+        
+        const sendResult = await SendWhatsAppOficialMessage({
           body: bodyToSave,
           ticket,
           type: 'template',
@@ -1985,8 +1987,12 @@ async function handleDispatchCampaign(job) {
           template: templateData,
           quotedMsg: null
         });
+        
+        const messageId = sendResult?.messages?.[0]?.id || 'N/A';
+        logger.info(`[CAMPAIGN-DISPATCH] ✅ Template enviado com sucesso - Ticket=${ticket.id}, MessageId=${messageId}`);
 
         await campaignShipping.update({ deliveredAt: moment() });
+        logger.info(`[CAMPAIGN-DISPATCH] 📝 CampaignShipping atualizado com deliveredAt - ID=${campaignShippingId}, Time=${moment().format('YYYY-MM-DD HH:mm:ss')}`);
       }
       // ✅ Lógica original para WhatsApp não oficial
       else if (whatsapp.status === "CONNECTED") {
@@ -2124,7 +2130,7 @@ async function handleDispatchCampaign(job) {
         await campaignShipping.update({ deliveredAt: moment() });
       } else if (whatsapp.channel === "whatsapp_oficial" && campaign.templateId) {
         // ✅ WhatsApp Oficial SEM ticket mas COM template (envio direto via API Meta)
-        logger.info(`Enviando template da Meta SEM criar ticket: Campanha=${campaignId}`);
+        logger.info(`[CAMPAIGN-DISPATCH] 📋 Enviando template SEM ticket: Campanha=${campaignId}, Template=${campaign.templateId}, Contato=${campaignShipping.number}`);
         
         const template = await QuickMessage.findByPk(campaign.templateId, {
           include: [{ model: QuickMessageComponent, as: "components" }]

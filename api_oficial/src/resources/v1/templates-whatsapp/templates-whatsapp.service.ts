@@ -80,7 +80,10 @@ export class TemplatesWhatsappService {
               throw new Error(`URL da mídia retornou status ${response.status}`);
             }
             
-            this.logger.log(`[CREATE TEMPLATE] ✅ Mídia validada e acessível: ${mediaUrl}`);
+            this.logger.log(`[CREATE TEMPLATE] ✅ Mídia validada e acessível`);
+            this.logger.log(`[CREATE TEMPLATE] URL: ${mediaUrl}`);
+            this.logger.log(`[CREATE TEMPLATE] Content-Type: ${response.headers['content-type']}`);
+            this.logger.log(`[CREATE TEMPLATE] Content-Length: ${response.headers['content-length']}`);
           } catch (error: any) {
             this.logger.error(`[CREATE TEMPLATE] Erro ao validar mídia: ${error.message}`);
             throw new Error(`URL da mídia não está acessível: ${error.message}`);
@@ -88,8 +91,17 @@ export class TemplatesWhatsappService {
           
           // ✅ Manter URL pública (não fazer upload)
           // A Meta API valida e baixa a mídia diretamente da URL fornecida
+          
+          // ⚠️ IMPORTANTE: Verificar se URL é acessível externamente
+          // A Meta precisa conseguir baixar a mídia de seus servidores
+          this.logger.warn(`[CREATE TEMPLATE] ⚠️ ATENÇÃO: Certifique-se que a URL é acessível EXTERNAMENTE`);
+          this.logger.warn(`[CREATE TEMPLATE] ⚠️ A Meta tentará baixar de: ${mediaUrl}`);
+          this.logger.warn(`[CREATE TEMPLATE] ⚠️ Teste em: https://reqbin.com/ ou curl externo`);
         }
       }
+
+      this.logger.log(`[CREATE TEMPLATE] Enviando para Meta API...`);
+      this.logger.log(`[CREATE TEMPLATE] Payload final: ${JSON.stringify(templateData, null, 2)}`);
 
       const result = await this.metaService.createTemplate(
         conexao.waba_id,

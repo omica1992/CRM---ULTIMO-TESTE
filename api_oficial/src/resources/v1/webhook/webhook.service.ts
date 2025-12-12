@@ -199,9 +199,23 @@ export class WebhookService {
               const { value } = change;
 
               if (value?.statuses != null) {
-                this.logger.log(`[WEBHOOK STATUS] Processando ${value.statuses.length} status updates`);
+                this.logger.log(`[WEBHOOK STATUS] 📬 Processando ${value.statuses.length} status updates`);
                 for (const status of value.statuses) {
-                  this.logger.log(`[WEBHOOK STATUS] Status para mensagem ${status.id}`);
+                  this.logger.log(
+                    `[WEBHOOK STATUS] 📨 MessageId: ${status.id}, Status: ${status.status}, Timestamp: ${status.timestamp}, Recipient: ${status.recipient_id || 'N/A'}`,
+                  );
+                  
+                  // Log adicional para status de entrega
+                  if (status.status === 'delivered') {
+                    this.logger.log(`[WEBHOOK STATUS] ✅ DELIVERED - Mensagem ${status.id} foi ENTREGUE ao destinatário`);
+                  } else if (status.status === 'sent') {
+                    this.logger.log(`[WEBHOOK STATUS] 🚀 SENT - Mensagem ${status.id} foi ENVIADA (aguardando entrega)`);
+                  } else if (status.status === 'read') {
+                    this.logger.log(`[WEBHOOK STATUS] 👀 READ - Mensagem ${status.id} foi LIDA pelo destinatário`);
+                  } else if (status.status === 'failed') {
+                    this.logger.error(`[WEBHOOK STATUS] ❌ FAILED - Mensagem ${status.id} FALHOU: ${JSON.stringify((status as any).errors || {})}`);
+                  }
+                  
                   this.socket.readMessage({
                     companyId: company.idEmpresaMult100,
                     messageId: status.id,
