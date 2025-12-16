@@ -176,83 +176,40 @@ const ListTicketsService = async ({
         }
         else
           if (user.profile === "user" && status === "pending" && showTicketWithoutQueue) {
-            const TicketsUserFilter: any[] | null = [];
-
-            let ticketsIds = [];
-
+            // ✅ CORREÇÃO: Simplificar lógica sem consultas extras
             if (!showTicketAllQueues) {
-              ticketsIds = await Ticket.findAll({
-                where: {
-                  userId: { [Op.or]: [user.id, null] },
-                  queueId: { [Op.or]: [queueIds, null] },
-                  status: "pending",
-                  companyId
-                },
-              });
+              whereCondition = {
+                companyId,
+                status: "pending",
+                userId: { [Op.or]: [user.id, null] },
+                queueId: { [Op.or]: [queueIds, null] }
+              };
             } else {
-              ticketsIds = await Ticket.findAll({
-                where: {
-                  userId: { [Op.or]: [user.id, null] },
-                  status: "pending",
-                  companyId
-                },
-              });
+              whereCondition = {
+                companyId,
+                status: "pending",
+                userId: { [Op.or]: [user.id, null] }
+              };
             }
-
-            if (ticketsIds) {
-              TicketsUserFilter.push(ticketsIds.map(t => t.id));
-            }
-
-            const ticketsIntersection: number[] = intersection(...TicketsUserFilter);
-
-            whereCondition = {
-              ...whereCondition,
-              id: ticketsIntersection
-            };
           }
           else
             if (user.profile === "user" && status === "pending" && !showTicketWithoutQueue) {
-              const TicketsUserFilter: any[] | null = [];
-
-              let ticketsIds = [];
-
+              // ✅ CORREÇÃO: Simplificar lógica e remover redundâncias
               if (!showTicketAllQueues) {
-                ticketsIds = await Ticket.findAll({
-                  where: {
-                    companyId,
-                    userId:
-                      { [Op.or]: [user.id, null] },
-                    status: "pending",
-                    queueId: { [Op.in]: queueIds }
-                  },
-                });
+                whereCondition = {
+                  companyId,
+                  status: "pending",
+                  userId: { [Op.or]: [user.id, null] },
+                  queueId: { [Op.in]: queueIds }
+                };
               } else {
-                ticketsIds = await Ticket.findAll({
-                  where: {
-                    companyId,
-                    [Op.or]:
-                      [{
-                        userId:
-                          { [Op.or]: [user.id, null] }
-                      },
-                      {
-                        status: "pending"
-                      }
-                      ],
-                    status: "pending"
-                  },
-                });
+                // ✅ CORREÇÃO: Remover [Op.or] redundante com status duplicado
+                whereCondition = {
+                  companyId,
+                  status: "pending",
+                  userId: { [Op.or]: [user.id, null] }
+                };
               }
-              if (ticketsIds) {
-                TicketsUserFilter.push(ticketsIds.map(t => t.id));
-              }
-
-              const ticketsIntersection: number[] = intersection(...TicketsUserFilter);
-
-              whereCondition = {
-                ...whereCondition,
-                id: ticketsIntersection
-              };
             }
 
   if (showAll === "true" && (user.profile === "admin" || user.allUserChat === "enabled") && status !== "search") {

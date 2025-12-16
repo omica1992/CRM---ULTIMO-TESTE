@@ -185,21 +185,54 @@ export class MetaService {
         Authorization: `Bearer ${token}`,
       };
 
-      const result = await fetch(`${this.urlMeta}/${wabaId}/message_templates`,
-        {
+      let allTemplates = [];
+      let nextUrl = `${this.urlMeta}/${wabaId}/message_templates?limit=100`;
+      let pageCount = 0;
+
+      this.logger.log(`[GET TEMPLATES] Iniciando busca de templates para WABA ${wabaId}`);
+
+      // Loop para buscar todas as páginas
+      while (nextUrl) {
+        pageCount++;
+        this.logger.log(`[GET TEMPLATES] 📄 Buscando página ${pageCount}...`);
+
+        const result = await fetch(nextUrl, {
           method: 'GET',
           headers,
-        },
-      );
+        });
 
-      if (result.status != 200) {
-        const resultError = await result.json();
-        throw new Error(
-          resultError.error.message || 'Falha ao buscar templates',
-        );
+        if (result.status != 200) {
+          const resultError = await result.json();
+          throw new Error(
+            resultError.error.message || 'Falha ao buscar templates',
+          );
+        }
+
+        const pageData = (await result.json()) as IResultTemplates;
+        
+        // Adicionar templates da página atual
+        if (pageData.data && pageData.data.length > 0) {
+          allTemplates = allTemplates.concat(pageData.data);
+          this.logger.log(`[GET TEMPLATES] ✅ Página ${pageCount}: ${pageData.data.length} templates encontrados`);
+        }
+
+        // Verificar se há próxima página
+        if (pageData.paging?.next) {
+          nextUrl = pageData.paging.next;
+          this.logger.log(`[GET TEMPLATES] 🔄 Próxima página disponível`);
+        } else {
+          nextUrl = null;
+          this.logger.log(`[GET TEMPLATES] ✅ Última página alcançada`);
+        }
       }
 
-      return (await result.json()) as IResultTemplates;
+      this.logger.log(`[GET TEMPLATES] 🎉 Total de templates carregados: ${allTemplates.length} (${pageCount} páginas)`);
+
+      // Retornar no formato esperado
+      return {
+        data: allTemplates,
+        paging: {} // Paging vazio pois já buscamos tudo
+      } as IResultTemplates;
     } catch (error: any) {
       this.logger.error(`getListTemplates - ${error.message}`);
       throw Error('Erro ao buscar templates');

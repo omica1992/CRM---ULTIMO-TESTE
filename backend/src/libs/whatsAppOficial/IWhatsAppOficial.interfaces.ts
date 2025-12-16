@@ -329,7 +329,9 @@ export interface IResultTemplates {
 }
 
 export interface IResultTemplatesPaging {
-    cursors: IResultTemplatesPagingCursors;
+    cursors?: IResultTemplatesPagingCursors;
+    next?: string; // URL da próxima página
+    previous?: string; // URL da página anterior
 }
 
 export interface IResultTemplatesPagingCursors {
