@@ -5,6 +5,7 @@ import Ticket from "../../models/Ticket";
 import ShowTicketService from "./ShowTicketService";
 import FindOrCreateATicketTrakingService from "./FindOrCreateATicketTrakingService";
 import Setting from "../../models/Setting";
+import { getIO } from "../../libs/socket";
 
 interface TicketData {
   status?: string;
@@ -94,6 +95,8 @@ const FindOrCreateTicketServiceMeta = async (
     }
   }
 
+  const isNewTicket = !ticket;
+  
   if (!ticket) {
     ticket = await Ticket.create({
       contactId: contact.id,
@@ -118,6 +121,17 @@ const FindOrCreateTicketServiceMeta = async (
   }
 
   ticket = await ShowTicketService(ticket.id, companyId);
+
+  // ✅ CORREÇÃO: Emitir evento de socket quando novo ticket é criado
+  if (isNewTicket) {
+    const io = getIO();
+    io.of(String(companyId))
+      .emit(`company-${companyId}-ticket`, {
+        action: "update",
+        ticket
+      });
+    console.log(`[FIND-OR-CREATE-META] ✅ Evento de socket emitido para novo ticket ${ticket.id}`);
+  }
 
   return ticket;
 };

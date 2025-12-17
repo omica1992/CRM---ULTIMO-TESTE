@@ -383,13 +383,11 @@ const TicketsListCustom = (props) => {
             if (data.action === "create" &&
                 shouldUpdateTicket(data.ticket) && data.ticket.status === status) {
                 
-                // Verificar se ticket já existe na lista
-                const ticketExists = ticketsList.find(t => t.id === data.ticket.id);
+                // ✅ CORREÇÃO: Não incrementar contador manualmente
+                // O contador deve sempre vir do backend para evitar inconsistências
+                // Apenas atualizar a lista visual e mensagens não lidas
                 
-                // Só incrementar se for ticket novo
-                if (!ticketExists) {
-                    setTotalCount(prev => prev + 1);
-                }
+                console.log(`[${status}] Nova mensagem no ticket ${data.ticket.id} - Atualizando apenas lista visual`);
                 
                 // Atualizar na lista visual
                 dispatch({

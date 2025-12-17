@@ -248,8 +248,12 @@ export const ActionsWebhookService = async (
     return "max_recursion_depth_reached";
   }
 
-  logger.info(`[FLOW EXECUTION] Iniciando ActionsWebhookService - Ticket: ${idTicket}, Flow: ${idFlowDb}, Recursion Depth: ${recursionDepth}`);
+  logger.info(`[FLOW EXECUTION] Iniciando ActionsWebhookService - Ticket: ${idTicket}, Flow: ${idFlowDb}, Recursion Depth: ${recursionDepth}, PressKey: "${pressKey || 'VAZIO'}"`);
 
+  // ✅ LOG DE DEBUG: Rastrear estado inicial do fluxo
+  if (idTicket) {
+    console.log(`[FLOW DEBUG] Ticket ${idTicket} - NextStage: ${nextStage}, InputResponded: ${inputResponded}, PressKey: "${pressKey || 'VAZIO'}"`);
+  }
 
   console.log("details", details);
   console.log("numberPhrase", numberPhrase);
@@ -765,7 +769,8 @@ export const ActionsWebhookService = async (
 
             // Recuperar o valor do próximo nó salvo anteriormente
             const savedNext = global.flowVariables[`${inputIdentifier}_next`];
-            logger.info(`[INPUT NODE] Próximo nó salvo: ${savedNext}`);
+            logger.info(`[INPUT NODE] Recuperando próximo nó para ${inputIdentifier}: ${savedNext}`);
+            logger.info(`[INPUT NODE] Todas as chaves de flowVariables para ticket ${ticket.id}: ${JSON.stringify(Object.keys(global.flowVariables).filter(k => k.includes(`${ticket.id}_`)))}`);
 
             if (savedNext) {
               next = savedNext;
@@ -803,6 +808,11 @@ export const ActionsWebhookService = async (
             global.flowVariables = global.flowVariables || {};
             global.flowVariables[inputIdentifier] = true;
             logger.info(`[INPUT NODE] Marcando input como respondido: ${inputIdentifier}`);
+
+            // ✅ CORREÇÃO: Limpar pressKey após processar input
+            // Isso evita que a resposta do input seja reutilizada no próximo nó (ex: menu)
+            pressKey = "";
+            logger.info(`[INPUT NODE] pressKey limpo após processar input - Ticket ${ticket.id}`);
 
             // Pular para o próximo nó sem processar mais este nó
             continue;
@@ -865,6 +875,10 @@ export const ActionsWebhookService = async (
 
               global.flowVariables = global.flowVariables || {};
               global.flowVariables[`${inputIdentifier}_next`] = nextNodeId;
+              
+              // ✅ LOG DE DEBUG: Rastrear salvamento do próximo nó
+              logger.info(`[INPUT NODE] Salvando próximo nó para ${inputIdentifier}: ${nextNodeId}`);
+              logger.info(`[INPUT NODE] Estado atual de flowVariables para este ticket: ${JSON.stringify(Object.keys(global.flowVariables).filter(k => k.includes(`${ticket.id}_`)))}`);
 
               break; // Parar o fluxo para aguardar a resposta
             }

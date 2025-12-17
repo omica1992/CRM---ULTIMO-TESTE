@@ -266,7 +266,16 @@ const FindOrCreateTicketService = async (
     type: openAsLGPD ? "lgpd" : "create"
   });
 
+  // ✅ CORREÇÃO: Emitir evento de socket quando novo ticket é criado
+  io.of(String(companyId))
+    .emit(`company-${companyId}-ticket`, {
+      action: "update",
+      ticket
+    });
+  
   console.log(`[RDS-TICKET] Ticket final: ID=${ticket.id}, status=${ticket.status}, contactId=${ticket.contactId}`);
+  console.log(`[RDS-TICKET] ✅ Evento de socket emitido para novo ticket ${ticket.id}`);
+  
   return ticket;
 };
 
