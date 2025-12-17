@@ -749,13 +749,18 @@ export const ActionsWebhookService = async (
           // Verifica se este input específico já foi respondido
           const inputIdentifier = `${ticket.id}_${variableName}`;
           const thisInputResponded = global.flowVariables[inputIdentifier];
+          
+          // ✅ CORREÇÃO: Verificar se estamos retomando após aguardar input
+          const isWaitingForThisInput = ticket?.dataWebhook?.waitingInput && 
+                                        ticket?.dataWebhook?.inputVariableName === variableName &&
+                                        ticket?.lastFlowId === nodeSelected.id;
 
           logger.info(`[INPUT NODE] Debug - Ticket ${ticket.id}, Variable: ${variableName}, InputIdentifier: ${inputIdentifier}`);
-          logger.info(`[INPUT NODE] Debug - inputResponded: ${inputResponded}, thisInputResponded: ${thisInputResponded}`);
+          logger.info(`[INPUT NODE] Debug - inputResponded: ${inputResponded}, thisInputResponded: ${thisInputResponded}, isWaitingForThisInput: ${isWaitingForThisInput}`);
 
-          // Se inputResponded é true, significa que estamos retomando o fluxo após uma resposta
+          // Se estamos retomando o fluxo após aguardar input (pressKey foi fornecido)
           // Neste caso, devemos continuar para o próximo nó sem processar este input novamente
-          if (inputResponded && thisInputResponded) {
+          if (pressKey && isWaitingForThisInput) {
             logger.info(`[INPUT NODE] Retomando fluxo após resposta - Ticket ${ticket.id}`);
 
             // Recuperar o valor do próximo nó salvo anteriormente
@@ -794,13 +799,19 @@ export const ActionsWebhookService = async (
               }
             });
 
+            // ✅ MARCAR que este input foi respondido para evitar reprocessamento
+            global.flowVariables = global.flowVariables || {};
+            global.flowVariables[inputIdentifier] = true;
+            logger.info(`[INPUT NODE] Marcando input como respondido: ${inputIdentifier}`);
+
             // Pular para o próximo nó sem processar mais este nó
             continue;
-          } else if (!inputResponded && thisInputResponded) {
-            // Se não estamos retomando o fluxo mas o input já foi respondido, pular
-            logger.info(`[INPUT NODE] Input já respondido anteriormente - pulando - Ticket ${ticket.id}`);
-            continue;
-          } else {
+          } else if (!pressKey && isWaitingForThisInput) {
+            // Se estamos no nó de input que está aguardando resposta, mas não temos pressKey
+            // Isso significa que é um reprocessamento indevido - pular
+            logger.info(`[INPUT NODE] Nó aguardando input, mas sem resposta (pressKey) - pulando reprocessamento - Ticket ${ticket.id}`);
+            break; // Parar o fluxo aqui
+          } else if (!isWaitingForThisInput) {
             logger.info(`[INPUT NODE] Processando novo input - Ticket ${ticket.id}`);
 
             // Enviar a pergunta e aguardar resposta
@@ -857,6 +868,10 @@ export const ActionsWebhookService = async (
 
               break; // Parar o fluxo para aguardar a resposta
             }
+          } else {
+            // Caso não se encaixe em nenhuma condição, pular
+            logger.warn(`[INPUT NODE] Condição não tratada - Ticket ${ticket.id}, pressKey: ${pressKey}, isWaitingForThisInput: ${isWaitingForThisInput}`);
+            continue;
           }
         } catch (error) {
         }

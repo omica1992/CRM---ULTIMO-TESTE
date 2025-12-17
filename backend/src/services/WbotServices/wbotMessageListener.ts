@@ -8,6 +8,7 @@ import { REDIS_URI_MSG_CONN } from "../../config/redis";
 
 import {
   downloadMediaMessage,
+  downloadContentFromMessage,
   extractMessageContent,
   getContentType,
   GroupMetadata,
@@ -508,6 +509,19 @@ const allowedMimeTypes = [
   "application/x-executable"
 ];
 
+// ✅ NOVO: Helper para mapear tipo de mensagem para downloadContentFromMessage (EvolutionAPI#1660)
+const mapMediaType = (msgType: string): MediaType => {
+  const mediaTypeMap: { [key: string]: MediaType } = {
+    imageMessage: "image",
+    videoMessage: "video",
+    audioMessage: "audio",
+    documentMessage: "document",
+    documentWithCaptionMessage: "document",
+    stickerMessage: "sticker"
+  };
+  return mediaTypeMap[msgType] || "document";
+};
+
 const downloadMedia = async (
   msg: proto.IWebMessageInfo,
   isImported: Date = null,
@@ -731,7 +745,7 @@ const downloadMedia = async (
   let buffer;
   try {
     buffer = await downloadMediaMessage(
-      msg,
+      msg as any,
       "buffer",
       {},
       {
@@ -745,7 +759,34 @@ const downloadMedia = async (
         "Falha ao fazer o download de uma mensagem importada, provavelmente a mensagem já não esta mais disponível"
       );
     } else {
-      console.error("Erro ao baixar mídia:", err);
+      logger.warn(`[MEDIA DOWNLOAD] ❌ Falha no downloadMediaMessage, tentando fallback com downloadContentFromMessage - Key: ${msg.key?.id}`);
+      
+      // ✅ NOVO: Fallback com downloadContentFromMessage (EvolutionAPI#1660)
+      try {
+        await delay(5000); // Aguardar 5 segundos antes de tentar novamente
+        
+        const msgType = getTypeMessage(msg);
+        const mediaType = mapMediaType(msgType);
+        
+        // Extrair o conteúdo da mensagem corretamente
+        const messageContent = msg.message?.[msgType];
+        if (!messageContent) {
+          throw new Error(`Tipo de mensagem ${msgType} não encontrado`);
+        }
+        
+        const stream = await downloadContentFromMessage(messageContent as any, mediaType);
+        
+        const chunks: Uint8Array[] = [];
+        for await (const chunk of stream) {
+          chunks.push(chunk);
+        }
+        
+        buffer = Buffer.concat(chunks as any);
+        logger.info(`[MEDIA DOWNLOAD] ✅ Fallback bem-sucedido usando downloadContentFromMessage - Key: ${msg.key?.id}`);
+      } catch (fallbackErr) {
+        logger.error(`[MEDIA DOWNLOAD] ❌ Fallback também falhou: ${fallbackErr.message} - Key: ${msg.key?.id}`);
+        console.error("Erro ao baixar mídia (ambos métodos falharam):", fallbackErr);
+      }
     }
   }
 
@@ -3174,7 +3215,7 @@ export const handleMessageIntegration = async (
         await sendDialogflowAwswer(
           wbot,
           ticket,
-          msg,
+          msg as any,
           ticket.contact,
           inputAudio,
           companyId,
@@ -4470,52 +4511,51 @@ const handleMessage = async (
             include: [{ model: Contact, as: "contact" }]
           });
 
-          // Só verificar se não entrou em fluxo
-          if (!ticket.flowWebhook || !ticket.lastFlowId) {
-            const contactForCampaign = await ShowContactService(
-              ticket.contactId,
-              ticket.companyId
-            );
+          // ✅ CORREÇÃO CRÍTICA: Sempre processar, independente se está em fluxo ou não
+          // O flowbuilderIntegration tem a lógica interna para continuar fluxos existentes
+          const contactForCampaign = await ShowContactService(
+            ticket.contactId,
+            ticket.companyId
+          );
 
-            // ✅ CORREÇÃO: Verificar integrationId OU flowIdNotPhrase
-            try {
-              if (whatsapp.integrationId) {
-                const queueIntegrations = await ShowQueueIntegrationService(
-                  whatsapp.integrationId,
-                  companyId
-                );
+          // ✅ CORREÇÃO: Verificar integrationId OU flowIdNotPhrase
+          try {
+            if (whatsapp.integrationId) {
+              const queueIntegrations = await ShowQueueIntegrationService(
+                whatsapp.integrationId,
+                companyId
+              );
 
-                // DEBUG - Verificar tipo de integração para diagnóstico
-                logger.info(`[RDS-FLOW-DEBUG] Iniciando flowbuilder para ticket ${ticket.id}, integração tipo: ${queueIntegrations?.type || 'indefinido'}`);
+              // DEBUG - Verificar tipo de integração para diagnóstico
+              logger.info(`[RDS-FLOW-DEBUG] Iniciando flowbuilder para ticket ${ticket.id}, integração tipo: ${queueIntegrations?.type || 'indefinido'}`);
 
-                // ✅ VERIFICAÇÃO FINAL APENAS SE NECESSÁRIO
-                await flowbuilderIntegration(
-                  msg,
-                  wbot,
-                  companyId,
-                  queueIntegrations,
-                  ticket,
-                  contactForCampaign
-                );
+              // ✅ VERIFICAÇÃO FINAL APENAS SE NECESSÁRIO
+              await flowbuilderIntegration(
+                msg,
+                wbot,
+                companyId,
+                queueIntegrations,
+                ticket,
+                contactForCampaign
+              );
 
-                // DEBUG - Verificar se flowbuilder foi executado com sucesso
-                logger.info(`[RDS-FLOW-DEBUG] flowbuilderIntegration executado para ticket ${ticket.id}`);
-              } else {
-                // ✅ NOVO: Tentar executar flowIdNotPhrase se não houver integrationId
-                logger.info(`[RDS-FLOW-DEBUG] Sem integrationId para conexão ${whatsapp.id}, tentando flowIdNotPhrase`);
-                
-                await flowbuilderIntegration(
-                  msg,
-                  wbot,
-                  companyId,
-                  null, // Sem integração de fila
-                  ticket,
-                  contactForCampaign
-                );
-              }
-            } catch (integrationError) {
-              logger.error("[RDS-4573 - INTEGRATION ERROR] Erro ao processar integração:", integrationError);
+              // DEBUG - Verificar se flowbuilder foi executado com sucesso
+              logger.info(`[RDS-FLOW-DEBUG] flowbuilderIntegration executado para ticket ${ticket.id}`);
+            } else {
+              // ✅ NOVO: Tentar executar flowIdNotPhrase se não houver integrationId
+              logger.info(`[RDS-FLOW-DEBUG] Sem integrationId para conexão ${whatsapp.id}, tentando flowIdNotPhrase`);
+              
+              await flowbuilderIntegration(
+                msg,
+                wbot,
+                companyId,
+                null, // Sem integração de fila
+                ticket,
+                contactForCampaign
+              );
             }
+          } catch (integrationError) {
+            logger.error("[RDS-4573 - INTEGRATION ERROR] Erro ao processar integração:", integrationError);
           }
         } catch (error) {
           logger.error("[RDS-4573 - CAMPAIGN MESSAGE] Erro ao verificar campanhas:", error);
@@ -4723,11 +4763,35 @@ const filterMessages = (msg: WAMessage): boolean => {
   return true;
 };
 
+// ✅ NOVO: Filtro para erros conhecidos de descriptografia (EvolutionAPI#1660)
+const hasKnownDecryptionError = (msg: WAMessage): boolean => {
+  if (msg.messageStubParameters && msg.messageStubParameters.length > 0) {
+    const knownErrors = [
+      'Bad MAC',
+      'No matching sessions found',
+      'SessionError',
+      'failed to decrypt message'
+    ];
+    
+    for (const param of msg.messageStubParameters) {
+      for (const error of knownErrors) {
+        if (param.includes(error)) {
+          logger.warn(
+            `[BAILEYS ERROR FILTER] Pulando mensagem com erro de descriptografia: ${error} - Key: ${msg.key.id}`
+          );
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+};
+
 // Logs de debug de eventos Baileys removidos para produção
 const wbotMessageListener = (wbot: Session, companyId: number): void => {
   wbot.ev.on("messages.upsert", async (messageUpsert: ImessageUpsert) => {
     const messages = messageUpsert.messages
-      .filter(filterMessages)
+      .filter(msg => filterMessages(msg as any) && !hasKnownDecryptionError(msg as any))
       .map(msg => msg);
 
     if (!messages) return;
@@ -4797,7 +4861,7 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
             }
           );
         } else {
-          handleMsgAck(message, 2);
+          handleMsgAck(message as any, 2);
         }
       }
     });
