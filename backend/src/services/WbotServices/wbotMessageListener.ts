@@ -2520,7 +2520,27 @@ export const flowbuilderIntegration = async (
   isTranfered?: boolean
 ) => {
   const io = getIO();
-  const body = msg ? getBodyMessage(msg) : ticket.lastMessage || "";
+
+  // ✅ CORREÇÃO BAILEYS: Fallback manual para extração de respostas de menu
+  // Tentar extrair resposta de menu MANUALMENTE antes de usar getBodyMessage
+  let body = "";
+
+  if (msg) {
+    const menuResponse =
+      msg.message?.buttonsResponseMessage?.selectedButtonId ||
+      msg.message?.buttonsResponseMessage?.selectedDisplayText ||
+      msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
+      msg.message?.listResponseMessage?.title;
+
+    if (menuResponse) {
+      body = menuResponse;
+      logger.info(`[BAILEYS FLOW MENU] Resposta de menu detectada manualmente: ${body}`);
+    } else {
+      body = getBodyMessage(msg) || "";
+    }
+  } else {
+    body = ticket.lastMessage || "";
+  }
 
   // DEBUG - Verificar parâmetros de entrada
   logger.info(`[RDS-FLOW-DEBUG] flowbuilderIntegration iniciado para ticket ${ticket.id}`);

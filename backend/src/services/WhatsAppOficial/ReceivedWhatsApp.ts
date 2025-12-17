@@ -682,11 +682,12 @@ export class ReceibedWhatsAppService {
             // ✅ CORREÇÃO: Adicionar flag para evitar processamento duplicado
             const isProcessingFlow = (global as any)[`processing_flow_${ticket.id}`];
             
+            // ✅ CORREÇÃO: Permitir respostas de menu (texto ou número)
+            // Removida verificação !isNaN que impedia respostas de texto em menus
             if (
                 ticket.flowStopped &&
                 ticket.flowWebhook &&
-                ticket.lastFlowId &&
-                !isNaN(parseInt(ticket.lastMessage))
+                ticket.lastFlowId
             ) {
                 if (isProcessingFlow) {
                     logger.info(`[WHATSAPP OFICIAL - FLOW QUEUE] ⏭️ Pulando processamento - ticket ${ticket.id} já está sendo processado`);
@@ -699,7 +700,9 @@ export class ReceibedWhatsAppService {
                 (global as any)[`processing_flow_${ticket.id}`] = true;
                 
                 try {
-                    // Criar mensagem simulada para compatibilidade com flowBuilderQueue
+                    // ✅ CORREÇÃO: Criar mensagem simulada COMPLETA para compatibilidade com flowBuilderQueue
+                    // Incluir campos de menu interativo (buttonsResponseMessage e listResponseMessage)
+                    // para que getBodyMessage() possa extrair corretamente a resposta
                     const simulatedMsg = {
                         key: {
                             fromMe: false,
@@ -707,6 +710,13 @@ export class ReceibedWhatsAppService {
                             id: message.idMessage
                         },
                         message: {
+                            // ✅ CORREÇÃO: Adicionar campos de menu para API Oficial
+                            buttonsResponseMessage: message.type === "interactive" 
+                                ? { selectedButtonId: message.text, selectedDisplayText: message.text } 
+                                : undefined,
+                            listResponseMessage: message.type === "interactive" 
+                                ? { singleSelectReply: { selectedRowId: message.text }, title: message.text } 
+                                : undefined,
                             conversation: message.text || "",
                             timestamp: message.timestamp
                         }

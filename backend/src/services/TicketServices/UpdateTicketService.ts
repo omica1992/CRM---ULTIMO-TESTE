@@ -984,6 +984,15 @@ const UpdateTicketService = async ({
           action: "delete",
           ticketId: ticket.id
         });
+        
+      // Emitir evento global de mudança de status para atualizar contadores
+      if (ticket.status !== oldStatus) {
+        io.of(String(companyId)).emit('ticketStatus', {
+          oldStatus,
+          newStatus: ticket.status,
+          ticketId: ticket.id
+        });
+      }
     }
     // console.log("emitiu socket 746", ticket.id)
 

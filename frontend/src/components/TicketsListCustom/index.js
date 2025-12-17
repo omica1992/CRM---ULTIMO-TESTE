@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useReducer, useContext, useMemo } from "react";
+import React, { useState, useEffect, useReducer, useContext, useMemo, useCallback } from "react";
 
 import { makeStyles } from "@material-ui/core/styles";
 import List from "@material-ui/core/List";
@@ -220,6 +220,7 @@ const TicketsListCustom = (props) => {
     const [pageNumber, setPageNumber] = useState(1);
     let [ticketsList, dispatch] = useReducer(reducer, []);
     const [totalCount, setTotalCount] = useState(0); // ✅ Estado separado para contador total
+    // Estado removido - usando contador do backend
     //   const socketManager = useContext(SocketContext);
     const { user, socket } = useContext(AuthContext);
     const { updateAvailableTickets } = useAvailableTickets();
@@ -233,7 +234,8 @@ const TicketsListCustom = (props) => {
         setPageNumber(1);
     }, [status, searchParam, dispatch, showAll, tags, users, forceSearch, selectedQueueIds, whatsappIds, statusFilter, sortTickets, searchOnMessages]);
 
-    const { tickets, hasMore, loading, count } = useTickets({
+    // Hook para carregar tickets e contador
+    const { tickets, hasMore, loading, count, refetch } = useTickets({
         pageNumber,
         searchParam,
         status,
@@ -247,15 +249,21 @@ const TicketsListCustom = (props) => {
         userFilter,
         sortTickets
     });
+    
+    // Função para atualizar contador diretamente do backend
+    const refreshCountFromBackend = useCallback(async () => {
+        try {
+            // Apenas atualiza o contador sem alterar a página
+            await refetch();
+        } catch (err) {
+            console.error(`[${status}] Erro ao atualizar contador:`, err);
+        }
+    }, [refetch, status]);
 
+
+    // Código de limpeza removido - usando contador do backend
 
     useEffect(() => {
-        // const queueIds = queues.map((q) => q.id);
-        // const filteredTickets = tickets.filter(
-        //     (t) => queueIds.indexOf(t.queueId) > -1
-        // );
-        // const allticket = user.allTicket === 'enabled';
-        // if (profile === "admin" || allTicket || allowGroup || allHistoric) {
         if (companyId) {
             dispatch({
                 type: "LOAD_TICKETS",
@@ -264,18 +272,31 @@ const TicketsListCustom = (props) => {
                 sortDir: sortTickets
             });
         }
-        // } else {
-        //  dispatch({ type: "LOAD_TICKETS", payload: filteredTickets });
-        // }
-
     }, [tickets]);
 
     // ✅ Atualizar totalCount quando count do backend mudar
     useEffect(() => {
         if (count !== undefined && count !== null) {
             setTotalCount(count);
+            console.log(`[${status}] Contador inicial do backend: ${count}`);
         }
     }, [count]);
+    
+    // Evento global para atualizar contadores quando um ticket muda de status
+    useEffect(() => {
+        if (socket) {
+            const handleTicketStatusChange = () => {
+                console.log(`[${status}] Evento global de mudança de status - Atualizando contador`);
+                refreshCountFromBackend();
+            };
+            
+            socket.on('ticketStatus', handleTicketStatusChange);
+            
+            return () => {
+                socket.off('ticketStatus', handleTicketStatusChange);
+            };
+        }
+    }, [socket, status, refreshCountFromBackend]);
 
     useEffect(() => {
         const shouldUpdateTicket = ticket => {
@@ -290,7 +311,7 @@ const TicketsListCustom = (props) => {
             ticket.queueId && selectedQueueIds.indexOf(ticket.queueId) === -1;
 
         const onCompanyTicketTicketsList = (data) => {
-            // console.log("onCompanyTicketTicketsList", data)
+            // Processar eventos de leitura
             if (data.action === "updateUnread") {
                 dispatch({
                     type: "RESET_UNREAD",
@@ -298,69 +319,79 @@ const TicketsListCustom = (props) => {
                     status: status,
                     sortDir: sortTickets
                 });
+                return;
             }
-            // console.log(shouldUpdateTicket(data.ticket))
-            if (data.action === "update" &&
-                shouldUpdateTicket(data.ticket) && data.ticket.status === status) {
-                
-                // ✅ Verificar se é ticket novo (não existe na lista)
-                const ticketExists = ticketsList.find(t => t.id === data.ticket.id);
-                if (!ticketExists) {
-                    setTotalCount(prev => prev + 1); // Incrementar contador
-                }
-                
+
+            // SOLUÇÃO SIMPLIFICADA: Atualizar contador diretamente do backend
+            // quando houver mudança de status
+            
+            // PARTE 1: Processar DELETE - Apenas remove da lista visual
+            if (data.action === "delete") {
+                // Remover da lista visual
                 dispatch({
-                    type: "UPDATE_TICKET",
-                    payload: data.ticket,
+                    type: "DELETE_TICKET", 
+                    payload: data?.ticketId, 
                     status: status,
                     sortDir: sortTickets
                 });
+                
+                // Atualizar contador do backend
+                refreshCountFromBackend();
+                return;
             }
 
-            // else if (data.action === "update" && shouldUpdateTicketUser(data.ticket) && data.ticket.status === status) {
-            //     dispatch({
-            //         type: "UPDATE_TICKET",
-            //         payload: data.ticket,
-            //     });
-            // }
-            if (data.action === "update" && notBelongsToUserQueues(data.ticket)) {
-                // ✅ Verificar se ticket existe antes de decrementar
+            // PARTE 2: Processar UPDATE
+            if (data.action === "update") {
+                // Verificar se ticket existe na lista atual
                 const ticketExists = ticketsList.find(t => t.id === data.ticket.id);
-                if (ticketExists) {
-                    setTotalCount(prev => Math.max(0, prev - 1)); // Decrementar contador
-                }
                 
-                dispatch({
-                    type: "DELETE_TICKET", payload: data.ticket?.id, status: status,
-                    sortDir: sortTickets
-                });
-            }
-
-            if (data.action === "delete") {
-                // ✅ Verificar se ticket existe antes de decrementar
-                const ticketExists = ticketsList.find(t => t.id === data?.ticketId);
-                if (ticketExists) {
-                    setTotalCount(prev => Math.max(0, prev - 1)); // Decrementar contador
+                // CASO 1: Ticket PERTENCE a esta aba (status correto + permissões)
+                if (data.ticket.status === status && shouldUpdateTicket(data.ticket)) {
+                    // Adicionar/atualizar na lista visual
+                    dispatch({
+                        type: "UPDATE_TICKET",
+                        payload: data.ticket,
+                        status: status,
+                        sortDir: sortTickets
+                    });
+                    
+                    // Atualizar contador do backend
+                    refreshCountFromBackend();
                 }
-                
-                dispatch({
-                    type: "DELETE_TICKET", payload: data?.ticketId, status: status,
-                    sortDir: sortTickets
-                });
-
+                // CASO 2: Ticket NÃO PERTENCE a esta aba (status diferente) mas ESTAVA na lista
+                else if (ticketExists && data.ticket.status !== status) {
+                    // Remover da lista visual
+                    dispatch({
+                        type: "DELETE_TICKET", 
+                        payload: data.ticket.id, 
+                        status: status,
+                        sortDir: sortTickets
+                    });
+                    
+                    // Atualizar contador do backend
+                    refreshCountFromBackend();
+                }
+                // CASO 3: Ticket não pertence e não estava - ignorar
+                else {
+                    // Nada a fazer
+                }
             }
         };
 
         const onCompanyAppMessageTicketsList = (data) => {
+            // Processar apenas mensagens novas que pertencem a esta aba
             if (data.action === "create" &&
                 shouldUpdateTicket(data.ticket) && data.ticket.status === status) {
                 
-                // ✅ Verificar se é ticket novo (não existe na lista)
+                // Verificar se ticket já existe na lista
                 const ticketExists = ticketsList.find(t => t.id === data.ticket.id);
+                
+                // Só incrementar se for ticket novo
                 if (!ticketExists) {
-                    setTotalCount(prev => prev + 1); // Incrementar contador
+                    setTotalCount(prev => prev + 1);
                 }
                 
+                // Atualizar na lista visual
                 dispatch({
                     type: "UPDATE_TICKET_UNREAD_MESSAGES",
                     payload: data.ticket,
@@ -368,12 +399,6 @@ const TicketsListCustom = (props) => {
                     sortDir: sortTickets
                 });
             }
-            // else if (data.action === "create" && shouldUpdateTicketUser(data.ticket) && data.ticket.status === status) {
-            //     dispatch({
-            //         type: "UPDATE_TICKET_UNREAD_MESSAGES",
-            //         payload: data.ticket,
-            //     });
-            // }
         };
 
         const onCompanyContactTicketsList = (data) => {

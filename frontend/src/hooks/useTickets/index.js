@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import toastError from "../../errors/toastError";
 import { format, sub } from 'date-fns'
 import api from "../../services/api";
@@ -118,7 +118,55 @@ const useTickets = ({
     searchOnMessages
   ]);
 
-  return { tickets, loading, hasMore, count };
+  // Função para recarregar os dados sem mudar os parâmetros
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get("/tickets", {
+        params: {
+          searchParam,
+          tags,
+          users,
+          pageNumber,
+          status,
+          date,
+          updatedAt,
+          showAll,
+          queueIds,
+          withUnreadMessages,
+          whatsappIds,
+          statusFilter,
+          userFilter,
+          sortTickets,
+          searchOnMessages
+        }
+      });
+      setCount(data.count);
+      return data;
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    searchParam,
+    tags,
+    users,
+    pageNumber,
+    status,
+    date,
+    updatedAt,
+    showAll,
+    queueIds,
+    withUnreadMessages,
+    whatsappIds,
+    statusFilter,
+    userFilter,
+    sortTickets,
+    searchOnMessages
+  ]);
+
+  return { tickets, loading, hasMore, count, refetch };
 };
 
 export default useTickets;
