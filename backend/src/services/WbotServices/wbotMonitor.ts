@@ -4,7 +4,6 @@ import {
   Contact as BContact,
   isJidBroadcast,
   isJidStatusBroadcast,
-  isJidUser,
 } from "@whiskeysockets/baileys";
 import * as Sentry from "@sentry/node";
 import fs from "fs";
@@ -18,6 +17,11 @@ import CreateMessageService from "../MessageServices/CreateMessageService";
 import CompaniesSettings from "../../models/CompaniesSettings";
 import path from "path";
 import { verifyMessage } from "./wbotMessageListener";
+
+// ✅ CORREÇÃO: isJidUser não existe no Baileys 7.x, criar função alternativa
+const isJidUser = (jid: string): boolean => {
+  return jid?.endsWith('@s.whatsapp.net');
+};
 
 let i = 0;
 
