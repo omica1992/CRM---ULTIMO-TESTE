@@ -7,10 +7,15 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   constructor() {
+    // ✅ Adicionar parâmetros de connection pool à URL existente
+    const databaseUrl = process.env.DATABASE_LINK;
+    const separator = databaseUrl.includes('?') ? '&' : '?';
+    const urlWithPool = `${databaseUrl}${separator}connection_limit=5&pool_timeout=20`;
+    
     super({
       datasources: {
         db: {
-          url: `${process.env.DATABASE_LINK}?connection_limit=5&pool_timeout=20`,
+          url: urlWithPool,
         },
       },
       log: ['error', 'warn'],
