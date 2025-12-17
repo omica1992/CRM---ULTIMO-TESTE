@@ -729,7 +729,9 @@ export class ReceibedWhatsAppService {
                         whatsapp,
                         companyId,
                         contact,
-                        null
+                        null,
+                        0, // recursionDepth
+                        message.text || "" // ✅ CORREÇÃO: Passar body diretamente
                     );
 
                     logger.info(`[WHATSAPP OFICIAL - FLOW QUEUE] ✅ Fluxo interrompido retomado com sucesso`);

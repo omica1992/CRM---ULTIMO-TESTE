@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { PrismaService } from './@core/infra/database/prisma.service';
+import { PrismaModule } from './@core/infra/database/prisma.module';
 import { CompaniesModule } from './resources/v1/companies/companies.module';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from './@core/guard/auth.guard';
@@ -18,6 +18,7 @@ import { TemplatesWhatsappModule } from './resources/v1/templates-whatsapp/templ
 
 @Module({
   imports: [
+    PrismaModule,
     CompaniesModule,
     WebhookModule,
     WhatsappOficialModule,
@@ -44,7 +45,6 @@ import { TemplatesWhatsappModule } from './resources/v1/templates-whatsapp/templ
   ],
   controllers: [AppController],
   providers: [
-    PrismaService,
     AppService,
     {
       provide: APP_GUARD,

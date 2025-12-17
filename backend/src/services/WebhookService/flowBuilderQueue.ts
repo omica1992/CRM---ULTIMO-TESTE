@@ -16,7 +16,8 @@ const flowBuilderQueue = async (
   companyId: number,
   contact: Contact,
   isFirstMsg: Ticket,
-  recursionDepth: number = 0
+  recursionDepth: number = 0,
+  bodyOverride?: string
 ) => {
   // Proteção contra recursão infinita
   if (recursionDepth >= 10) {
@@ -24,7 +25,8 @@ const flowBuilderQueue = async (
     return;
   }
 
-  const body = getBodyMessage(msg);
+  // Usar bodyOverride se fornecido (API Oficial), senão extrair do msg (Baileys)
+  const body = bodyOverride || getBodyMessage(msg);
 
   // Verificar se existe fluxo interrompido válido
   if (!ticket.flowStopped || !ticket.lastFlowId) {
@@ -54,24 +56,24 @@ const flowBuilderQueue = async (
     const nodes: INodes[] = flow.flow["nodes"];
     const connections: IConnections[] = flow.flow["connections"];
 
-    console.log(`[flowBuilderQueue] Chamando ActionsWebhookService - Ticket: ${ticket.id}, Flow: ${ticket.flowStopped}, Recursion Depth: ${recursionDepth}`);
+    console.log(`[flowBuilderQueue] Chamando ActionsWebhookService - Ticket: ${ticket.id}, Flow: ${ticket.flowStopped}, Recursion Depth: ${recursionDepth}, Body: "${body}"`);
 
     await ActionsWebhookService(
-      whatsapp.id,
-      parseInt(ticket.flowStopped),
-      ticket.companyId,
-      nodes,
-      connections,
-      ticket.lastFlowId,
-      null,
-      "",
-      "",
-      body,
-      ticket.id,
-      mountDataContact,
-      false,
-      undefined,
-      recursionDepth + 1
+      whatsapp.id,              // whatsappId
+      parseInt(ticket.flowStopped), // idFlowDb
+      ticket.companyId,         // companyId
+      nodes,                    // nodes
+      connections,              // connects
+      ticket.lastFlowId,        // nextStage
+      null,                     // dataWebhook
+      "",                       // details
+      ticket.hashFlowId || "",  // hashWebhookId
+      body,                     // pressKey
+      ticket.id,                // idTicket
+      mountDataContact,         // numberPhrase
+      false,                    // inputResponded
+      msg,                      // msg
+      recursionDepth + 1        // recursionDepth
     );
     
     console.log(`Fluxo interrompido ${ticket.flowStopped} executado com sucesso`);

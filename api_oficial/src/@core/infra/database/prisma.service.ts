@@ -10,11 +10,9 @@ export class PrismaService
     super({
       datasources: {
         db: {
-          url: process.env.DATABASE_LINK,
+          url: `${process.env.DATABASE_LINK}?connection_limit=5&pool_timeout=20`,
         },
       },
-      // ✅ Configuração de pool de conexões
-      // Limita o número de conexões simultâneas para evitar esgotar o pool do PostgreSQL
       log: ['error', 'warn'],
     });
   }
