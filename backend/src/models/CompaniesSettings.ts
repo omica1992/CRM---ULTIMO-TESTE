@@ -135,6 +135,10 @@ class CompaniesSettings extends Model<CompaniesSettings> {
   @Default(true)
   @Column
   closeTicketOutOfHours: boolean;
+
+  @Default(false)
+  @Column
+  closeTicketOnFlowExit: boolean;
 }
 
 export default CompaniesSettings;

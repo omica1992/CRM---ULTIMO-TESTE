@@ -1549,6 +1549,11 @@ export const ActionsWebhookService = async (
 
             const ticketDetails = await ShowTicketService(ticket.id, companyId);
 
+            // ✅ Buscar configuração da empresa
+            const settings = await CompaniesSettings.findOne({
+              where: { companyId: companyId }
+            });
+
             const exitMessage = "Atendimento pelo chatbot finalizado. Em breve um atendente entrará em contato.";
 
             if (whatsapp.channel === "whatsapp") {
@@ -1580,13 +1585,19 @@ export const ActionsWebhookService = async (
               // ✅ NÃO chamar CreateMessageService - evita duplicação!
             }
 
+            // ✅ Verificar se deve encerrar o ticket ou apenas marcar como pendente
+            const shouldCloseTicket = settings?.closeTicketOnFlowExit === true;
+            const newStatus = shouldCloseTicket ? "closed" : "pending";
+
+            logger.info(`[FLOW EXIT] Ticket ${ticket.id} - closeTicketOnFlowExit: ${shouldCloseTicket}, novo status: ${newStatus}`);
+
             await ticketDetails.update({
               flowWebhook: false,
               flowStopped: null,
               lastFlowId: null,
               hashFlowId: null,
               dataWebhook: null,
-              status: "pending"
+              status: newStatus
             });
 
             return "flow_exited";

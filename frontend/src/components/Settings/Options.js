@@ -165,6 +165,10 @@ export default function Options(props) {
   const [closeTicketOutOfHours, setCloseTicketOutOfHours] = useState(true)
   const [loadingCloseTicketOutOfHours, setLoadingCloseTicketOutOfHours] = useState(false)
 
+  // Fechar ticket ao digitar "Sair" no fluxo
+  const [closeTicketOnFlowExit, setCloseTicketOnFlowExit] = useState(false)
+  const [loadingCloseTicketOnFlowExit, setLoadingCloseTicketOnFlowExit] = useState(false)
+
   // Usar carteira de clientes
   const [directTicketsToWallets, setDirectTicketsToWallets] = useState(false)
   const [loadingDirectTicketsToWallets, setLoadingDirectTicketsToWallets] = useState(false)
@@ -281,6 +285,7 @@ const [loadingCopyContactPrefix, setLoadingCopyContactPrefix] = useState(false);
       if (key === "DirectTicketsToWallets") setDirectTicketsToWallets(value);
       if (key === "closeTicketOnTransfer") setCloseTicketOnTransfer(value);
       if (key === "closeTicketOutOfHours") setCloseTicketOutOfHours(value);
+      if (key === "closeTicketOnFlowExit") setCloseTicketOnFlowExit(value);
       if (key === "transferMessage") setTransferMessage(value);
       if (key === "greetingAcceptedMessage") setGreetingAcceptedMessage(value);
       if (key === "AcceptCallWhatsappMessage") setAcceptCallWhatsappMessage(value);
@@ -659,6 +664,17 @@ async function handleCopyContactPrefix(value) {
       data: value,
     });
     setLoadingCloseTicketOutOfHours(false);
+    toast.success("Configuração atualizada com sucesso!");
+  }
+
+  async function handleCloseTicketOnFlowExit(value) {
+    setCloseTicketOnFlowExit(value);
+    setLoadingCloseTicketOnFlowExit(true);
+    await update({
+      column: "closeTicketOnFlowExit",
+      data: value,
+    });
+    setLoadingCloseTicketOnFlowExit(false);
     toast.success("Configuração atualizada com sucesso!");
   }
 
@@ -1106,6 +1122,25 @@ async function handleCopyContactPrefix(value) {
             </Select>
             <FormHelperText>
               {loadingCloseTicketOutOfHours ? "Atualizando..." : "Encerra ticket quando envia mensagem automática"}
+            </FormHelperText>
+          </FormControl>
+        </Grid>
+
+        <Grid xs={12} sm={6} md={4} item>
+          <FormControl className={classes.selectContainer}>
+            <InputLabel id="closeTicketOnFlowExit-label">Encerrar ticket ao digitar "Sair" no fluxo</InputLabel>
+            <Select
+              labelId="closeTicketOnFlowExit-label"
+              value={closeTicketOnFlowExit}
+              onChange={async (e) => {
+                handleCloseTicketOnFlowExit(e.target.value);
+              }}
+            >
+              <MenuItem value={false}>Não</MenuItem>
+              <MenuItem value={true}>Sim</MenuItem>
+            </Select>
+            <FormHelperText>
+              {loadingCloseTicketOnFlowExit ? "Atualizando..." : "Encerra o ticket quando usuário digita 'Sair' durante o fluxo"}
             </FormHelperText>
           </FormControl>
         </Grid>
