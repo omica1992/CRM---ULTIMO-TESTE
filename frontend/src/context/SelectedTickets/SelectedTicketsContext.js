@@ -5,6 +5,7 @@ const SelectedTicketsContext = createContext();
 const initialState = {
   selectedTickets: new Set(),
   isSelectionMode: false,
+  currentTab: "open", // Rastrear aba atual: open, pending, closed
 };
 
 const selectedTicketsReducer = (state, action) => {
@@ -48,6 +49,12 @@ const selectedTicketsReducer = (state, action) => {
         selectedTickets: updatedSelection,
       };
 
+    case "SET_CURRENT_TAB":
+      return {
+        ...state,
+        currentTab: action.tab,
+      };
+
     default:
       return state;
   }
@@ -84,12 +91,17 @@ export const SelectedTicketsProvider = ({ children }) => {
     return Array.from(state.selectedTickets);
   };
 
+  const setCurrentTab = (tab) => {
+    dispatch({ type: "SET_CURRENT_TAB", tab });
+  };
+
   return (
     <SelectedTicketsContext.Provider
       value={{
         selectedTickets: state.selectedTickets,
         isSelectionMode: state.isSelectionMode,
         selectedCount: state.selectedTickets.size,
+        currentTab: state.currentTab,
         toggleSelectionMode,
         toggleTicketSelection,
         selectAllTickets,
@@ -97,6 +109,7 @@ export const SelectedTicketsProvider = ({ children }) => {
         removeTicketsFromSelection,
         isTicketSelected,
         getSelectedTicketsArray,
+        setCurrentTab,
       }}
     >
       {children}
