@@ -12,6 +12,7 @@ interface Request {
   transferMessage?: string;
   companyId: number;
   userRequestId: number; // ID do usuário que está fazendo a transferência
+  openPendingTickets?: boolean; // Se deve abrir tickets pendentes durante a transferência
 }
 
 interface BulkTransferResult {
@@ -29,7 +30,8 @@ const BulkTransferTicketsService = async ({
   queueId,
   transferMessage,
   companyId,
-  userRequestId
+  userRequestId,
+  openPendingTickets = false
 }: Request): Promise<BulkTransferResult> => {
   const io = getIO();
   const successfulTransfers: number[] = [];
@@ -161,6 +163,10 @@ const BulkTransferTicketsService = async ({
         // Isso remove da fila de "aguardando"
         updateData.status = "open";
         console.log(`[BULK TRANSFER] Alterando status do ticket ${ticket.id} para "open" por ser transferido para usuário`);
+      } else if (openPendingTickets && ticket.status === "pending") {
+        // ✅ NOVO: Abrir tickets pendentes se checkbox marcada (mesmo sem usuário específico)
+        updateData.status = "open";
+        console.log(`[BULK TRANSFER] Alterando status do ticket ${ticket.id} de "pending" para "open" (openPendingTickets=true)`);
       }
 
       if (queueId) {

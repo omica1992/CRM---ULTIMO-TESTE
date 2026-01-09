@@ -407,7 +407,7 @@ const TicketsManagerTabs = () => {
   const { profile } = user;
   const { setSelectedQueuesMessage } = useContext(QueueSelectedContext);
   const { tabOpen, setTabOpen } = useContext(TicketsContext);
-  const { isSelectionMode, toggleSelectionMode } = useSelectedTickets();
+  const { isSelectionMode, toggleSelectionMode, setCurrentTab } = useSelectedTickets();
 
   const [openCount, setOpenCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
@@ -442,6 +442,11 @@ const TicketsManagerTabs = () => {
       setShowAllTickets(false);
     }
   }, []);
+
+  // Atualizar contexto com a aba atual
+  useEffect(() => {
+    setCurrentTab(tabOpen);
+  }, [tabOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (tab === "search") {

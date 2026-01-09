@@ -667,7 +667,7 @@ export const triggerFlow = async (
 
 export const bulkTransfer = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
-  const { ticketIds, userId, queueId, transferMessage } = req.body;
+  const { ticketIds, userId, queueId, transferMessage, openPendingTickets } = req.body;
 
   // Validações básicas
   if (!ticketIds || !Array.isArray(ticketIds) || ticketIds.length === 0) {
@@ -684,6 +684,7 @@ export const bulkTransfer = async (req: Request, res: Response): Promise<Respons
 
   try {
     console.log(`[BULK TRANSFER CONTROLLER] Iniciando transferência múltipla para ${ticketIds.length} tickets`);
+    console.log(`[BULK TRANSFER CONTROLLER] openPendingTickets: ${openPendingTickets}`);
     
     const result = await BulkTransferTicketsService({
       ticketIds,
@@ -691,7 +692,8 @@ export const bulkTransfer = async (req: Request, res: Response): Promise<Respons
       queueId,
       transferMessage,
       companyId,
-      userRequestId: parseInt(req.user.id)
+      userRequestId: parseInt(req.user.id),
+      openPendingTickets
     });
 
     return res.status(200).json({

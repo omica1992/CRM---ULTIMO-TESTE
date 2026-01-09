@@ -72,6 +72,7 @@ const BulkActionsBar = () => {
     clearSelection,
     getSelectedTicketsArray,
     removeTicketsFromSelection,
+    currentTab,
   } = useSelectedTickets();
 
   const { getAllTicketIds } = useAvailableTickets();
@@ -83,6 +84,7 @@ const BulkActionsBar = () => {
   const [transferToQueue, setTransferToQueue] = useState(null);
   const [includeMessage, setIncludeMessage] = useState(false);
   const [transferMessage, setTransferMessage] = useState("");
+  const [openPendingTickets, setOpenPendingTickets] = useState(false);
   
   // Estados para usuários e filas
   const [users, setUsers] = useState([]);
@@ -148,6 +150,7 @@ const BulkActionsBar = () => {
     setTransferToQueue(null);
     setIncludeMessage(false);
     setTransferMessage("");
+    setOpenPendingTickets(false);
     setDataLoaded(false); // Reset para permitir novo carregamento na próxima abertura
   };
 
@@ -167,6 +170,7 @@ const BulkActionsBar = () => {
         ...(transferToUser && { userId: transferToUser.id }),
         ...(transferToQueue && { queueId: transferToQueue.id }),
         ...(includeMessage && transferMessage && { transferMessage }),
+        ...(openPendingTickets && { openPendingTickets: true }),
       };
 
       const response = await api.post("/tickets/bulk-transfer", transferData);
@@ -318,6 +322,21 @@ const BulkActionsBar = () => {
             )}
             style={{ marginBottom: 16 }}
           />
+          
+          {/* Checkbox para abrir tickets pendentes - só aparece na aba pending */}
+          {currentTab === "pending" && (
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={openPendingTickets}
+                  onChange={(e) => setOpenPendingTickets(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label="Abrir tickets pendentes após transferência"
+              style={{ marginTop: 16 }}
+            />
+          )}
           
           <FormControlLabel
             control={
