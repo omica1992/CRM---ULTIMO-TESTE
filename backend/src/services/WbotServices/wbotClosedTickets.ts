@@ -4,6 +4,7 @@ import Whatsapp from "../../models/Whatsapp"
 import { getIO } from "../../libs/socket"
 import formatBody from "../../helpers/Mustache";
 import SendWhatsAppMessage from "./SendWhatsAppMessage";
+import SendWhatsAppOficialMessage from "../WhatsAppOficial/SendWhatsAppOficialMessage";
 import moment from "moment";
 import ShowTicketService from "../TicketServices/ShowTicketService";
 import { verifyMessage } from "./wbotMessageListener";
@@ -18,6 +19,39 @@ import { IConnections, INodes } from "../WebhookService/DispatchWebHookService";
 import { FlowBuilderModel } from "../../models/FlowBuilder";
 import Contact from "../../models/Contact";
 import ShowTicketUUIDService from "../TicketServices/ShowTicketFromUUIDService";
+
+/**
+ * Função auxiliar para enviar mensagens de inatividade
+ * Suporta tanto Baileys quanto API Oficial
+ */
+const sendInactivityMessage = async (body: string, ticket: any): Promise<void> => {
+  try {
+    logger.info(`[AUTO-CLOSE] Enviando mensagem de inatividade - Canal: ${ticket.channel}, Ticket: ${ticket.id}`);
+    
+    if (ticket.channel === "whatsapp") {
+      // Baileys (WhatsApp não oficial)
+      const sentMessage = await SendWhatsAppMessage({ body, ticket });
+      await verifyMessage(sentMessage, ticket, ticket.contact);
+      logger.info(`[AUTO-CLOSE] Mensagem enviada via Baileys - Ticket: ${ticket.id}`);
+    } else if (ticket.channel === "whatsapp_oficial") {
+      // API Oficial do WhatsApp
+      await SendWhatsAppOficialMessage({
+        body,
+        ticket,
+        quotedMsg: null,
+        type: 'text',
+        media: null,
+        vCard: null
+      });
+      logger.info(`[AUTO-CLOSE] Mensagem enviada via API Oficial - Ticket: ${ticket.id}`);
+    } else {
+      logger.warn(`[AUTO-CLOSE] Canal desconhecido: ${ticket.channel} - Ticket: ${ticket.id}`);
+    }
+  } catch (error) {
+    logger.error(`[AUTO-CLOSE] Erro ao enviar mensagem - Ticket: ${ticket.id}, Canal: ${ticket.channel}`, error);
+    throw error;
+  }
+};
 
 const closeTicket = async (ticket: any, body: string) => {
   await ticket.update({
@@ -42,6 +76,9 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
   let timeInactiveMessage = Number(whatsapp.timeInactiveMessage || 0);
   let expiresTime = Number(whatsapp.expiresTicket || 0);
   let flowInactiveTime = Number(whatsapp.flowInactiveTime || 0);
+
+  logger.info(`[AUTO-CLOSE] Verificando tickets inativos - Empresa: ${companyId}, Conexão: ${whatsapp.name} (ID: ${whatsapp.id}), Canal: ${whatsapp.channel}`);
+  logger.info(`[AUTO-CLOSE] Configurações - timeInactiveMessage: ${timeInactiveMessage}min, expiresTime: ${expiresTime}min, whenExpiresTicket: ${whatsapp.whenExpiresTicket}`);
 
   if (!isNil(expiresTime) && expiresTime > 0) {
 
@@ -80,8 +117,7 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
           await ticket.reload();
           if (!ticket.sendInactiveMessage) {
             const bodyMessageInactive = formatBody(`\u200e ${whatsapp.inactiveMessage}`, ticket);
-            const sentMessage = await SendWhatsAppMessage({ body: bodyMessageInactive, ticket: ticket });
-            await verifyMessage(sentMessage, ticket, ticket.contact);
+            await sendInactivityMessage(bodyMessageInactive, ticket);
             await ticket.update({ sendInactiveMessage: true, fromMe: true });
           }
         }));
@@ -136,8 +172,7 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
 
         if (!isNil(whatsapp.expiresInactiveMessage) && whatsapp.expiresInactiveMessage !== "") {
           bodyExpiresMessageInactive = formatBody(`\u200e${whatsapp.expiresInactiveMessage}`, ticket);
-          const sentMessage = await SendWhatsAppMessage({ body: bodyExpiresMessageInactive, ticket: ticket });
-          await verifyMessage(sentMessage, ticket, ticket.contact);
+          await sendInactivityMessage(bodyExpiresMessageInactive, ticket);
         }
 
         // Como o campo sendInactiveMessage foi atualizado, podemos garantir que a mensagem foi enviada
@@ -276,8 +311,7 @@ const handleNPSTickets = async (companyId: number, whatsapp: any) => {
 
       if (!isNil(whatsapp.complationMessage) && whatsapp.complationMessage !== "") {
         bodyComplationMessage = formatBody(`\u200e${whatsapp.complationMessage}`, ticket);
-        const sentMessage = await SendWhatsAppMessage({ body: bodyComplationMessage, ticket: ticket });
-        await verifyMessage(sentMessage, ticket, ticket.contact);
+        await sendInactivityMessage(bodyComplationMessage, ticket);
       }
 
       await closeTicket(ticket, bodyComplationMessage);
@@ -305,6 +339,9 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
   let timeInactiveMessage = Number(whatsapp.timeInactiveMessage || 0);
   let expiresTime = Number(whatsapp.expiresTicket || 0);
   let flowInactiveTime = Number(whatsapp.flowInactiveTime || 0);
+
+  logger.info(`[AUTO-CLOSE] Verificando tickets pendentes inativos - Empresa: ${companyId}, Conexão: ${whatsapp.name} (ID: ${whatsapp.id}), Canal: ${whatsapp.channel}`);
+  logger.info(`[AUTO-CLOSE] Configurações - timeInactiveMessage: ${timeInactiveMessage}min, expiresTime: ${expiresTime}min, whenExpiresTicket: ${whatsapp.whenExpiresTicket}`);
 
   if (!isNil(expiresTime) && expiresTime > 0) {
 
@@ -343,8 +380,7 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
           await ticket.reload();
           if (!ticket.sendInactiveMessage) {
             const bodyMessageInactive = formatBody(`\u200e ${whatsapp.inactiveMessage}`, ticket);
-            const sentMessage = await SendWhatsAppMessage({ body: bodyMessageInactive, ticket: ticket });
-            await verifyMessage(sentMessage, ticket, ticket.contact);
+            await sendInactivityMessage(bodyMessageInactive, ticket);
             await ticket.update({ sendInactiveMessage: true, fromMe: true });
           }
         }));
@@ -401,8 +437,7 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
 
         if (!isNil(whatsapp.expiresInactiveMessage) && whatsapp.expiresInactiveMessage !== "") {
           bodyExpiresMessageInactive = formatBody(`\u200e${whatsapp.expiresInactiveMessage}`, ticket);
-          const sentMessage = await SendWhatsAppMessage({ body: bodyExpiresMessageInactive, ticket: ticket });
-          await verifyMessage(sentMessage, ticket, ticket.contact);
+          await sendInactivityMessage(bodyExpiresMessageInactive, ticket);
         }
 
         // Como o campo sendInactiveMessage foi atualizado, podemos garantir que a mensagem foi enviada
