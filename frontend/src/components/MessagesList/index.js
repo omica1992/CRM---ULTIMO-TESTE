@@ -486,9 +486,20 @@ const MessagesList = ({
 
   // ✅ Verificar se janela de 24h expirou baseado na última mensagem do cliente
   useEffect(() => {
-    if (!messagesList || messagesList.length === 0) {
+    // ✅ CORREÇÃO: Só aplicar lógica de 24h para canais Meta
+    const isMetaChannel = channel && channel !== "whatsapp";
+    
+    if (!isMetaChannel) {
+      // Para Baileys (whatsapp), não há restrição de 24h
       setLocalIs24HourWindowExpired(false);
       setIs24HourWindowExpired(false);
+      return;
+    }
+
+    if (!messagesList || messagesList.length === 0) {
+      // ✅ CORREÇÃO: Se não há mensagens, janela está expirada para Meta
+      setLocalIs24HourWindowExpired(true);
+      setIs24HourWindowExpired(true);
       return;
     }
 
@@ -498,8 +509,10 @@ const MessagesList = ({
       .find(msg => msg.fromMe === false);
 
     if (!lastClientMessage || !lastClientMessage.createdAt) {
-      setLocalIs24HourWindowExpired(false);
-      setIs24HourWindowExpired(false);
+      // ✅ CORREÇÃO: Se não há mensagem do cliente, janela está expirada
+      console.log("⚠️ Nenhuma mensagem do cliente encontrada - janela expirada");
+      setLocalIs24HourWindowExpired(true);
+      setIs24HourWindowExpired(true);
       return;
     }
 
@@ -515,17 +528,19 @@ const MessagesList = ({
         lastMessageDate: lastClientMessage.createdAt,
         hoursDiff,
         expired,
-        channel
+        channel,
+        hasClientMessage: true
       });
       
       setLocalIs24HourWindowExpired(expired);
       setIs24HourWindowExpired(expired); // ✅ Atualizar contexto para MessageInput
     } catch (error) {
       console.error("Erro ao calcular diferença de horas:", error);
-      setLocalIs24HourWindowExpired(false);
-      setIs24HourWindowExpired(false);
+      // ✅ CORREÇÃO: Em caso de erro, considerar expirada por segurança
+      setLocalIs24HourWindowExpired(true);
+      setIs24HourWindowExpired(true);
     }
-  }, [messagesList, setIs24HourWindowExpired]);
+  }, [messagesList, setIs24HourWindowExpired, channel]);
 
   useEffect(() => {
     async function fetchData() {
