@@ -27,7 +27,7 @@ import ShowTicketUUIDService from "../TicketServices/ShowTicketFromUUIDService";
 const sendInactivityMessage = async (body: string, ticket: any): Promise<void> => {
   try {
     logger.info(`[AUTO-CLOSE] Enviando mensagem de inatividade - Canal: ${ticket.channel}, Ticket: ${ticket.id}`);
-    
+
     if (ticket.channel === "whatsapp") {
       // Baileys (WhatsApp não oficial)
       const sentMessage = await SendWhatsAppMessage({ body, ticket });
@@ -97,7 +97,8 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
           })
         },
         imported: null,
-        sendInactiveMessage: false
+        sendInactiveMessage: false,
+        userId: null // Excluir tickets atribuídos a atendentes
       };
 
       if (Number(whatsapp.whenExpiresTicket) === 1) {
@@ -137,7 +138,8 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
           minutes: Number(expiresTime)
         })
       },
-      imported: null
+      imported: null,
+      userId: null // Excluir tickets atribuídos a atendentes
     }
 
     if (timeInactiveMessage > 0) {
@@ -208,7 +210,8 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
         })
       },
       imported: null,
-      sendInactiveMessage: false
+      sendInactiveMessage: false,
+      userId: null // Excluir tickets atribuídos a atendentes
     };
 
     if (Number(whatsapp.whenExpiresTicket) === 1) {
@@ -360,7 +363,8 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
           })
         },
         imported: null,
-        sendInactiveMessage: false
+        sendInactiveMessage: false,
+        userId: null // Excluir tickets atribuídos a atendentes
       };
 
       if (Number(whatsapp.whenExpiresTicket) === 1) {
@@ -402,7 +406,8 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
           minutes: Number(expiresTime)
         })
       },
-      imported: null
+      imported: null,
+      userId: null // Excluir tickets atribuídos a atendentes
     }
 
     if (timeInactiveMessage > 0) {
@@ -475,7 +480,8 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
         })
       },
       imported: null,
-      sendInactiveMessage: false
+      sendInactiveMessage: false,
+      userId: null // Excluir tickets atribuídos a atendentes
     };
 
     if (Number(whatsapp.whenExpiresTicket) === 1) {
