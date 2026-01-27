@@ -252,16 +252,24 @@ export class ReceibedWhatsAppService {
         try {
             const { message, fromNumber, nameContact, token } = data;
 
+            console.log(`[RECEIVED WHATSAPP] ===== NOVA MENSAGEM =====`);
+            console.log(`[RECEIVED WHATSAPP] Token recebido: ${token?.substring(0, 10)}...`);
+            console.log(`[RECEIVED WHATSAPP] From: ${fromNumber}, Name: ${nameContact}`);
+
             const conexao = await Whatsapp.findOne({ where: { token } });
 
-            const { companyId } = conexao;
-
             if (!conexao) {
-                logger.error('getMessage - Nenhum whatsApp encontrado');
+                logger.error(`[RECEIVED WHATSAPP] ❌ Nenhuma conexão encontrada para token: ${token?.substring(0, 10)}...`);
                 return;
             }
 
+            console.log(`[RECEIVED WHATSAPP] ✅ Conexão encontrada - ID: ${conexao.id}, Nome: ${conexao.name}, CompanyId: ${conexao.companyId}`);
+
+            const { companyId } = conexao;
+
             const whatsapp = await ShowWhatsAppService(conexao.id, companyId);
+
+            console.log(`[RECEIVED WHATSAPP] WhatsApp carregado - ID: ${whatsapp.id}, Status: ${whatsapp.status}`);
 
             // ✅ USAR CreateOrUpdateContactService para manter consistência com Baileys
             let contact = await Contact.findOne({ where: { number: fromNumber, companyId } });

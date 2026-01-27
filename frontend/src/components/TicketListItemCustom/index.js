@@ -610,7 +610,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
             onClick={(e) => e.stopPropagation()}
           />
         )}
-        
+
         <ListItemAvatar style={{ marginLeft: isSelectionMode ? "-5px" : "-15px" }}>
           <Avatar
             style={{
@@ -675,11 +675,11 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                       className={classes.connectionTag}
                       style={{
                         backgroundColor:
-                          ticket.channel === "whatsapp"
+                          ticket.channel === "whatsapp" || ticket.channel === "whatsapp_oficial"
                             ? ticket.whatsapp?.color || "#25D366"
                             : ticket.channel === "facebook"
-                            ? "#4267B2"
-                            : "#E1306C",
+                              ? "#4267B2"
+                              : "#E1306C",
                       }}
                     >
                       {ticket.whatsapp?.name.toUpperCase()}
@@ -697,8 +697,8 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                       {ticket.queueId
                         ? ticket.queue?.name.toUpperCase()
                         : ticket.status === "lgpd"
-                        ? "LGPD"
-                        : `${i18n.t("momentsUser.noqueue")}`}
+                          ? "LGPD"
+                          : `${i18n.t("momentsUser.noqueue")}`}
                     </Badge>
                   }
                   {ticket?.user && (
@@ -863,32 +863,32 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                 {(ticket.status === "pending" ||
                   ticket.status === "open" ||
                   ticket.status === "group") && (
-                  <ButtonWithSpinner
-                    style={{
-                      backgroundColor: "transparent",
-                      boxShadow: "none",
-                      border: "none",
-                      color: theme.mode === "light" ? "purple" : "#FFF",
-                      padding: "0px",
-                      borderRadius: "50%",
-                      right: "26px",
-                      position: "absolute",
-                      fontSize: "0.6rem",
-                      bottom: "-30px",
-                      minWidth: "2em",
-                      width: "auto",
-                    }}
-                    variant="contained"
-                    className={classes.acceptButton}
-                    size="small"
-                    loading={loading}
-                    onClick={handleOpenTransferModal}
-                  >
-                    <Tooltip title={`${i18n.t("ticketsList.buttons.transfer")}`}>
-                      <SwapHoriz />
-                    </Tooltip>
-                  </ButtonWithSpinner>
-                )}
+                    <ButtonWithSpinner
+                      style={{
+                        backgroundColor: "transparent",
+                        boxShadow: "none",
+                        border: "none",
+                        color: theme.mode === "light" ? "purple" : "#FFF",
+                        padding: "0px",
+                        borderRadius: "50%",
+                        right: "26px",
+                        position: "absolute",
+                        fontSize: "0.6rem",
+                        bottom: "-30px",
+                        minWidth: "2em",
+                        width: "auto",
+                      }}
+                      variant="contained"
+                      className={classes.acceptButton}
+                      size="small"
+                      loading={loading}
+                      onClick={handleOpenTransferModal}
+                    >
+                      <Tooltip title={`${i18n.t("ticketsList.buttons.transfer")}`}>
+                        <SwapHoriz />
+                      </Tooltip>
+                    </ButtonWithSpinner>
+                  )}
               </span>
               <span className={classes.secondaryContentSecond}>
                 {(ticket.status === "open" || ticket.status === "group") && (
@@ -1078,8 +1078,8 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
         fullWidth
       >
         <DialogContent className={classes.imageModalContent}>
-          <img 
-            src={ticket?.contact?.urlPicture} 
+          <img
+            src={ticket?.contact?.urlPicture}
             alt={ticket?.contact?.name || "Foto do contato"}
             className={classes.expandedImage}
           />
