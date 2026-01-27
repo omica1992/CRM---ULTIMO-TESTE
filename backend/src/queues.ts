@@ -153,8 +153,8 @@ async function handleVerifyReminders(job) {
       include: [
         { model: Contact, as: "contact" },
         { model: User, as: "user", attributes: ["name"] },
-        { 
-          model: QuickMessage, 
+        {
+          model: QuickMessage,
           as: "template",
           required: false,
           // ✅ CORREÇÃO: Usar expressão literal com função cast_to_int_safe para resolver incompatibilidade
@@ -208,8 +208,8 @@ async function handleVerifySchedules(job) {
       include: [
         { model: Contact, as: "contact" },
         { model: User, as: "user", attributes: ["name"] },
-        { 
-          model: QuickMessage, 
+        {
+          model: QuickMessage,
           as: "template",
           required: false,
           // ✅ CORREÇÃO: Usar expressão literal com função cast_to_int_safe para resolver incompatibilidade
@@ -322,10 +322,10 @@ async function handleSendScheduledMessage(job) {
       ticket = await ShowTicketService(ticket.id, schedule.companyId);
 
       // ✅ Verificar se é API Oficial (com ou sem ticket)
-      const isOficial = whatsapp.provider === "oficial" || 
-                       
-                       whatsapp.channel === "whatsapp-oficial" || 
-                       whatsapp.channel === "whatsapp_oficial";
+      const isOficial = whatsapp.provider === "oficial" ||
+
+        whatsapp.channel === "whatsapp-oficial" ||
+        whatsapp.channel === "whatsapp_oficial";
 
       let sentMessage;
 
@@ -334,111 +334,111 @@ async function handleSendScheduledMessage(job) {
         logger.info(`📋 [SCHEDULE-QUEUE] TEMPLATE (com ticket) - Enviando via API Oficial`);
         logger.info(`📋 [SCHEDULE-QUEUE] - Template Meta ID: ${schedule.templateMetaId}`);
         logger.info(`📋 [SCHEDULE-QUEUE] - Ticket ID: ${ticket.id}`);
-        
+
         const cleanNumber = schedule.contact.number.replace(/[^\d]/g, "");
         const formattedNumber = `+${cleanNumber}`; // ✅ Adicionar + para API Oficial
         logger.info(`📋 [SCHEDULE-QUEUE] - Número original: ${schedule.contact.number}`);
         logger.info(`📋 [SCHEDULE-QUEUE] - Número limpo: ${cleanNumber}`);
         logger.info(`📋 [SCHEDULE-QUEUE] - Número formatado: ${formattedNumber}`);
         logger.info(`📋 [SCHEDULE-QUEUE] - Tamanho do número: ${cleanNumber.length}`);
-        
+
         // ✅ Usar mesma estrutura da campanha
         // ⚠️ Limpar components - remover campos extras (id, createdAt, etc)
         const cleanComponents = (schedule.templateComponents || []).map((comp: any) => {
           const cleanComp: any = {
             type: comp.type
           };
-          
+
           // Adicionar sub_type e index se for botão
           if (comp.sub_type) cleanComp.sub_type = comp.sub_type;
           if (comp.index !== undefined) cleanComp.index = comp.index;
-          
+
           // Limpar parameters também
           if (Array.isArray(comp.parameters)) {
             cleanComp.parameters = comp.parameters.map((param: any) => {
               // Manter apenas campos válidos do parameter
               const cleanParam: any = { type: param.type };
-              
+
               if (param.text !== undefined) cleanParam.text = param.text;
               if (param.coupon_code !== undefined) cleanParam.coupon_code = param.coupon_code;
               if (param.image !== undefined) cleanParam.image = param.image;
               if (param.video !== undefined) cleanParam.video = param.video;
               if (param.document !== undefined) cleanParam.document = param.document;
-              
+
               return cleanParam;
             });
           } else {
             cleanComp.parameters = [];
           }
-          
+
           return cleanComp;
         });
 
         // ✅ CORREÇÃO PARA CAMPANHAS: Usar o metaID diretamente como nome do template 
         // para templates da API Oficial, em vez de buscar na tabela QuickMessages
         const isMetaApiId = schedule.templateMetaId && schedule.templateMetaId.length > 10;
-        
+
         // ✅ CORREÇÃO: Buscar nome do template apropriado para uso com a API Oficial
-let templateRecord = schedule.template;
-let templateName = schedule.templateName || ""; // ✅ Primeiro tentar usar o nome salvo no agendamento
-let templateLanguage = schedule.templateLanguage || "pt_BR";
+        let templateRecord = schedule.template;
+        let templateName = schedule.templateName || ""; // ✅ Primeiro tentar usar o nome salvo no agendamento
+        let templateLanguage = schedule.templateLanguage || "pt_BR";
 
-// ✅ Se não tiver templateName salvo no agendamento, tentar obter de outras fontes
-if (!templateName) {
-  // Verificar se é ID da Meta API (IDs longos, geralmente >10 caracteres)
-  const isMetaApiId = schedule.templateMetaId && schedule.templateMetaId.length > 10;
-  
-  // Se o templateRecord já estiver carregado, usar seu shortcode
-  if (templateRecord) {
-    templateName = templateRecord.shortcode;
-    templateLanguage = templateRecord.language || templateLanguage;
-    logger.info(`✅ [SCHEDULE-QUEUE] Usando template já carregado: ${templateName}`);
-  }
-  // Se não tiver template carregado, tentar buscar no banco
-  else if (!isMetaApiId) {
-    try {
-      // Para IDs curtos, tentar buscar no banco por compatibilidade
-      templateRecord = await QuickMessage.findByPk(schedule.templateMetaId, {
-        include: [{ model: QuickMessageComponent, as: "components" }]
-      });
-      
-      if (templateRecord) {
-        templateName = templateRecord.shortcode;
-        templateLanguage = templateRecord.language || templateLanguage;
-        logger.info(`✅ [SCHEDULE-QUEUE] Template local encontrado: ${templateName}`);
-        
-        // ✅ Salvar o nome do template no agendamento para futuras execuções
-        if (scheduleRecord) {
-          await scheduleRecord.update({ templateName: templateName });
-          logger.info(`✅ [SCHEDULE-QUEUE] Nome do template salvo no agendamento: ${templateName}`);
+        // ✅ Se não tiver templateName salvo no agendamento, tentar obter de outras fontes
+        if (!templateName) {
+          // Verificar se é ID da Meta API (IDs longos, geralmente >10 caracteres)
+          const isMetaApiId = schedule.templateMetaId && schedule.templateMetaId.length > 10;
+
+          // Se o templateRecord já estiver carregado, usar seu shortcode
+          if (templateRecord) {
+            templateName = templateRecord.shortcode;
+            templateLanguage = templateRecord.language || templateLanguage;
+            logger.info(`✅ [SCHEDULE-QUEUE] Usando template já carregado: ${templateName}`);
+          }
+          // Se não tiver template carregado, tentar buscar no banco
+          else if (!isMetaApiId) {
+            try {
+              // Para IDs curtos, tentar buscar no banco por compatibilidade
+              templateRecord = await QuickMessage.findByPk(schedule.templateMetaId, {
+                include: [{ model: QuickMessageComponent, as: "components" }]
+              });
+
+              if (templateRecord) {
+                templateName = templateRecord.shortcode;
+                templateLanguage = templateRecord.language || templateLanguage;
+                logger.info(`✅ [SCHEDULE-QUEUE] Template local encontrado: ${templateName}`);
+
+                // ✅ Salvar o nome do template no agendamento para futuras execuções
+                if (scheduleRecord) {
+                  await scheduleRecord.update({ templateName: templateName });
+                  logger.info(`✅ [SCHEDULE-QUEUE] Nome do template salvo no agendamento: ${templateName}`);
+                }
+              } else {
+                logger.warn(`❗ [SCHEDULE-QUEUE] Template não encontrado no banco`);
+              }
+            } catch (err) {
+              logger.warn(`❗ [SCHEDULE-QUEUE] Erro ao buscar template: ${err.message}`);
+            }
+          }
+
+          // Se ainda não tiver nome, usar o proprio ID como fallback
+          if (!templateName) {
+            templateName = schedule.templateMetaId;
+            logger.info(`📋 [SCHEDULE-QUEUE] Usando ID como nome do template: ${templateName}`);
+          }
+        } else {
+          logger.info(`📋 [SCHEDULE-QUEUE] Usando nome do template já salvo no agendamento: ${templateName}`);
         }
-      } else {
-        logger.warn(`❗ [SCHEDULE-QUEUE] Template não encontrado no banco`);
-      }
-    } catch (err) {
-      logger.warn(`❗ [SCHEDULE-QUEUE] Erro ao buscar template: ${err.message}`);
-    }
-  }
-  
-  // Se ainda não tiver nome, usar o proprio ID como fallback
-  if (!templateName) {
-    templateName = schedule.templateMetaId;
-    logger.info(`📋 [SCHEDULE-QUEUE] Usando ID como nome do template: ${templateName}`);
-  }
-} else {
-  logger.info(`📋 [SCHEDULE-QUEUE] Usando nome do template já salvo no agendamento: ${templateName}`);
-}
 
-// Montar dados do template usando o nome apropriado 
-const templateData: IMetaMessageTemplate = {
-  name: templateName,
-  language: {
-    code: templateLanguage
-  },
-  components: cleanComponents
-};
+        // Montar dados do template usando o nome apropriado 
+        const templateData: IMetaMessageTemplate = {
+          name: templateName,
+          language: {
+            code: templateLanguage
+          },
+          components: cleanComponents
+        };
 
-logger.info(`📋 [SCHEDULE-QUEUE] Enviando template: name=${templateName}, language=${templateLanguage}`);
+        logger.info(`📋 [SCHEDULE-QUEUE] Enviando template: name=${templateName}, language=${templateLanguage}`);
 
         const payload: ISendMessageOficial = {
           type: 'template',
@@ -453,9 +453,9 @@ logger.info(`📋 [SCHEDULE-QUEUE] Enviando template: name=${templateName}, lang
           whatsapp.token || whatsapp.send_token || whatsapp.tokenMeta,
           payload
         );
-        
+
         logger.info(`✅ [SCHEDULE-QUEUE] Template enviado (com ticket)`);
-        
+
         // Criar mensagem fake para o verifyMessage
         sentMessage = {
           key: { id: `TEMPLATE_${Date.now()}` },
@@ -471,7 +471,7 @@ logger.info(`📋 [SCHEDULE-QUEUE] Enviando template: name=${templateName}, lang
         } else {
           bodyMessage = schedule.body.trim();
         }
-        
+
         sentMessage = await SendMessage(
           whatsapp,
           {
@@ -518,120 +518,120 @@ logger.info(`📋 [SCHEDULE-QUEUE] Enviando template: name=${templateName}, lang
       // }
     } else {
       logger.info(`📤 [SCHEDULE-QUEUE] Modo: Sem abrir ticket`);
-      
+
       // ✅ Verificar se é um template da API Oficial
-      const isOficial = whatsapp.provider === "oficial" || 
-                       
-                       whatsapp.channel === "whatsapp-oficial" || 
-                       whatsapp.channel === "whatsapp_oficial";
-      
+      const isOficial = whatsapp.provider === "oficial" ||
+
+        whatsapp.channel === "whatsapp-oficial" ||
+        whatsapp.channel === "whatsapp_oficial";
+
       if (schedule.isTemplate && schedule.templateMetaId && isOficial) {
         logger.info(`📋 [SCHEDULE-QUEUE] DETECTADO TEMPLATE - Enviando via API Oficial`);
         logger.info(`📋 [SCHEDULE-QUEUE] - Template Meta ID: ${schedule.templateMetaId}`);
         logger.info(`📋 [SCHEDULE-QUEUE] - Language: ${schedule.templateLanguage || "pt_BR"}`);
         logger.info(`📋 [SCHEDULE-QUEUE] - To: ${schedule.contact.number}`);
-        
+
         const cleanNumber = schedule.contact.number.replace(/[^\d]/g, "");
         const formattedNumber = `+${cleanNumber}`; // ✅ Adicionar + para API Oficial
-        
+
         // ✅ Usar mesma estrutura da campanha
         // ⚠️ Limpar components - remover campos extras (id, createdAt, etc)
         const cleanComponents = (schedule.templateComponents || []).map((comp: any) => {
           const cleanComp: any = {
             type: comp.type
           };
-          
+
           // Adicionar sub_type e index se for botão
           if (comp.sub_type) cleanComp.sub_type = comp.sub_type;
           if (comp.index !== undefined) cleanComp.index = comp.index;
-          
+
           // Limpar parameters também
           if (Array.isArray(comp.parameters)) {
             cleanComp.parameters = comp.parameters.map((param: any) => {
               // Manter apenas campos válidos do parameter
               const cleanParam: any = { type: param.type };
-              
+
               if (param.text !== undefined) cleanParam.text = param.text;
               if (param.coupon_code !== undefined) cleanParam.coupon_code = param.coupon_code;
               if (param.image !== undefined) cleanParam.image = param.image;
               if (param.video !== undefined) cleanParam.video = param.video;
               if (param.document !== undefined) cleanParam.document = param.document;
-              
+
               return cleanParam;
             });
           } else {
             cleanComp.parameters = [];
           }
-          
+
           return cleanComp;
         });
 
         // ✅ CORREÇÃO PARA CAMPANHAS: Usar o metaID diretamente como nome do template 
         // para templates da API Oficial, em vez de buscar na tabela QuickMessages
         const isMetaApiId = schedule.templateMetaId && schedule.templateMetaId.length > 10;
-        
+
         // Opcionalmente tentar buscar o template no banco (apenas para logs)
         // ✅ CORREÇÃO: Buscar nome do template apropriado para uso com a API Oficial
-let templateRecord = schedule.template;
-let templateName = schedule.templateName || ""; // ✅ Primeiro tentar usar o nome salvo no agendamento
-let templateLanguage = schedule.templateLanguage || "pt_BR";
+        let templateRecord = schedule.template;
+        let templateName = schedule.templateName || ""; // ✅ Primeiro tentar usar o nome salvo no agendamento
+        let templateLanguage = schedule.templateLanguage || "pt_BR";
 
-// ✅ Se não tiver templateName salvo no agendamento, tentar obter de outras fontes
-if (!templateName) {
-  // Verificar se é ID da Meta API (IDs longos, geralmente >10 caracteres)
-  const isMetaApiId = schedule.templateMetaId && schedule.templateMetaId.length > 10;
-  
-  // Se o templateRecord já estiver carregado, usar seu shortcode
-  if (templateRecord) {
-    templateName = templateRecord.shortcode;
-    templateLanguage = templateRecord.language || templateLanguage;
-    logger.info(`✅ [SCHEDULE-QUEUE] Usando template já carregado: ${templateName}`);
-  }
-  // Se não tiver template carregado, tentar buscar no banco
-  else if (!isMetaApiId) {
-    try {
-      // Para IDs curtos, tentar buscar no banco por compatibilidade
-      templateRecord = await QuickMessage.findByPk(schedule.templateMetaId, {
-        include: [{ model: QuickMessageComponent, as: "components" }]
-      });
-      
-      if (templateRecord) {
-        templateName = templateRecord.shortcode;
-        templateLanguage = templateRecord.language || templateLanguage;
-        logger.info(`✅ [SCHEDULE-QUEUE] Template local encontrado: ${templateName}`);
-        
-        // ✅ Salvar o nome do template no agendamento para futuras execuções
-        if (scheduleRecord) {
-          await scheduleRecord.update({ templateName: templateName });
-          logger.info(`✅ [SCHEDULE-QUEUE] Nome do template salvo no agendamento: ${templateName}`);
+        // ✅ Se não tiver templateName salvo no agendamento, tentar obter de outras fontes
+        if (!templateName) {
+          // Verificar se é ID da Meta API (IDs longos, geralmente >10 caracteres)
+          const isMetaApiId = schedule.templateMetaId && schedule.templateMetaId.length > 10;
+
+          // Se o templateRecord já estiver carregado, usar seu shortcode
+          if (templateRecord) {
+            templateName = templateRecord.shortcode;
+            templateLanguage = templateRecord.language || templateLanguage;
+            logger.info(`✅ [SCHEDULE-QUEUE] Usando template já carregado: ${templateName}`);
+          }
+          // Se não tiver template carregado, tentar buscar no banco
+          else if (!isMetaApiId) {
+            try {
+              // Para IDs curtos, tentar buscar no banco por compatibilidade
+              templateRecord = await QuickMessage.findByPk(schedule.templateMetaId, {
+                include: [{ model: QuickMessageComponent, as: "components" }]
+              });
+
+              if (templateRecord) {
+                templateName = templateRecord.shortcode;
+                templateLanguage = templateRecord.language || templateLanguage;
+                logger.info(`✅ [SCHEDULE-QUEUE] Template local encontrado: ${templateName}`);
+
+                // ✅ Salvar o nome do template no agendamento para futuras execuções
+                if (scheduleRecord) {
+                  await scheduleRecord.update({ templateName: templateName });
+                  logger.info(`✅ [SCHEDULE-QUEUE] Nome do template salvo no agendamento: ${templateName}`);
+                }
+              } else {
+                logger.warn(`❗ [SCHEDULE-QUEUE] Template não encontrado no banco`);
+              }
+            } catch (err) {
+              logger.warn(`❗ [SCHEDULE-QUEUE] Erro ao buscar template: ${err.message}`);
+            }
+          }
+
+          // Se ainda não tiver nome, usar o proprio ID como fallback
+          if (!templateName) {
+            templateName = schedule.templateMetaId;
+            logger.info(`📋 [SCHEDULE-QUEUE] Usando ID como nome do template: ${templateName}`);
+          }
+        } else {
+          logger.info(`📋 [SCHEDULE-QUEUE] Usando nome do template já salvo no agendamento: ${templateName}`);
         }
-      } else {
-        logger.warn(`❗ [SCHEDULE-QUEUE] Template não encontrado no banco`);
-      }
-    } catch (err) {
-      logger.warn(`❗ [SCHEDULE-QUEUE] Erro ao buscar template: ${err.message}`);
-    }
-  }
-  
-  // Se ainda não tiver nome, usar o proprio ID como fallback
-  if (!templateName) {
-    templateName = schedule.templateMetaId;
-    logger.info(`📋 [SCHEDULE-QUEUE] Usando ID como nome do template: ${templateName}`);
-  }
-} else {
-  logger.info(`📋 [SCHEDULE-QUEUE] Usando nome do template já salvo no agendamento: ${templateName}`);
-}
 
-// Montar dados do template usando o nome apropriado 
-const templateData: IMetaMessageTemplate = {
-  name: templateName,
-  language: {
-    code: templateLanguage
-  },
-  components: cleanComponents
-};
+        // Montar dados do template usando o nome apropriado 
+        const templateData: IMetaMessageTemplate = {
+          name: templateName,
+          language: {
+            code: templateLanguage
+          },
+          components: cleanComponents
+        };
 
-logger.info(`📋 [SCHEDULE-QUEUE] Enviando template: name=${templateName}, language=${templateLanguage}`);
+        logger.info(`📋 [SCHEDULE-QUEUE] Enviando template: name=${templateName}, language=${templateLanguage}`);
 
         const payload: ISendMessageOficial = {
           type: 'template',
@@ -647,7 +647,7 @@ logger.info(`📋 [SCHEDULE-QUEUE] Enviando template: name=${templateName}, lang
           whatsapp.token || whatsapp.send_token || whatsapp.tokenMeta,
           payload
         );
-        
+
         logger.info(`✅ [SCHEDULE-QUEUE] Template enviado com sucesso`);
       } else if (isOficial) {
         // ✅ Texto livre na API Oficial (não é template)
@@ -656,10 +656,10 @@ logger.info(`📋 [SCHEDULE-QUEUE] Enviando template: name=${templateName}, lang
         logger.info(`💬 [SCHEDULE-QUEUE] - Channel: ${whatsapp.channel}`);
         logger.info(`💬 [SCHEDULE-QUEUE] - Body: ${schedule.body}`);
         logger.info(`💬 [SCHEDULE-QUEUE] - To: ${schedule.contact.number}`);
-        
+
         const cleanNumber = schedule.contact.number.replace(/[^\d]/g, "");
         const formattedNumber = `+${cleanNumber}`; // ✅ Adicionar + para API Oficial
-        
+
         const payload = {
           messaging_product: "whatsapp",
           to: formattedNumber,
@@ -676,14 +676,14 @@ logger.info(`📋 [SCHEDULE-QUEUE] Enviando template: name=${templateName}, lang
           whatsapp.token || whatsapp.send_token || whatsapp.tokenMeta,
           payload
         );
-        
+
         logger.info(`✅ [SCHEDULE-QUEUE] Texto livre enviado via API Oficial`);
       } else {
         // Envio via Baileys
         logger.info(`💬 [SCHEDULE-QUEUE] TEXTO LIVRE VIA BAILEYS`);
         logger.info(`💬 [SCHEDULE-QUEUE] - Provider: ${whatsapp.provider}`);
         logger.info(`💬 [SCHEDULE-QUEUE] - Body length: ${schedule.body?.length}`);
-        
+
         await SendMessage(
           whatsapp,
           {
@@ -694,7 +694,7 @@ logger.info(`📋 [SCHEDULE-QUEUE] Enviando template: name=${templateName}, lang
           },
           schedule.contact.isGroup
         );
-        
+
         logger.info(`✅ [SCHEDULE-QUEUE] Mensagem enviada via Baileys`);
       }
     }
@@ -796,37 +796,37 @@ logger.info(`📋 [SCHEDULE-QUEUE] Enviando template: name=${templateName}, lang
     await scheduleRecord?.update({
       status: "ERRO"
     });
-    
+
     // Logs detalhados com verificações de segurança
     logger.error(`❌ [SCHEDULE-QUEUE] ========================================`);
     logger.error(`❌ [SCHEDULE-QUEUE] ERRO AO ENVIAR MENSAGEM`);
     logger.error(`❌ [SCHEDULE-QUEUE] Schedule ID: ${schedule?.id || 'N/A'}`);
     logger.error(`❌ [SCHEDULE-QUEUE] ========================================`);
-    
+
     // Serializar erro de forma segura
     if (e) {
       logger.error(`❌ [SCHEDULE-QUEUE] Erro Type: ${typeof e}`);
       logger.error(`❌ [SCHEDULE-QUEUE] Erro Name: ${e.name || 'N/A'}`);
       logger.error(`❌ [SCHEDULE-QUEUE] Erro Message: ${e.message || 'Sem mensagem'}`);
-      
+
       if (e.stack) {
         logger.error(`❌ [SCHEDULE-QUEUE] Stack Trace:`);
         logger.error(e.stack);
       }
-      
+
       // Tentar stringify o erro completo
       try {
         logger.error(`❌ [SCHEDULE-QUEUE] Erro Completo (JSON): ${JSON.stringify(e, null, 2)}`);
       } catch (jsonErr) {
         logger.error(`❌ [SCHEDULE-QUEUE] Não foi possível serializar erro como JSON`);
       }
-      
+
       // Mostrar propriedades do erro
       logger.error(`❌ [SCHEDULE-QUEUE] Propriedades do erro:`, Object.keys(e));
     } else {
       logger.error(`❌ [SCHEDULE-QUEUE] Erro é null/undefined!`);
     }
-    
+
     logger.error(`❌ [SCHEDULE-QUEUE] ----------------------------------------`);
     logger.error(`❌ [SCHEDULE-QUEUE] DADOS DO SCHEDULE:`);
     logger.error(`❌ [SCHEDULE-QUEUE] - ID: ${schedule?.id}`);
@@ -845,7 +845,7 @@ logger.info(`📋 [SCHEDULE-QUEUE] Enviando template: name=${templateName}, lang
     logger.error(`❌ [SCHEDULE-QUEUE] - Channel: ${whatsapp?.channel}`);
     logger.error(`❌ [SCHEDULE-QUEUE] - Status: ${whatsapp?.status}`);
     logger.error(`❌ [SCHEDULE-QUEUE] ========================================`);
-    
+
     throw e;
   }
 }
@@ -1474,7 +1474,7 @@ async function verifyAndFinalizeCampaign(campaign) {
   if (totalProcessed >= contacts.length) {
     // Salvar executionCount antigo antes de atualizar
     const oldExecutionCount = campaign.executionCount;
-    
+
     // Atualizar executionCount se necessário
     if (realExecutionCount > oldExecutionCount) {
       logger.info(
@@ -1705,7 +1705,7 @@ async function handlePrepareContact(job) {
         }
       );
 
-      logger.info(`[CAMPAIGN-DISPATCH] ➕ Job criado: #${nextJob.id}, Campanha=${campaign.id}, Shipping=${record.id}, Delay=${delay}ms (${Math.round(delay/1000)}s)`);
+      logger.info(`[CAMPAIGN-DISPATCH] ➕ Job criado: #${nextJob.id}, Campanha=${campaign.id}, Shipping=${record.id}, Delay=${delay}ms (${Math.round(delay / 1000)}s)`);
 
       await record.update({ jobId: String(nextJob.id) });
     }
@@ -1719,9 +1719,9 @@ async function handlePrepareContact(job) {
 async function handleDispatchCampaign(job) {
   const { data } = job;
   const { campaignShippingId, campaignId }: DispatchCampaignData = data;
-  
+
   logger.info(`[CAMPAIGN-DISPATCH] 🎯 INICIANDO handleDispatchCampaign - Job #${job.id}, Campanha=${campaignId}, Shipping=${campaignShippingId}`);
-  
+
   try {
     const campaign = await getCampaign(campaignId);
 
@@ -1742,7 +1742,7 @@ async function handleDispatchCampaign(job) {
 
     // ✅ Buscar informações do WhatsApp ANTES de tentar wbot
     const whatsapp = await Whatsapp.findByPk(campaign.whatsappId);
-    
+
     if (!whatsapp) {
       logger.error(
         `campaignQueue -> DispatchCampaign -> error: whatsapp ${campaign.whatsappId} not found`
@@ -1823,7 +1823,9 @@ async function handleDispatchCampaign(job) {
           whatsappId: whatsapp.id,
           queueId: campaign?.queueId,
           userId: campaign?.userId,
-          status: campaign?.statusTicket
+          status: campaign?.statusTicket,
+          // ✅ CORREÇÃO: Adicionar channel da conexão WhatsApp
+          channel: whatsapp.channel || "whatsapp"
         });
       }
 
@@ -1832,7 +1834,7 @@ async function handleDispatchCampaign(job) {
       // ✅ Verifica se é WhatsApp Oficial e tem template configurado
       if (whatsapp.channel === "whatsapp_oficial" && campaign.templateId) {
         logger.info(`[CAMPAIGN-DISPATCH] 📋 Enviando template da Meta: Campanha=${campaignId}, Template=${campaign.templateId}, Ticket=${ticket.id}, Contato=${campaignShipping.number}`);
-        
+
         // ✅ CORREÇÃO: Usar dados salvos na campanha em vez de buscar em QuickMessage
         if (!campaign.templateName || !campaign.templateLanguage) {
           throw new Error(`Campanha ${campaignId} não possui dados completos do template (templateName ou templateLanguage ausentes)`);
@@ -1859,7 +1861,7 @@ async function handleDispatchCampaign(job) {
             if (Array.isArray(templateComponents) && templateComponents.length > 0) {
               templateComponents.forEach((component, index) => {
                 const componentType = component.type.toLowerCase() as "header" | "body" | "footer" | "button";
-                
+
                 // Verifique se há variáveis para o componente atual
                 if (variables[componentType] && Object.keys(variables[componentType]).length > 0) {
                   let newComponent;
@@ -1940,20 +1942,20 @@ async function handleDispatchCampaign(job) {
 
         // ✅ CORREÇÃO: Criar corpo da mensagem a partir do template
         let bodyToSave = '';
-        
+
         // Prioridade 1: Tentar extrair do BODY do template
         const bodyComponent = templateComponents?.find(c => c.type === 'BODY');
         if (bodyComponent && bodyComponent.text) {
           bodyToSave = bodyComponent.text;
           logger.info(`[CAMPAIGN-SAVE] Usando texto do BODY do template: ${bodyToSave.substring(0, 50)}...`);
         }
-        
+
         // Prioridade 2: Usar mensagem da campanha
         if (!bodyToSave && campaignShipping.message && campaignShipping.message.trim() !== '') {
           bodyToSave = campaignShipping.message;
           logger.info(`[CAMPAIGN-SAVE] Usando mensagem da campanha: ${bodyToSave.substring(0, 50)}...`);
         }
-        
+
         // Prioridade 3: Usar HEADER do template
         if (!bodyToSave) {
           const headerComponent = templateComponents?.find(c => c.type === 'HEADER');
@@ -1962,24 +1964,24 @@ async function handleDispatchCampaign(job) {
             logger.info(`[CAMPAIGN-SAVE] Usando texto do HEADER do template: ${bodyToSave.substring(0, 50)}...`);
           }
         }
-        
+
         // Fallback final: Nome do template
         if (!bodyToSave || bodyToSave.trim() === '') {
           bodyToSave = `📋 Template: ${campaign.templateName}`;
           logger.info(`[CAMPAIGN-SAVE] Usando fallback com nome do template: ${bodyToSave}`);
         }
-        
+
         // Adicionar informação sobre botões se houver
         if (buttonsToSave && buttonsToSave.length > 0) {
           bodyToSave = bodyToSave.concat('||||', JSON.stringify(buttonsToSave));
           logger.info(`[CAMPAIGN-SAVE] Botões adicionados ao body`);
         }
-        
+
         logger.info(`[CAMPAIGN-SAVE] Body final a ser salvo: ${bodyToSave.substring(0, 100)}...`);
 
         // Envia template via API Meta
         logger.info(`[CAMPAIGN-DISPATCH] 🚀 Chamando SendWhatsAppOficialMessage - Ticket=${ticket.id}, Template=${templateData.name}`);
-        
+
         const sendResult = await SendWhatsAppOficialMessage({
           body: bodyToSave,
           ticket,
@@ -1988,7 +1990,7 @@ async function handleDispatchCampaign(job) {
           template: templateData,
           quotedMsg: null
         });
-        
+
         const messageId = sendResult?.messages?.[0]?.id || 'N/A';
         logger.info(`[CAMPAIGN-DISPATCH] ✅ Template enviado com sucesso - Ticket=${ticket.id}, MessageId=${messageId}`);
 
@@ -2132,7 +2134,7 @@ async function handleDispatchCampaign(job) {
       } else if (whatsapp.channel === "whatsapp_oficial" && campaign.templateId) {
         // ✅ WhatsApp Oficial SEM ticket mas COM template (envio direto via API Meta)
         logger.info(`[CAMPAIGN-DISPATCH] 📋 Enviando template SEM ticket: Campanha=${campaignId}, Template=${campaign.templateId}, Contato=${campaignShipping.number}`);
-        
+
         // ✅ CORREÇÃO: Usar dados salvos na campanha em vez de buscar em QuickMessage
         if (!campaign.templateName || !campaign.templateLanguage) {
           throw new Error(`Campanha ${campaignId} não possui dados completos do template (templateName ou templateLanguage ausentes)`);
@@ -2159,7 +2161,7 @@ async function handleDispatchCampaign(job) {
             if (Array.isArray(templateComponents) && templateComponents.length > 0) {
               templateComponents.forEach((component, index) => {
                 const componentType = component.type.toLowerCase() as "header" | "body" | "footer" | "button";
-                
+
                 if (variables[componentType] && Object.keys(variables[componentType]).length > 0) {
                   let newComponent;
 
@@ -2237,15 +2239,15 @@ async function handleDispatchCampaign(job) {
         // Envia template direto via API Meta usando lib
         // Formatar número para padrão WhatsApp (apenas dígitos)
         let cleanNumber = campaignShipping.number.replace(/\D/g, '');
-        
+
         // Se não começar com código do país, adicionar 55 (Brasil)
         if (cleanNumber.length === 11 && !cleanNumber.startsWith('55')) {
           cleanNumber = '55' + cleanNumber;
         }
-        
+
         // API Oficial exige formato +5511999999999
         const formattedNumber = '+' + cleanNumber;
-        
+
         const options: ISendMessageOficial = {
           type: 'template',
           body_template: templateData,
@@ -2253,7 +2255,7 @@ async function handleDispatchCampaign(job) {
         };
 
         logger.info(`Enviando template via API Meta: Numero original=${campaignShipping.number}, Numero formatado=${formattedNumber}`);
-        
+
         // Log detalhado para arquivo
         campaignLogger.info(`Iniciando envio de template`, {
           campaignId,
@@ -2272,7 +2274,7 @@ async function handleDispatchCampaign(job) {
           );
 
           await campaignShipping.update({ deliveredAt: moment() });
-          
+
           // Log de sucesso
           campaignLogger.templateSent(campaignId, formattedNumber, parseInt(campaign.templateId), result);
           logger.info(`Template enviado via Meta API sem ticket: Campanha=${campaignId};Numero=${cleanNumber};Status=Enviado`);
@@ -2307,7 +2309,7 @@ async function handleDispatchCampaign(job) {
     Sentry.captureException(err);
     logger.error(`Erro ao enviar campanha: Campanha=${data.campaignId};Erro=${err.message}`);
     console.log(err.stack);
-    
+
     // ✅ SOLUÇÃO 2: Registrar falha no CampaignShipping
     try {
       const failedShipping = await CampaignShipping.findByPk(data.campaignShippingId);
@@ -2322,7 +2324,7 @@ async function handleDispatchCampaign(job) {
     } catch (updateError) {
       logger.error(`[CAMPAIGN-ERROR] Erro ao registrar falha: ${updateError.message}`);
     }
-    
+
     // Ainda assim verifica e finaliza a campanha
     try {
       const failedCampaign = await getCampaign(data.campaignId);

@@ -79,13 +79,17 @@ const FindOrCreateTicketService = async (
         await ticket.update({
           userId: userId !== ticket.userId ? ticket.userId : userId,
           queueId: queueId !== ticket.queueId ? ticket.queueId : queueId,
+          // ✅ CORREÇÃO: Atualizar channel também para campanhas
+          ...(channel && { channel })
         })
       } else {
         const newUnreadCount = ticket.unreadMessages + unreadMessages;
 
         const updateData: any = {
           unreadMessages: newUnreadCount,
-          isBot: false
+          isBot: false,
+          // ✅ CORREÇÃO: Atualizar channel se foi fornecido para garantir consistência
+          ...(channel && { channel })
         };
 
         if (!["open", "pending", "chatbot"].includes(ticket.status)) {

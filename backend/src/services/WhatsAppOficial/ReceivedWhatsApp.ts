@@ -795,7 +795,10 @@ export class ReceibedWhatsAppService {
                 !ticket.useIntegration &&
                 !ticket.integrationId
             ) {
-                if (!ticket.user || ticket.queue?.chatbots?.length > 0) {
+                logger.info(`[WHATSAPP OFICIAL - CHATBOT CHECK] Ticket ${ticket.id} - userId: ${ticket.userId}, hasUser: ${!!ticket.user}, chatbots: ${ticket.queue?.chatbots?.length || 0}`);
+
+                // ✅ CORREÇÃO: Trocar OR (||) por AND (&&) para garantir que chatbot só execute sem atendente
+                if (!ticket.user && ticket.queue?.chatbots?.length > 0) {
                     console.log("[WHATSAPP OFICIAL] Executando sayChatbot para ticket", ticket.id);
 
                     // Criar um objeto msg simulado para compatibilidade com sayChatbot
@@ -826,6 +829,8 @@ export class ReceibedWhatsAppService {
                         console.error("[WHATSAPP OFICIAL] Erro ao executar sayChatbotOficial:", error);
                         logger.error(`[WHATSAPP OFICIAL] Erro sayChatbotOficial: ${error}`);
                     }
+                } else {
+                    logger.info(`[WHATSAPP OFICIAL - CHATBOT CHECK] Pulando chatbot para ticket ${ticket.id} - ${ticket.user ? 'ticket atribuído a atendente' : 'sem chatbots configurados'}`);
                 }
 
                 // Atualiza mensagem para indicar que houve atividade e aí contar o tempo novamente para enviar mensagem de inatividade
