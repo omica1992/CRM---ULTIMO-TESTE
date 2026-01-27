@@ -23,10 +23,11 @@ module.exports = {
     max: 100
   },
   pool: {
-    max: parseInt(process.env.DB_POOL_MAX) || 100,
-    min: parseInt(process.env.DB_POOL_MIN) || 15,
-    acquire: parseInt(process.env.DB_POOL_ACQUIRE) || 30000,
-    idle: parseInt(process.env.DB_POOL_IDLE) || 600000
+    max: parseInt(process.env.DB_POOL_MAX) || 10,      // ✅ Reduzido de 100 para 10
+    min: parseInt(process.env.DB_POOL_MIN) || 2,       // ✅ Reduzido de 15 para 2
+    acquire: parseInt(process.env.DB_POOL_ACQUIRE) || 60000,  // ✅ Aumentado de 30s para 60s
+    idle: parseInt(process.env.DB_POOL_IDLE) || 10000, // ✅ Reduzido de 10min para 10s
+    evict: 5000  // ✅ Verificar conexões idle a cada 5s
   },
   dialect: process.env.DB_DIALECT || "postgres",
   timezone: 'America/Sao_Paulo',
