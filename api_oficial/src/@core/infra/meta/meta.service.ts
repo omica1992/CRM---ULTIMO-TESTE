@@ -21,7 +21,7 @@ export class MetaService {
 
   path = `./public`;
 
-  constructor() {}
+  constructor() { }
 
   async send<T>(
     url: string,
@@ -70,7 +70,11 @@ export class MetaService {
     conexao: number,
   ): Promise<{ base64: string; mimeType: string }> {
     try {
+      this.logger.log(`[META DOWNLOAD] 📥 Iniciando download - ID: ${idMessage}, Phone: ${phone_number_id}`);
+
       const auth = await this.authFileMeta(idMessage, phone_number_id, token);
+
+      this.logger.log(`[META DOWNLOAD] ✅ Auth obtido - URL: ${auth.url}, MimeType: ${auth.mime_type}, Size: ${auth.file_size || 'N/A'} bytes`);
 
       if (!existsSync(this.path)) mkdirSync(this.path);
       if (!existsSync(`${this.path}/${companyId}`))
@@ -88,26 +92,45 @@ export class MetaService {
         'User-Agent': 'curl/7.64.1',
       };
 
+      this.logger.log(`[META DOWNLOAD] 🌐 Baixando arquivo de ${auth.url}...`);
+
       const result = await axios.get(auth.url, {
         headers,
         responseType: 'arraybuffer',
+        maxContentLength: 100 * 1024 * 1024, // 100MB limit
+        maxBodyLength: 100 * 1024 * 1024,
       });
 
-      if (result.status != 200)
+      this.logger.log(`[META DOWNLOAD] ✅ Download concluído - Status: ${result.status}, Size: ${result.data.length} bytes`);
+
+      if (result.status != 200) {
+        this.logger.error(`[META DOWNLOAD] ❌ Status HTTP inválido: ${result.status}`);
         throw new Error('Falha em baixar o arquivo da meta');
+      }
 
       const base64 = result.data.toString('base64');
 
+      this.logger.log(`[META DOWNLOAD] 💾 Salvando arquivo em ${pathFile}/${idMessage}.${mimeType}`);
+
       writeFileSync(`${pathFile}/${idMessage}.${mimeType}`, result.data);
+
+      this.logger.log(`[META DOWNLOAD] ✅ Arquivo salvo com sucesso - Base64 length: ${base64.length}`);
 
       return {
         base64,
         mimeType: auth.mime_type,
       };
     } catch (error: any) {
-      console.log(error);
-      this.logger.error(`authDownloadFile - ${error.message}`);
-      throw Error('Erro ao converter o arquivo');
+      this.logger.error(`[META DOWNLOAD] ❌ ERRO CRÍTICO ao baixar arquivo ${idMessage}`);
+      this.logger.error(`[META DOWNLOAD] Erro: ${error.message}`);
+      if (error.response) {
+        this.logger.error(`[META DOWNLOAD] Response Status: ${error.response.status}`);
+        this.logger.error(`[META DOWNLOAD] Response Data: ${JSON.stringify(error.response.data).substring(0, 500)}`);
+      }
+      if (error.stack) {
+        this.logger.error(`[META DOWNLOAD] Stack: ${error.stack.split('\n').slice(0, 5).join('\n')}`);
+      }
+      throw Error(`Erro ao baixar arquivo: ${error.message}`);
     }
   }
 
@@ -209,7 +232,7 @@ export class MetaService {
         }
 
         const pageData = (await result.json()) as IResultTemplates;
-        
+
         // Adicionar templates da página atual
         if (pageData.data && pageData.data.length > 0) {
           allTemplates = allTemplates.concat(pageData.data);
@@ -242,11 +265,11 @@ export class MetaService {
   async uploadMedia(phoneNumberId: string, token: string, fileUrl: string, mimeType: string) {
     try {
       this.logger.log(`[META] Fazendo upload de mídia: ${fileUrl}`);
-      
+
       // Baixar o arquivo da URL
       const fileResponse = await axios.get(fileUrl, { responseType: 'arraybuffer' });
       const fileBuffer = Buffer.from(fileResponse.data);
-      
+
       // Criar FormData
       const FormData = require('form-data');
       const formData = new FormData();
@@ -255,7 +278,7 @@ export class MetaService {
         contentType: mimeType
       });
       formData.append('messaging_product', 'whatsapp');
-      
+
       // Upload para a Meta
       const response = await axios.post(
         `${this.urlMeta}/${phoneNumberId}/media`,
@@ -267,7 +290,7 @@ export class MetaService {
           }
         }
       );
-      
+
       this.logger.log(`[META] ✅ Mídia enviada com sucesso. ID: ${response.data.id}`);
       return response.data.id;
     } catch (error: any) {
@@ -298,14 +321,14 @@ export class MetaService {
         this.logger.error(`[META] Status HTTP: ${result.status}`);
         this.logger.error(`[META] Erro completo da Meta: ${JSON.stringify(resultError, null, 2)}`);
         this.logger.error(`[META] Payload enviado: ${JSON.stringify(templateData, null, 2)}`);
-        
+
         // ✅ Priorizar mensagem amigável da Meta (error_user_msg)
-        const errorMessage = resultError.error?.error_user_msg || 
-                            resultError.error?.error_user_title ||
-                            resultError.error?.message || 
-                            resultError.error?.error_data?.details || 
-                            'Falha ao criar template';
-        
+        const errorMessage = resultError.error?.error_user_msg ||
+          resultError.error?.error_user_title ||
+          resultError.error?.message ||
+          resultError.error?.error_data?.details ||
+          'Falha ao criar template';
+
         this.logger.error(`[META] Mensagem de erro extraída: ${errorMessage}`);
         throw new Error(errorMessage);
       }
@@ -338,12 +361,12 @@ export class MetaService {
       if (result.status !== 200) {
         const resultError = await result.json();
         this.logger.error(`[META] Erro ao atualizar template: ${JSON.stringify(resultError, null, 2)}`);
-        
-        const errorMessage = resultError.error?.error_user_msg || 
-                            resultError.error?.error_user_title ||
-                            resultError.error?.message || 
-                            'Falha ao atualizar template';
-        
+
+        const errorMessage = resultError.error?.error_user_msg ||
+          resultError.error?.error_user_title ||
+          resultError.error?.message ||
+          'Falha ao atualizar template';
+
         throw new Error(errorMessage);
       }
 
@@ -366,7 +389,7 @@ export class MetaService {
       this.logger.log(`[META] Deletando template: ${templateName}`);
 
       const result = await fetch(
-        `${this.urlMeta}/${wabaId}/message_templates?name=${templateName}`, 
+        `${this.urlMeta}/${wabaId}/message_templates?name=${templateName}`,
         {
           method: 'DELETE',
           headers,
@@ -376,12 +399,12 @@ export class MetaService {
       if (result.status !== 200) {
         const resultError = await result.json();
         this.logger.error(`[META] Erro ao deletar template: ${JSON.stringify(resultError, null, 2)}`);
-        
-        const errorMessage = resultError.error?.error_user_msg || 
-                            resultError.error?.error_user_title ||
-                            resultError.error?.message || 
-                            'Falha ao deletar template';
-        
+
+        const errorMessage = resultError.error?.error_user_msg ||
+          resultError.error?.error_user_title ||
+          resultError.error?.message ||
+          'Falha ao deletar template';
+
         throw new Error(errorMessage);
       }
 
@@ -408,12 +431,12 @@ export class MetaService {
 
       if (result.status !== 200) {
         const resultError = await result.json();
-        
-        const errorMessage = resultError.error?.error_user_msg || 
-                            resultError.error?.error_user_title ||
-                            resultError.error?.message || 
-                            'Falha ao buscar template';
-        
+
+        const errorMessage = resultError.error?.error_user_msg ||
+          resultError.error?.error_user_title ||
+          resultError.error?.message ||
+          'Falha ao buscar template';
+
         throw new Error(errorMessage);
       }
 
