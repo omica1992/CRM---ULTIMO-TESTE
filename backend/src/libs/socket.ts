@@ -15,7 +15,12 @@ export const initIO = (httpServer: Server): SocketIO => {
   io = new SocketIO(httpServer, {
     cors: {
       origin: process.env.FRONTEND_URL
-    }
+    },
+    // ✅ CORREÇÃO: Aumentar limite de tamanho de mensagem para suportar arquivos grandes
+    // Padrão é 1MB, mas PDFs de 1MB viram ~1.3MB em base64
+    maxHttpBufferSize: 50 * 1024 * 1024, // 50MB
+    pingTimeout: 60000, // 60 segundos
+    pingInterval: 25000  // 25 segundos
   });
 
   if (process.env.SOCKET_ADMIN && JSON.parse(process.env.SOCKET_ADMIN)) {
@@ -225,6 +230,10 @@ export const initIO = (httpServer: Server): SocketIO => {
     });
 
     socket.on("receivedMessageWhatsAppOficial", (data: any) => {
+      console.log(`[SOCKET] ===== MENSAGEM RECEBIDA VIA SOCKET =====`);
+      console.log(`[SOCKET] CompanyId: ${data?.companyId}, From: ${data?.fromNumber}, Type: ${data?.message?.type}`);
+      console.log(`[SOCKET] HasFile: ${!!data?.message?.file}, FileSize: ${data?.message?.file?.length || 0}`);
+
       const receivedService = new ReceibedWhatsAppService();
       receivedService.getMessage(data);
     });
@@ -312,7 +321,7 @@ export const emitBirthdayEvents = async (companyId: number) => {
       });
     }
   } catch (error) {
-    logger.error(` [RDS-SOCKET] Erro ao emitir eventos de aniversário para empresa ${companyId}:`, 
+    logger.error(` [RDS-SOCKET] Erro ao emitir eventos de aniversário para empresa ${companyId}:`,
       error instanceof Error ? error.message : "Unknown error");
     if (error instanceof Error && error.stack) {
       logger.debug(" [RDS-SOCKET] Error stack:", error.stack);
