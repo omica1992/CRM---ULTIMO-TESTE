@@ -248,7 +248,7 @@ export class ReceibedWhatsAppService {
 
     async getMessage(data: IReceivedWhatsppOficial) {
         let campaignExecuted = false;
-        
+
         try {
             const { message, fromNumber, nameContact, token } = data;
 
@@ -299,7 +299,10 @@ export class ReceibedWhatsAppService {
 
             const { file, mimeType, idFile, type, quoteMessageId } = message;
 
+            logger.info(`[ReceivedWhatsApp] Processando mensagem - Type: ${type}, MimeType: ${mimeType}, HasFile: ${!!file}, IdFile: ${idFile}`);
+
             if (!!file) {
+                logger.info(`[ReceivedWhatsApp] Iniciando processamento de arquivo - MimeType: ${mimeType}, IdFile: ${idFile}`);
 
                 const base64Data = file.replace(/^data:image\/\w+;base64,/, '');
 
@@ -307,10 +310,13 @@ export class ReceibedWhatsAppService {
 
                 fileName = `${idFile}.${mimeToExtension[mimeType]}`;
 
+                logger.info(`[ReceivedWhatsApp] Nome do arquivo gerado: ${fileName}, Tamanho do buffer: ${buffer.length} bytes`);
+
                 const folder = path.resolve(__dirname, "..", "..", "..", "public", `company${companyId}`);
 
                 // const folder = `public/company${companyId}`; // Correção adicionada por Altemir 16-08-2023
                 if (!existsSync(folder)) {
+                    logger.info(`[ReceivedWhatsApp] Criando pasta: ${folder}`);
                     mkdirSync(folder, { recursive: true }); // Correção adicionada por Altemir 16-08-2023
                     chmodSync(folder, 0o777)
                 }
@@ -318,6 +324,9 @@ export class ReceibedWhatsAppService {
                 // Escrever arquivo binário (buffer já está decodificado de base64)
                 // ✅ CORREÇÃO: Cast para Uint8Array para compatibilidade de tipos
                 writeFileSync(`${folder}/${fileName}`, new Uint8Array(buffer));
+                logger.info(`[ReceivedWhatsApp] ✅ Arquivo salvo com sucesso: ${folder}/${fileName}`);
+            } else {
+                logger.info(`[ReceivedWhatsApp] Mensagem sem arquivo anexo`);
             }
             const settings = await CompaniesSettings.findOne({
                 where: { companyId }
@@ -355,14 +364,14 @@ export class ReceibedWhatsAppService {
                 verifyRating(ticketTraking)
             ) {
                 const bodyMessage = message?.text || '';
-                
+
                 logger.info(`[WHATSAPP OFICIAL - NPS] Ticket ${ticket.id} aguardando avaliação. Resposta: "${bodyMessage}"`);
 
                 if (!isNaN(parseFloat(bodyMessage))) {
                     // Resposta é um número válido
                     const rating = parseFloat(bodyMessage);
                     logger.info(`[WHATSAPP OFICIAL - NPS] Processando avaliação ${rating} para ticket ${ticket.id}`);
-                    
+
                     await handleRating(rating, ticket, ticketTraking);
 
                     await ticketTraking.update({
@@ -377,7 +386,7 @@ export class ReceibedWhatsAppService {
                     // Resposta inválida - reenviar mensagem de NPS
                     if (ticket.amountUsedBotQueuesNPS < whatsapp.maxUseBotQueuesNPS) {
                         logger.warn(`[WHATSAPP OFICIAL - NPS] Resposta inválida "${bodyMessage}" para ticket ${ticket.id}. Reenviando mensagem de NPS.`);
-                        
+
                         let bodyErrorRating = `\u200eOpção inválida, tente novamente.\n`;
                         await SendWhatsAppOficialMessage({
                             body: bodyErrorRating,
@@ -405,7 +414,7 @@ export class ReceibedWhatsAppService {
                         logger.info(`[WHATSAPP OFICIAL - NPS] Mensagem de erro e NPS reenviadas. Tentativa ${ticket.amountUsedBotQueuesNPS + 1}/${whatsapp.maxUseBotQueuesNPS}`);
                     } else {
                         logger.warn(`[WHATSAPP OFICIAL - NPS] Limite de tentativas atingido para ticket ${ticket.id}. Fechando sem avaliação.`);
-                        
+
                         // Fechar ticket sem avaliação após limite de tentativas
                         await ticket.update({
                             status: "closed",
@@ -553,7 +562,7 @@ export class ReceibedWhatsAppService {
             logger.info(`[WHATSAPP OFICIAL - DEBUG] *** CHEGOU NA VERIFICAÇÃO DE FILA - ticket ${ticket.id} ***`);
             logger.info(`[WHATSAPP OFICIAL - DEBUG] Verificando condições para verifyQueue - ticket ${ticket.id}:`);
             logger.info(`[WHATSAPP OFICIAL - DEBUG] - imported: ${ticket.imported}, queue: ${!!ticket.queue}, isGroup: ${ticket.isGroup}, userId: ${ticket.userId}, queues.length: ${whatsapp?.queues?.length}, useIntegration: ${ticket.useIntegration}, whatsapp.integrationId: ${whatsapp.integrationId}`);
-            
+
             // ✅ CORREÇÃO: Não executar chatbot de filas se conexão tem integração (igual ao Baileys)
             if (
                 !ticket.imported &&
@@ -577,7 +586,7 @@ export class ReceibedWhatsAppService {
             }
 
             // ✅ IMPLEMENTAÇÃO DO SAYCHATBOT PARA API OFICIAL
-            
+
             // 🔄 TRATATIVA 1: INPUT NODE (flowbuilder) - IGUAL AO BAILEYS
             if (
                 (ticket.dataWebhook as any)?.waitingInput === true &&
@@ -651,7 +660,7 @@ export class ReceibedWhatsAppService {
                     }
                 } catch (error) {
                     logger.error(`[WHATSAPP OFICIAL - INPUT NODE] ❌ Erro ao processar resposta do nó de input:`, error);
-                    
+
                     // ✅ FALLBACK: Tentar salvar mensagem básica
                     try {
                         const SafeCreateMessage = (await import("../../helpers/SafeCreateMessage")).default;
@@ -681,7 +690,7 @@ export class ReceibedWhatsAppService {
             // 🔄 TRATATIVA 2: RETOMAR FLUXO INTERROMPIDO (flowBuilderQueue) - IGUAL AO BAILEYS
             // ✅ CORREÇÃO: Adicionar flag para evitar processamento duplicado
             const isProcessingFlow = (global as any)[`processing_flow_${ticket.id}`];
-            
+
             // ✅ CORREÇÃO: Permitir respostas de menu (texto ou número)
             // Removida verificação !isNaN que impedia respostas de texto em menus
             if (
@@ -693,12 +702,12 @@ export class ReceibedWhatsAppService {
                     logger.info(`[WHATSAPP OFICIAL - FLOW QUEUE] ⏭️ Pulando processamento - ticket ${ticket.id} já está sendo processado`);
                     return; // ✅ Sair imediatamente se já está processando
                 }
-                
+
                 logger.info(`[WHATSAPP OFICIAL - FLOW QUEUE] Retomando fluxo interrompido - ticket ${ticket.id}, flow ${ticket.flowStopped}`);
-                
+
                 // ✅ Marcar como processando
                 (global as any)[`processing_flow_${ticket.id}`] = true;
-                
+
                 try {
                     // ✅ CORREÇÃO: Criar mensagem simulada COMPLETA para compatibilidade com flowBuilderQueue
                     // Incluir campos de menu interativo (buttonsResponseMessage e listResponseMessage)
@@ -711,11 +720,11 @@ export class ReceibedWhatsAppService {
                         },
                         message: {
                             // ✅ CORREÇÃO: Adicionar campos de menu para API Oficial
-                            buttonsResponseMessage: message.type === "interactive" 
-                                ? { selectedButtonId: message.text, selectedDisplayText: message.text } 
+                            buttonsResponseMessage: message.type === "interactive"
+                                ? { selectedButtonId: message.text, selectedDisplayText: message.text }
                                 : undefined,
-                            listResponseMessage: message.type === "interactive" 
-                                ? { singleSelectReply: { selectedRowId: message.text }, title: message.text } 
+                            listResponseMessage: message.type === "interactive"
+                                ? { singleSelectReply: { selectedRowId: message.text }, title: message.text }
                                 : undefined,
                             conversation: message.text || "",
                             timestamp: message.timestamp
@@ -735,17 +744,17 @@ export class ReceibedWhatsAppService {
                     );
 
                     logger.info(`[WHATSAPP OFICIAL - FLOW QUEUE] ✅ Fluxo interrompido retomado com sucesso`);
-                    
+
                     // ✅ Limpar flag de processamento
                     delete (global as any)[`processing_flow_${ticket.id}`];
-                    
+
                     return; // ✅ CORREÇÃO: Sair após processar fluxo para evitar duplicação
                 } catch (error) {
                     logger.error(`[WHATSAPP OFICIAL - FLOW QUEUE] ❌ Erro ao retomar fluxo interrompido:`, error);
-                    
+
                     // ✅ Limpar flag mesmo em caso de erro
                     delete (global as any)[`processing_flow_${ticket.id}`];
-                    
+
                     // ✅ FALLBACK: Tentar salvar mensagem básica
                     try {
                         const SafeCreateMessage = (await import("../../helpers/SafeCreateMessage")).default;
@@ -820,13 +829,13 @@ export class ReceibedWhatsAppService {
             // ✅ VERIFICAÇÃO DE CAMPANHAS E FLUXOS (mesma lógica do wbotMessageListener)
             // ✅ CORREÇÃO: Adicionar verificação de status "pending" (igual ao Baileys)
             if (
-                !ticket.imported && 
-                !ticket.isGroup && 
+                !ticket.imported &&
+                !ticket.isGroup &&
                 ticket.status === "pending" &&  // ✅ Só executar em tickets pendentes
                 ticket.isBot !== false
             ) {
                 logger.info(`[WHATSAPP OFICIAL - FLOW] 🔍 Iniciando verificação de campanhas para ticket ${ticket.id} (status: ${ticket.status})`);
-                
+
                 // Verificar se ticket.integrationId existe antes de continuar
                 if (!ticket.integrationId) {
                     logger.info(`[WHATSAPP OFICIAL - FLOW] ⚠️ Ticket ${ticket.id} sem integração, pulando verificação de campanhas`);
@@ -858,7 +867,7 @@ export class ReceibedWhatsAppService {
                         } as any;
 
                         logger.info(`[WHATSAPP OFICIAL - FLOW] 🚀 Chamando flowbuilderIntegration para ticket ${ticket.id}`);
-                        
+
                         try {
                             campaignExecuted = await flowbuilderIntegration(
                                 simulatedMsgForFlow,
@@ -879,7 +888,7 @@ export class ReceibedWhatsAppService {
                             }
                         } catch (flowError) {
                             logger.error("[WHATSAPP OFICIAL - FLOW] ❌ Erro ao executar flowbuilderIntegration:", flowError);
-                            
+
                             // ✅ LIMPAR ESTADO EM CASO DE ERRO (igual ao Baileys)
                             try {
                                 await ticket.update({
@@ -896,7 +905,7 @@ export class ReceibedWhatsAppService {
                         }
                     } catch (error) {
                         logger.error("[WHATSAPP OFICIAL] ❌ Erro ao verificar campanhas:", error);
-                        
+
                         // ✅ FALLBACK: Tentar salvar mensagem básica
                         try {
                             const SafeCreateMessage = (await import("../../helpers/SafeCreateMessage")).default;
@@ -920,7 +929,7 @@ export class ReceibedWhatsAppService {
                         } catch (saveError) {
                             logger.error(`[WHATSAPP OFICIAL] ❌ Falha ao salvar fallback`, saveError);
                         }
-                        
+
                         // ✅ LIMPAR ESTADO EM CASO DE ERRO GERAL
                         try {
                             await ticket.update({
@@ -942,7 +951,7 @@ export class ReceibedWhatsAppService {
             if (ticket.flowWebhook && ticket.hashFlowId) {
                 // ✅ CORREÇÃO: Ignorar hashFlowId de recovery (artificial)
                 const isRecoveryHash = ticket.hashFlowId.startsWith('recovery-');
-                
+
                 if (!isRecoveryHash) {
                     console.log(
                         `[FLOW WEBHOOK - OFICIAL] Processando fluxo webhook existente para ticket ${ticket.id}`
@@ -994,7 +1003,7 @@ export class ReceibedWhatsAppService {
                         }
                     } catch (error) {
                         console.error("[FLOW WEBHOOK - OFICIAL] ❌ Erro ao processar fluxo webhook:", error);
-                        
+
                         // ✅ FALLBACK: Tentar salvar mensagem básica
                         try {
                             const SafeCreateMessage = (await import("../../helpers/SafeCreateMessage")).default;
@@ -1021,7 +1030,7 @@ export class ReceibedWhatsAppService {
                     }
                 }
             }
-            
+
             // ✅ RECOVERY: Apenas quando NÃO tem hashFlowId válido
             if (ticket.flowWebhook && !ticket.hashFlowId && ticket.flowStopped) {
                 // Fallback: continuar fluxo usando flowStopped quando hashFlowId estiver ausente
@@ -1149,7 +1158,7 @@ export class ReceibedWhatsAppService {
                 ticket.status === "pending"
             ) {
                 logger.info(`[WHATSAPP OFICIAL - FLOW] ⏱️ Agendando verificação final de campanhas para ticket ${ticket.id} (setTimeout 1s)`);
-                
+
                 // Aguardar um pouco para garantir que outros processamentos terminaram
                 setTimeout(async () => {
                     try {
@@ -1160,7 +1169,7 @@ export class ReceibedWhatsAppService {
                         // Só verificar se não entrou em fluxo
                         if (!ticket.flowWebhook || !ticket.lastFlowId) {
                             logger.info(`[WHATSAPP OFICIAL - FLOW] 🔄 Verificação final: ticket ${ticket.id} não está em fluxo, tentando iniciar`);
-                            
+
                             const contactForCampaign = await ShowContactService(
                                 ticket.contactId,
                                 ticket.companyId
@@ -1169,14 +1178,14 @@ export class ReceibedWhatsAppService {
                             // Verificar se existe integrationId antes de prosseguir
                             try {
                                 let queueIntegrations = null;
-                                
+
                                 if (!whatsapp.integrationId) {
                                     logger.info(`[WHATSAPP OFICIAL - FLOW] ⚠️ whatsapp.integrationId não definido para conexão ${whatsapp.id}, tentando flowIdNotPhrase (igual ao Baileys)`);
                                     // ✅ CORREÇÃO: Tentar executar flowIdNotPhrase mesmo sem integrationId (igual ao Baileys)
                                     queueIntegrations = null; // Sem integração, vai tentar flowIdNotPhrase
                                 } else {
                                     logger.info(`[WHATSAPP OFICIAL - FLOW] 🔎 Conexão ${whatsapp.id} possui integrationId, buscando integrações...`);
-                                    
+
                                     queueIntegrations = await ShowQueueIntegrationService(
                                         whatsapp.integrationId,
                                         companyId
@@ -1225,11 +1234,11 @@ export class ReceibedWhatsAppService {
                     }
                 }, 1000); // Aguardar 1 segundo para garantir que outros processamentos terminaram
             } else {
-                const skipReason = campaignExecuted ? 'campanha já executada' 
-                    : ticket.imported ? 'ticket importado' 
-                    : ticket.isGroup ? 'é grupo' 
-                    : ticket.status !== 'pending' ? `status=${ticket.status} (esperado: pending)` 
-                    : 'desconhecida';
+                const skipReason = campaignExecuted ? 'campanha já executada'
+                    : ticket.imported ? 'ticket importado'
+                        : ticket.isGroup ? 'é grupo'
+                            : ticket.status !== 'pending' ? `status=${ticket.status} (esperado: pending)`
+                                : 'desconhecida';
                 logger.info(`[WHATSAPP OFICIAL - FLOW] ⏭️ Pulando verificação final para ticket ${ticket.id} - Razão: ${skipReason}`);
             }
 

@@ -35,10 +35,32 @@ export function formatPhoneNumber(number: string | number): string {
 
     console.log(`[phoneFormatter] Input: ${number} → Limpo: ${cleaned}`);
 
-    // Remove prefixo 55 se começa com ele (pode estar duplicado)
-    while (cleaned.startsWith('55') && cleaned.length > 11) {
-      console.log(`[phoneFormatter] Removendo "55" duplicado: ${cleaned}`);
-      cleaned = cleaned.substring(2);
+    // ✅ CORREÇÃO: Verificar se já está no formato correto com código do país
+    if (cleaned.startsWith('55')) {
+      // 13 dígitos: 55 + DDD (2) + celular (9) = válido
+      if (cleaned.length === 13) {
+        console.log(`[phoneFormatter] Número válido com 13 dígitos (celular): ${cleaned}`);
+        return cleaned;
+      }
+
+      // 12 dígitos: 55 + DDD (2) + fixo (8) = válido
+      if (cleaned.length === 12) {
+        console.log(`[phoneFormatter] Número válido com 12 dígitos (fixo): ${cleaned}`);
+        return cleaned;
+      }
+
+      // Se tem mais de 13 dígitos, pode ter "55" duplicado
+      if (cleaned.length > 13) {
+        console.log(`[phoneFormatter] Número muito longo (${cleaned.length} dígitos), removendo "55" duplicado`);
+        cleaned = cleaned.substring(2);
+      }
+
+      // Se tem 11 dígitos após remover "55", é número sem código do país
+      if (cleaned.length === 11) {
+        const formatted = '55' + cleaned;
+        console.log(`[phoneFormatter] Adicionado código do país: ${formatted}`);
+        return formatted;
+      }
     }
 
     // Remove "0" no início se houver (código nacional)
@@ -47,27 +69,22 @@ export function formatPhoneNumber(number: string | number): string {
       console.log(`[phoneFormatter] Removido "0" inicial: ${cleaned}`);
     }
 
-    // Se ainda tiver mais de 11 dígitos, pega apenas os últimos 11
-    if (cleaned.length > 11) {
-      const original = cleaned;
-      cleaned = cleaned.slice(-11);
-      console.log(`[phoneFormatter] Truncado de ${original.length} para 11: ${original} → ${cleaned}`);
+    // Se tem 11 dígitos (DDD + número), adiciona código do país
+    if (cleaned.length === 11) {
+      const formatted = '55' + cleaned;
+      console.log(`[phoneFormatter] Número com 11 dígitos, adicionado código do país: ${formatted}`);
+      return formatted;
     }
 
-    // Validar: deve ter entre 10 e 11 dígitos
-    if (cleaned.length < 10) {
-      throw new Error(`Número muito curto: ${cleaned} (${cleaned.length} dígitos)`);
+    // Se tem 10 dígitos (DDD + fixo antigo), adiciona código do país
+    if (cleaned.length === 10) {
+      const formatted = '55' + cleaned;
+      console.log(`[phoneFormatter] Número com 10 dígitos (fixo), adicionado código do país: ${formatted}`);
+      return formatted;
     }
 
-    if (cleaned.length > 11) {
-      throw new Error(`Número muito longo: ${cleaned} (${cleaned.length} dígitos)`);
-    }
-
-    // Adicionar prefixo 55
-    const formatted = '55' + cleaned;
-    console.log(`[phoneFormatter] Resultado final: ${formatted}`);
-
-    return formatted;
+    // Se chegou aqui, número inválido
+    throw new Error(`Número com formato inválido: ${cleaned} (${cleaned.length} dígitos)`);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error(`[phoneFormatter] ERRO: ${msg} | Input original: ${number}`);

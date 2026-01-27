@@ -10,6 +10,7 @@ import CreateMessageService from "../MessageServices/CreateMessageService";
 import SafeCreateMessage from "../../helpers/SafeCreateMessage";
 import formatBody from "../../helpers/Mustache";
 import logger from "../../utils/logger";
+import { normalizePhoneNumber, isValidWhatsAppNumber } from "../../helpers/PhoneNumberHelper";
 
 interface Request {
   body: string;
@@ -70,7 +71,7 @@ const SendWhatsAppOficialMessage = async ({
   if (!ticket.whatsapp) {
     const Whatsapp = (await import("../../models/Whatsapp")).default;
     ticket.whatsapp = await Whatsapp.findByPk(ticket.whatsappId);
-    
+
     if (!ticket.whatsapp) {
       logger.error(`[SEND WHATSAPP OFICIAL] Whatsapp ${ticket.whatsappId} não encontrado para ticket ${ticket.id}`);
       throw new AppError("ERR_WHATSAPP_NOT_FOUND");
@@ -103,7 +104,7 @@ const SendWhatsAppOficialMessage = async ({
       break;
     case 'document':
       options.type = 'document';
-      options.body_document = { caption: bodyMsg }; 
+      options.body_document = { caption: bodyMsg };
       options.fileName = media.originalname.replace('/', '-');
       bodyTicket = "📂 Arquivo de Documento";
       mediaType = 'document';
@@ -153,22 +154,34 @@ const SendWhatsAppOficialMessage = async ({
     const numberContact = vCard.number;
     const firstName = vCard.name.split(' ')[0];
     const lastName = String(vCard.name).replace(vCard.name.split(' ')[0], '')
+    const normalizedVCardNumber = normalizePhoneNumber(numberContact);
     vcard = `BEGIN:VCARD\n`
       + `VERSION:3.0\n`
       + `N:${lastName};${firstName};;;\n`
       + `FN:${vCard.name}\n`
-      + `TEL;type=CELL;waid=${numberContact}:+${numberContact}\n`
+      + `TEL;type=CELL;waid=${numberContact}:${normalizedVCardNumber}\n`
       + `END:VCARD`;
     console.log(vcard)
   }
 
-  options.to = `+${contact.number}`;
+  // ✅ CORREÇÃO: Normalizar número do contato antes de enviar
+  const normalizedNumber = normalizePhoneNumber(contact.number);
+
+  // Validar se o número está no formato correto
+  if (!isValidWhatsAppNumber(normalizedNumber)) {
+    logger.error(`[WHATSAPP OFICIAL - ERROR] Número inválido - Ticket: ${ticket.id}, Número: ${contact.number}, Normalizado: ${normalizedNumber}`);
+    throw new AppError("ERR_INVALID_PHONE_NUMBER");
+  }
+
+  logger.info(`[WHATSAPP OFICIAL - SEND] Número normalizado - Original: ${contact.number}, Normalizado: ${normalizedNumber}`);
+
+  options.to = normalizedNumber;
   options.type = type;
   options.quotedId = quotedMsg?.wid;
 
   let sendMessage: IReturnMessageMeta | null = null;
   let messageData: any = null;
-  
+
   try {
     // ✅ PASSO 1: Enviar mensagem via API Oficial
     sendMessage = await sendMessageWhatsAppOficial(
@@ -176,9 +189,9 @@ const SendWhatsAppOficialMessage = async ({
       ticket.whatsapp.token,
       options
     )
-    
+
     logger.info(`[WHATSAPP OFICIAL - SEND] ✅ Mensagem enviada via API - Ticket: ${ticket.id}`);
-    
+
     await ticket.update({ lastMessage: !bodyMsg && !!media ? bodyTicket : bodyMsg, imported: null, unreadMessages: 0 });
 
     const wid: any = sendMessage
@@ -209,14 +222,14 @@ const SendWhatsAppOficialMessage = async ({
 
     // ✅ PASSO 2: Salvar mensagem no banco com retry
     logger.info(`[WHATSAPP OFICIAL - SAVE] Salvando mensagem no banco - Ticket: ${ticket.id}`);
-    
-    const savedMessage = await SafeCreateMessage({ 
-      messageData, 
+
+    const savedMessage = await SafeCreateMessage({
+      messageData,
       companyId: ticket.companyId,
       maxRetries: 3,
       context: `SEND_OFICIAL_${ticket.id}`
     });
-    
+
     if (savedMessage) {
       logger.info(`[WHATSAPP OFICIAL - SAVE] ✅ Mensagem salva com sucesso - Ticket: ${ticket.id}`);
     } else {
@@ -225,22 +238,22 @@ const SendWhatsAppOficialMessage = async ({
     }
 
     return sendMessage;
-    
+
   } catch (err) {
     logger.error(`[WHATSAPP OFICIAL - ERROR] Erro ao enviar mensagem - Company: ${ticket.companyId}, Ticket: ${ticket.id}`, err);
-    
+
     // ✅ Se mensagem foi enviada mas erro aconteceu depois, tentar salvar
     if (sendMessage && messageData) {
       logger.warn(`[WHATSAPP OFICIAL - RECOVERY] Tentando salvar mensagem que foi enviada mas teve erro no processamento`);
-      
-      await SafeCreateMessage({ 
-        messageData, 
+
+      await SafeCreateMessage({
+        messageData,
         companyId: ticket.companyId,
         maxRetries: 5, // Mais tentativas pois mensagem JÁ foi enviada
         context: `RECOVERY_OFICIAL_${ticket.id}`
       });
     }
-    
+
     Sentry.captureException(err);
     throw new AppError("ERR_SENDING_WAPP_MSG");
   }

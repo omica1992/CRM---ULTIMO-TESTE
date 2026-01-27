@@ -27,7 +27,7 @@ export async function createLock(
 
             if (!existing) {
                 // Lock disponível - tentar adquirir
-                await cacheLayer.set(lockKey, lockValue, Math.ceil(timeout / 1000));
+                await cacheLayer.set(lockKey, lockValue, "EX", Math.ceil(timeout / 1000));
 
                 // Verificar se realmente adquirimos (double-check)
                 const check = await cacheLayer.get(lockKey);

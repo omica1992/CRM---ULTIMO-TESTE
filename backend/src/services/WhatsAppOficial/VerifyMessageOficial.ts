@@ -20,6 +20,9 @@ const verifyMessageOficial = async (
     quoteMessageId?: string
 ) => {
 
+    console.log(`[VerifyMessageOficial] ===== INÍCIO DO PROCESSAMENTO =====`);
+    console.log(`[VerifyMessageOficial] Ticket: ${ticket.id}, Type: ${message.type}, FileName: ${fileName}`);
+
     let bodyMessage: any = message.text;
 
     if (message.type === "contacts" && Array.isArray(data?.message?.text?.contacts)) {
@@ -41,20 +44,20 @@ const verifyMessageOficial = async (
 
     // ✅ CORREÇÃO: Melhor tratamento do body da mensagem para preservar histórico
     let messageBody = '';
-    
+
     if (message.type === "contacts") {
         messageBody = bodyMessage;
         console.log(`[VERIFY MESSAGE OFICIAL] 👤 Contato: ${messageBody.substring(0, 50)}...`);
     } else {
         // Prioridade: message.text, depois extrair do data, fallback baseado no tipo
-        messageBody = message.text || 
-                     data?.message?.text?.body || 
-                     data?.message?.conversation || 
-                     data?.text || 
-                     (message.type && message.type !== 'text' ? `📎 ${message.type}` : '');
-        
+        messageBody = message.text ||
+            data?.message?.text?.body ||
+            data?.message?.conversation ||
+            data?.text ||
+            (message.type && message.type !== 'text' ? `📎 ${message.type}` : '');
+
         console.log(`[VERIFY MESSAGE OFICIAL] 💬 Msg ID: ${message.idMessage}, Type: ${message.type}, Body: "${messageBody}"`);
-        
+
         // Debug adicional quando body está vazio
         if (!messageBody) {
             console.log(`[VERIFY MESSAGE OFICIAL] ⚠️ Body vazio - Debug data:`, {
@@ -101,7 +104,17 @@ const verifyMessageOficial = async (
     //         contact: ticket.contact
     //     });
 
+    console.log(`[VerifyMessageOficial] Chamando CreateMessageService com dados:`, {
+        wid: messageData.wid,
+        ticketId: messageData.ticketId,
+        mediaType: messageData.mediaType,
+        mediaUrl: messageData.mediaUrl,
+        bodyLength: messageData.body?.length || 0
+    });
+
     await CreateMessageService({ messageData, companyId: companyId });
+
+    console.log(`[VerifyMessageOficial] ✅ CreateMessageService concluído com sucesso`);
 }
 
 export default verifyMessageOficial;
