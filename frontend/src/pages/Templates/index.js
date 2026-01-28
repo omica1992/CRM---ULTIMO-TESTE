@@ -114,13 +114,13 @@ const Templates = () => {
         try {
             const { data } = await api.get("/whatsapp");
             // Filtrar apenas conexões da API Oficial
-            const oficialWhatsapps = data.filter(w => 
-                (w.provider === "oficial" || w.provider === "beta" || 
-                 w.channel === "whatsapp_oficial" || w.channel === "whatsapp-oficial") &&
+            const oficialWhatsapps = data.filter(w =>
+                (w.provider === "oficial" || w.provider === "beta" ||
+                    w.channel === "whatsapp_oficial" || w.channel === "whatsapp-oficial") &&
                 (w.status === "CONNECTED" || w.status === "OPENING")
             );
             setWhatsapps(oficialWhatsapps);
-            
+
             if (oficialWhatsapps.length > 0 && !selectedWhatsapp) {
                 setSelectedWhatsapp(oficialWhatsapps[0].id);
             }
@@ -135,7 +135,7 @@ const Templates = () => {
             dispatch({ type: "RESET" });
             return;
         }
-        
+
         try {
             dispatch({ type: "RESET" });
             const { data } = await api.get(`/templates?whatsappId=${selectedWhatsapp}`);
@@ -316,12 +316,24 @@ const Templates = () => {
                                 </TableCell>
                                 <TableCell>{template.language}</TableCell>
                                 <TableCell>
-                                    <Chip
-                                        label={getStatusLabel(template.status)}
-                                        color={getStatusColor(template.status)}
-                                        size="small"
-                                        className={classes.statusChip}
-                                    />
+                                    {template.status?.toUpperCase() === 'REJECTED' && template.rejectionReason ? (
+                                        <Tooltip title={`Motivo: ${template.rejectionReason}`} arrow>
+                                            <Chip
+                                                label={getStatusLabel(template.status)}
+                                                color={getStatusColor(template.status)}
+                                                size="small"
+                                                className={classes.statusChip}
+                                                style={{ cursor: 'help' }}
+                                            />
+                                        </Tooltip>
+                                    ) : (
+                                        <Chip
+                                            label={getStatusLabel(template.status)}
+                                            color={getStatusColor(template.status)}
+                                            size="small"
+                                            className={classes.statusChip}
+                                        />
+                                    )}
                                 </TableCell>
                                 <TableCell>
                                     <Tooltip title="Editar">

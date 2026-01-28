@@ -8,6 +8,7 @@ import {
   Divider,
   Typography,
   IconButton,
+  Tooltip,
   makeStyles
 } from "@material-ui/core";
 
@@ -20,7 +21,8 @@ import {
   Facebook,
   Instagram,
   Reply,
-  WhatsApp
+  WhatsApp,
+  ErrorOutline
 } from "@material-ui/icons";
 import LockIcon from '@material-ui/icons/Lock';
 import MarkdownWrapper from "../MarkdownWrapper";
@@ -488,7 +490,7 @@ const MessagesList = ({
   useEffect(() => {
     // ✅ CORREÇÃO: Só aplicar lógica de 24h para canais Meta
     const isMetaChannel = channel && channel !== "whatsapp";
-    
+
     if (!isMetaChannel) {
       // Para Baileys (whatsapp), não há restrição de 24h
       setLocalIs24HourWindowExpired(false);
@@ -523,7 +525,7 @@ const MessagesList = ({
 
       // Janela expirou se passou mais de 24h
       const expired = hoursDiff >= 24;
-      
+
       console.log("⏰ Cálculo janela 24h:", {
         lastMessageDate: lastClientMessage.createdAt,
         hoursDiff,
@@ -531,7 +533,7 @@ const MessagesList = ({
         channel,
         hasClientMessage: true
       });
-      
+
       setLocalIs24HourWindowExpired(expired);
       setIs24HourWindowExpired(expired); // ✅ Atualizar contexto para MessageInput
     } catch (error) {
@@ -740,10 +742,10 @@ const MessagesList = ({
       let linkLocation = locationParts[1];
       let descriptionLocation = locationParts.length > 2 ? locationParts[2] : null;
 
-      return <LocationPreview 
-        image={imageLocation} 
-        link={linkLocation} 
-        description={descriptionLocation} 
+      return <LocationPreview
+        image={imageLocation}
+        link={linkLocation}
+        description={descriptionLocation}
       />;
     }
 
@@ -752,7 +754,7 @@ const MessagesList = ({
       let array = message.body.split("\n");
       let obj = [];
       let contact = "";
-      
+
       for (let index = 0; index < array.length; index++) {
         const v = array[index];
         let values = v.split(":");
@@ -765,13 +767,13 @@ const MessagesList = ({
           }
         }
       }
-      
-      return <VcardPreview 
-        contact={contact} 
-        numbers={obj[0]?.number} 
-        queueId={message?.ticket?.queueId} 
-        whatsappId={message?.ticket?.whatsappId} 
-        channel={channel} 
+
+      return <VcardPreview
+        contact={contact}
+        numbers={obj[0]?.number}
+        queueId={message?.ticket?.queueId}
+        whatsappId={message?.ticket?.whatsappId}
+        channel={channel}
       />;
     }
 
@@ -779,24 +781,24 @@ const MessagesList = ({
       console.log("Entrou no MetaPreview");
       // ✅ CORREÇÃO: Parse correto dos dados - formato: image|sourceUrl|title|body|messageUser
       let [image, sourceUrl, title, body, messageUser] = message.body.split('|');
-      
+
       // Fallback para messageUser se não estiver presente
       if (!messageUser || messageUser.trim() === "") {
         messageUser = "Olá! Tenho interesse e queria mais informações, por favor.";
       }
-      
-      return <AdMetaPreview 
-        image={image} 
-        sourceUrl={sourceUrl} 
-        title={title} 
-        body={body} 
-        messageUser={messageUser} 
+
+      return <AdMetaPreview
+        image={image}
+        sourceUrl={sourceUrl}
+        title={title}
+        body={body}
+        messageUser={messageUser}
       />;
     }
 
     // PDF e Documentos - SÓ DOWNLOAD
     else if (isPdfUrl(message.mediaUrl, message.body, message.mediaType)) {
-      
+
       console.log("📄 Renderizando como documento/PDF:", message.id);
       const pdfInfo = extractPdfInfoFromMessage(message);
 
@@ -841,7 +843,7 @@ const MessagesList = ({
     // Vídeos
     else if (message.mediaType === "video") {
       console.log("🎥 Renderizando como vídeo");
-      
+
       return (
         <div style={{ maxWidth: "400px", width: "100%", position: "relative" }}>
           {/* Loading indicator */}
@@ -863,7 +865,7 @@ const MessagesList = ({
               </Typography>
             </div>
           )}
-          
+
           {/* Vídeo player melhorado */}
           <video
             className={classes.messageMedia}
@@ -871,9 +873,9 @@ const MessagesList = ({
             controls
             preload="metadata"
             playsInline
-            style={{ 
-              width: "100%", 
-              height: "auto", 
+            style={{
+              width: "100%",
+              height: "auto",
               maxHeight: "300px",
               borderRadius: "8px",
               backgroundColor: "#f0f0f0",
@@ -904,16 +906,16 @@ const MessagesList = ({
             <source src={message.mediaUrl} type="video/mp4" />
             <source src={message.mediaUrl} type="video/webm" />
             <source src={message.mediaUrl} type="video/ogg" />
-            
+
             {/* Fallback para navegadores antigos */}
             Seu navegador não suporta reprodução de vídeo.
           </video>
-          
+
           {/* Error state */}
           {videoError && (
-            <div style={{ 
-              padding: "20px", 
-              textAlign: "center", 
+            <div style={{
+              padding: "20px",
+              textAlign: "center",
               backgroundColor: "#f5f5f5",
               borderRadius: "8px",
               color: "#666",
@@ -964,6 +966,28 @@ const MessagesList = ({
   };
 
   const renderMessageAck = (message) => {
+    // ✅ NOVO: Erro de entrega (ack: -1)
+    if (message.ack === -1) {
+      return (
+        <Tooltip
+          title={message.deliveryError || 'Falha na entrega'}
+          arrow
+          placement="top"
+        >
+          <ErrorOutline
+            fontSize="small"
+            style={{
+              color: '#f44336',
+              fontSize: 18,
+              verticalAlign: 'middle',
+              marginLeft: 4,
+              cursor: 'help'
+            }}
+          />
+        </Tooltip>
+      );
+    }
+
     if (message.ack === 0) {
       return <AccessTime fontSize="small" className={classes.ackIcons} />;
     } else
@@ -1114,9 +1138,9 @@ const MessagesList = ({
                   src={message.quotedMsg.mediaUrl}
                   controls
                   preload="metadata"
-                  style={{ 
-                    width: "100%", 
-                    height: "auto", 
+                  style={{
+                    width: "100%",
+                    height: "auto",
                     maxHeight: "200px",
                     borderRadius: "6px",
                     backgroundColor: "#f0f0f0"
@@ -1477,7 +1501,7 @@ const MessagesList = ({
       return <div>Diga olá para seu novo contato!</div>;
     }
   };
-const shouldBlurMessages = ticketStatus === "pending" && user.allowSeeMessagesInPendingTickets === "disabled";
+  const shouldBlurMessages = ticketStatus === "pending" && user.allowSeeMessagesInPendingTickets === "disabled";
 
   return (
     <div className={classes.messagesListWrapper} onDragEnter={handleDrag}>
@@ -1491,19 +1515,19 @@ const shouldBlurMessages = ticketStatus === "pending" && user.allowSeeMessagesIn
         whatsappId={whatsappId}
         queueId={queueId}
       />
-      
 
-<div
-  id="messagesList"
-  className={classes.messagesList}
-  onScroll={handleScroll}
-  style={{
-    filter: shouldBlurMessages ? "blur(4px)" : "none",
-    pointerEvents: shouldBlurMessages ? "none" : "auto"
-  }}
->
-  {messagesList.length > 0 ? renderMessages() : []}
-</div>
+
+      <div
+        id="messagesList"
+        className={classes.messagesList}
+        onScroll={handleScroll}
+        style={{
+          filter: shouldBlurMessages ? "blur(4px)" : "none",
+          pointerEvents: shouldBlurMessages ? "none" : "auto"
+        }}
+      >
+        {messagesList.length > 0 ? renderMessages() : []}
+      </div>
 
       {(channel !== "whatsapp" && channel !== undefined && is24HourWindowExpired) && (
         <div
