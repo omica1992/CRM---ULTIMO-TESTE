@@ -4,12 +4,14 @@ import {
   CreatedAt,
   UpdatedAt,
   Model,
+  DataType,
   PrimaryKey,
   ForeignKey,
   BelongsTo,
   AutoIncrement,
   HasMany
 } from "sequelize-typescript";
+
 
 import Company from "./Company";
 import User from "./User";
@@ -32,13 +34,13 @@ class QuickMessage extends Model<QuickMessage> {
   @Column
   get mediaPath(): string | null {
     if (this.getDataValue("mediaPath")) {
-      
+
       return `${process.env.BACKEND_URL}/public/company${this.companyId}/quickMessage/${this.getDataValue("mediaPath")}`;
 
     }
     return null;
   }
-  
+
   @Column
   mediaName: string;
 
@@ -48,7 +50,7 @@ class QuickMessage extends Model<QuickMessage> {
 
   @Column
   geral: boolean;
-  
+
   @ForeignKey(() => Company)
   @Column
   companyId: number;
@@ -96,6 +98,11 @@ class QuickMessage extends Model<QuickMessage> {
 
   @BelongsTo(() => Whatsapp)
   whatsapp: Whatsapp;
+
+  // ✅ Meta API Template Rejection Field
+  @Column(DataType.TEXT)
+  rejectionReason: string;
 }
+
 
 export default QuickMessage;

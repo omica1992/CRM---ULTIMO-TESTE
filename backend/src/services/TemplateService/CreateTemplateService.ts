@@ -38,10 +38,10 @@ const CreateTemplateService = async (data: Request) => {
   }
 
   // Verificar se é API Oficial
-  const isOficial = whatsapp.provider === "oficial" || 
-                   
-                   whatsapp.channel === "whatsapp-oficial" || 
-                   whatsapp.channel === "whatsapp_oficial";
+  const isOficial = whatsapp.provider === "oficial" ||
+
+    whatsapp.channel === "whatsapp-oficial" ||
+    whatsapp.channel === "whatsapp_oficial";
 
   if (!isOficial) {
     throw new AppError("Esta funcionalidade é apenas para API Oficial", 400);
@@ -68,12 +68,12 @@ const CreateTemplateService = async (data: Request) => {
       const comp = templateData.components[i];
       if (comp.type === 'HEADER' && comp.example?.header_handle && comp.example.header_handle.length > 0) {
         const mediaUrl = comp.example.header_handle[0];
-        
+
         if (!mediaUrl.startsWith('https://')) {
           console.warn(`[CREATE TEMPLATE] ⚠️ URL da mídia não é HTTPS: ${mediaUrl}`);
           console.warn(`[CREATE TEMPLATE] A Meta pode rejeitar URLs HTTP. Configure BACKEND_URL com HTTPS em produção.`);
         }
-        
+
         // Testar se a URL é acessível
         try {
           console.log(`[CREATE TEMPLATE] Testando acessibilidade da URL: ${mediaUrl}`);
@@ -103,18 +103,18 @@ const CreateTemplateService = async (data: Request) => {
         const cleanedComp: any = {
           type: comp.type
         };
-        
+
         // Adicionar format apenas para HEADER se necessário
         if (comp.format && comp.type === 'HEADER') {
           cleanedComp.format = comp.format;
           console.log(`[CREATE TEMPLATE] HEADER com formato: ${comp.format}`);
         }
-        
+
         // Adicionar text apenas se existir
         if (comp.text) {
           cleanedComp.text = comp.text;
         }
-        
+
         // ✅ CORREÇÃO: Adicionar example se existir e não estiver vazio
         if (comp.example && Object.keys(comp.example).length > 0) {
           // Para BODY: verificar se tem body_text COM CONTEÚDO
@@ -132,27 +132,27 @@ const CreateTemplateService = async (data: Request) => {
             // ✅ Garantir que header_handle é array
             if (Array.isArray(comp.example.header_handle) && comp.example.header_handle.length > 0) {
               const handleValue = comp.example.header_handle[0];
-              
+
               // Verificar se é handle da Meta (formato: "4:xxxxx") ou URL
               const isMetaHandle = /^\d+:[a-zA-Z0-9+/=]+$/.test(handleValue);
-              
+
               if (isMetaHandle) {
                 console.log(`[CREATE TEMPLATE] ✅ HEADER com Meta Handle (CORRETO):`, handleValue);
               } else {
                 console.log(`[CREATE TEMPLATE] ⚠️ HEADER com URL (pode não funcionar):`, handleValue);
                 console.log(`[CREATE TEMPLATE] ⚠️ Recomendação: Use upload para Meta API para obter handle correto`);
               }
-              
+
               cleanedComp.example = comp.example;
             } else if (typeof comp.example.header_handle === 'string') {
               // ✅ Se vier como string, converter para array
               const handleValue = comp.example.header_handle;
               const isMetaHandle = /^\d+:[a-zA-Z0-9+/=]+$/.test(handleValue);
-              
+
               cleanedComp.example = {
                 header_handle: [handleValue]
               };
-              
+
               if (isMetaHandle) {
                 console.log(`[CREATE TEMPLATE] ✅ HEADER com Meta Handle (convertido para array):`, handleValue);
               } else {
@@ -168,17 +168,17 @@ const CreateTemplateService = async (data: Request) => {
             console.log(`[CREATE TEMPLATE] Example preservado para ${comp.type}:`, comp.example);
           }
         }
-        
+
         // Adicionar buttons apenas se existir
         if (comp.buttons && comp.buttons.length > 0) {
           cleanedComp.buttons = comp.buttons;
         }
-        
+
         console.log(`[CREATE TEMPLATE] Componente ${index} limpo:`, cleanedComp);
         return cleanedComp;
       })
     };
-    
+
     // ========================================
     // 📋 LOGS DETALHADOS DO PAYLOAD PARA META
     // ========================================
@@ -189,7 +189,7 @@ const CreateTemplateService = async (data: Request) => {
     console.log('[CREATE TEMPLATE] 📋 Payload JSON:');
     console.log(JSON.stringify(cleanedData, null, 2));
     console.log('='.repeat(80) + '\n');
-    
+
     // Criar template via API Oficial
     const response = await axios.post(
       `${process.env.URL_API_OFICIAL}/v1/templates-whatsapp/${whatsapp.token}`,
@@ -203,7 +203,7 @@ const CreateTemplateService = async (data: Request) => {
     );
 
     const createdTemplate = response.data;
-    
+
     // ========================================
     // 📥 LOGS DA RESPOSTA DA META
     // ========================================
@@ -218,7 +218,7 @@ const CreateTemplateService = async (data: Request) => {
     // Salvar como QuickMessage para integração com o sistema
     if (createdTemplate.id) {
       const bodyComponent = templateData.components.find(comp => comp.type === 'BODY');
-      
+
       const quickMessage = await QuickMessage.create({
         shortcode: templateName, // ✅ Usar nome convertido
         message: bodyComponent?.text || '',
@@ -266,7 +266,7 @@ const CreateTemplateService = async (data: Request) => {
     console.error('[CREATE TEMPLATE] ❌ ERRO AO CRIAR TEMPLATE');
     console.error('='.repeat(80));
     console.error('[CREATE TEMPLATE] Mensagem:', error.message);
-    
+
     if (error.response) {
       console.error('[CREATE TEMPLATE] Status HTTP:', error.response.status);
       console.error('[CREATE TEMPLATE] Resposta da Meta:');
@@ -274,14 +274,62 @@ const CreateTemplateService = async (data: Request) => {
       console.error('[CREATE TEMPLATE] Headers da resposta:');
       console.error(JSON.stringify(error.response.headers, null, 2));
     }
-    
+
     console.error('='.repeat(80) + '\n');
-    
+
+    // ✅ NOVO: Salvar template como rejeitado com motivo do erro
+    try {
+      const errorMessage = error.response?.data?.error?.message || error.response?.data?.message || error.message;
+      const errorCode = error.response?.data?.error?.code || error.response?.status || 'UNKNOWN';
+      const errorSubcode = error.response?.data?.error?.error_subcode;
+
+      const rejectionReason = errorSubcode
+        ? `[${errorCode}/${errorSubcode}] ${errorMessage}`
+        : `[${errorCode}] ${errorMessage}`;
+
+      console.log('[CREATE TEMPLATE] 💾 Salvando template rejeitado no banco...');
+
+      // Buscar componente BODY para salvar mensagem
+      const bodyComp = templateData.components.find(c => c.type === 'BODY');
+
+      // Salvar template como rejeitado
+      const quickMessage = await QuickMessage.create({
+        shortcode: templateData.name,
+        message: bodyComp?.text || '',
+        companyId,
+        userId: 1,
+        geral: false,
+        visao: false,
+        isOficial: true,
+        language: templateData.language,
+        status: 'REJECTED',
+        category: templateData.category,
+        whatsappId,
+        rejectionReason: rejectionReason
+      });
+
+
+      console.log(`[CREATE TEMPLATE] ✅ Template rejeitado salvo com ID: ${quickMessage.id}`);
+
+      // Emitir evento via socket para atualizar UI
+      const io = getIO();
+      io.of(String(companyId))
+        .emit(`company-${companyId}-quickmessage`, {
+          action: "create",
+          record: quickMessage
+        });
+
+      console.log('[CREATE TEMPLATE] ✅ Evento socket emitido para atualizar UI');
+    } catch (saveError) {
+      console.error('[CREATE TEMPLATE] ❌ Erro ao salvar template rejeitado:', saveError);
+    }
+
     throw new AppError(
       `Erro ao criar template: ${error.response?.data?.error?.message || error.response?.data?.message || error.message}`,
       error.response?.status || 500
     );
   }
+
 };
 
 export default CreateTemplateService;

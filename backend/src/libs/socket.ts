@@ -243,6 +243,68 @@ export const initIO = (httpServer: Server): SocketIO => {
       receivedService.readMessage(data);
     });
 
+    // ✅ NOVO: Event handler para status updates de mensagens da Meta API
+    socket.on("messageStatusUpdateWhatsAppOficial", async (data: any) => {
+      try {
+        console.log(`[SOCKET] ===== STATUS UPDATE RECEBIDO =====`);
+        console.log(`[SOCKET] MessageId: ${data?.messageId}, Status: ${data?.status}, CompanyId: ${data?.companyId}`);
+
+        const { messageId, status, error, companyId } = data;
+
+        if (!messageId || !companyId) {
+          logger.warn(`[SOCKET] Status update inválido - faltam dados obrigatórios`);
+          return;
+        }
+
+        // Buscar mensagem pelo wid
+        const Message = (await import("../models/Message")).default;
+        const message = await Message.findOne({
+          where: { wid: messageId, companyId }
+        });
+
+        if (!message) {
+          logger.warn(`[SOCKET] Mensagem ${messageId} não encontrada para companyId ${companyId}`);
+          return;
+        }
+
+        // Se status é falha, atualizar com erro
+        if (status === 'failed' || status === 'undelivered') {
+          const errorMessage = error?.message || error?.error_data?.details || 'Falha na entrega';
+          const errorCode = error?.code?.toString() || 'UNKNOWN';
+
+          await message.update({
+            deliveryError: errorMessage,
+            deliveryErrorCode: errorCode,
+            deliveryErrorAt: new Date(),
+            ack: -1 // Indicar falha
+          });
+
+          logger.info(`[SOCKET] ✅ Mensagem ${messageId} atualizada com erro: [${errorCode}] ${errorMessage}`);
+
+          // Emitir evento para atualizar UI
+          const io = getIO();
+          io.of(String(companyId)).emit(`company-${companyId}-appMessage`, {
+            action: "update",
+            message
+          });
+        }
+        // Se status é sucesso, atualizar ack
+        else if (status === 'sent') {
+          await message.update({ ack: 1 });
+          logger.info(`[SOCKET] ✅ Mensagem ${messageId} marcada como enviada (ack: 1)`);
+        } else if (status === 'delivered') {
+          await message.update({ ack: 2 });
+          logger.info(`[SOCKET] ✅ Mensagem ${messageId} marcada como entregue (ack: 2)`);
+        } else if (status === 'read') {
+          await message.update({ ack: 3, read: true });
+          logger.info(`[SOCKET] ✅ Mensagem ${messageId} marcada como lida (ack: 3)`);
+        }
+      } catch (error) {
+        logger.error(`[SOCKET] Erro ao processar status update:`, error);
+      }
+    });
+
+
     //  NOVO: Heartbeat para manter usuário online e verificar aniversários periodicamente
     socket.on("heartbeat", () => handleHeartbeat(socket));
 
