@@ -14,17 +14,17 @@ export interface IReceivedWhatsppOficialRead {
 
 export interface IMessageReceived {
   type:
-    | 'text'
-    | 'image'
-    | 'audio'
-    | 'document'
-    | 'video'
-    | 'location'
-    | 'contacts'
-    | 'order'
-    | 'interactive'
-    | 'referral'
-    | 'sticker';
+  | 'text'
+  | 'image'
+  | 'audio'
+  | 'document'
+  | 'video'
+  | 'location'
+  | 'contacts'
+  | 'order'
+  | 'interactive'
+  | 'referral'
+  | 'sticker';
   timestamp: number;
   idMessage: string;
   text?: string;
@@ -32,4 +32,14 @@ export interface IMessageReceived {
   mimeType?: string;
   idFile?: string;
   quoteMessageId?: string;
+}
+
+export interface ITemplateStatusUpdate {
+  companyId: number;
+  templateId: string;
+  previousCategory?: string;
+  newCategory?: string;
+  status: string;
+  reason?: string;
+  token: string;
 }

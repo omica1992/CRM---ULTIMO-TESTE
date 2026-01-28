@@ -453,6 +453,25 @@ export class WebhookService {
                   }
                 }
               }
+            } else if (change.field === 'message_template_status_update') {
+              const value: any = change.value;
+
+              this.logger.log(`[WEBHOOK TEMPLATE] 📋 Status update recebido: ${JSON.stringify(value)}`);
+
+              // O evento pode ser APPROVED, REJECTED, PAUSED, FLAGGED, DISABLED
+              const updateData = {
+                companyId: company.idEmpresaMult100,
+                templateId: value.message_template_id,
+                previousCategory: value.previous_category,
+                newCategory: value.new_category,
+                status: value.event,
+                reason: value.reason,
+                token: whats.token_mult100
+              };
+
+              this.logger.log(`[WEBHOOK TEMPLATE] 🚀 Enviando update via socket para Backend: ${JSON.stringify(updateData)}`);
+
+              this.socket.sendTemplateStatusUpdate(updateData);
             }
           }
         }

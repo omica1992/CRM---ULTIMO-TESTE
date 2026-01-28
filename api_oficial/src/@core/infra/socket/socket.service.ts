@@ -132,6 +132,34 @@ export class SocketService implements OnModuleDestroy {
     }
   }
 
+  // ✅ NOVO: Enviar status update de template (APPROVED, REJECTED, PAUSED)
+  sendTemplateStatusUpdate(data: {
+    companyId: number;
+    templateId: string;
+    previousCategory?: string;
+    newCategory?: string;
+    status: string;
+    reason?: string;
+    token: string;
+  }) {
+    try {
+      this.logger.log(
+        `[SOCKET TEMPLATE UPDATE] Enviando template status para empresa ${data.companyId} - TemplateId: ${data.templateId}, Status: ${data.status}`,
+      );
+
+      const socket = this.getOrCreateSocket(data.companyId);
+      socket.emit('templateStatusUpdateWhatsAppOficial', data);
+
+      this.logger.log(
+        `[SOCKET TEMPLATE UPDATE SUCCESS] Template status enviado para empresa ${data.companyId}`,
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `[SOCKET TEMPLATE UPDATE ERROR] Erro ao enviar template status para empresa ${data.companyId}: ${error?.message}`,
+      );
+    }
+  }
+
   private setupSocketEvents(socket: Socket, companyId: number): void {
     socket.on('connect', () => {
       this.logger.log(

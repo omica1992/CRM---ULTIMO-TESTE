@@ -308,6 +308,55 @@ export const initIO = (httpServer: Server): SocketIO => {
     });
 
 
+    // ✅ NOVO: Event handler para status updates de TEMPLATES da Meta API
+    socket.on("templateStatusUpdateWhatsAppOficial", async (data: any) => {
+      try {
+        console.log(`[SOCKET] ===== TEMPLATE STATUS UPDATE RECEBIDO =====`);
+        const { templateId, status, reason, companyId } = data;
+        console.log(`[SOCKET] TemplateId: ${templateId}, Status: ${status}, CompanyId: ${companyId}`);
+
+        if (!templateId || !companyId) {
+          logger.warn(`[SOCKET] Template status update inválido - faltam dados obrigatórios`);
+          return;
+        }
+
+        const QuickMessage = (await import("../models/QuickMessage")).default;
+
+        // Buscar template pelo metaID
+        const template = await QuickMessage.findOne({
+          where: { metaID: templateId, companyId }
+        });
+
+        if (!template) {
+          logger.warn(`[SOCKET] Template ${templateId} não encontrado para companyId ${companyId}`);
+          return;
+        }
+
+        const updateData: any = {
+          status: status
+        };
+
+        if (status === 'REJECTED' || status === 'PAUSED') {
+          updateData.rejectionReason = reason;
+        }
+
+        await template.update(updateData);
+
+        logger.info(`[SOCKET] ✅ Template ${template.shortcode} atualizado para ${status}`);
+
+        // Emitir evento para atualizar UI
+        const io = getIO();
+        io.of(String(companyId))
+          .emit(`company-${companyId}-quickmessage`, {
+            action: "update",
+            record: template
+          });
+
+      } catch (error) {
+        logger.error(`[SOCKET] Erro ao processar template status update:`, error);
+      }
+    });
+
     //  NOVO: Heartbeat para manter usuário online e verificar aniversários periodicamente
     socket.on("heartbeat", () => handleHeartbeat(socket));
 
