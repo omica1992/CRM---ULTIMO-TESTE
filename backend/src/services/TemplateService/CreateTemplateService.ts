@@ -47,17 +47,17 @@ const CreateTemplateService = async (data: Request) => {
     throw new AppError("Esta funcionalidade é apenas para API Oficial", 400);
   }
 
-  try {
-    // ✅ VALIDAÇÃO E CONVERSÃO DO NOME DO TEMPLATE
-    // Meta exige: apenas letras minúsculas e sublinhados
-    let templateName = templateData.name
-      .toLowerCase()                    // Converter para minúsculas
-      .normalize('NFD')                 // Normalizar caracteres acentuados
-      .replace(/[\u0300-\u036f]/g, '') // Remover acentos
-      .replace(/[^a-z0-9_]/g, '_')     // Substituir caracteres inválidos por _
-      .replace(/_+/g, '_')              // Remover underscores duplicados
-      .replace(/^_|_$/g, '');           // Remover underscores do início/fim
+  // ✅ VALIDAÇÃO E CONVERSÃO DO NOME DO TEMPLATE (fora do try para acessar no catch)
+  // Meta exige: apenas letras minúsculas e sublinhados
+  let templateName = templateData.name
+    .toLowerCase()                    // Converter para minúsculas
+    .normalize('NFD')                 // Normalizar caracteres acentuados
+    .replace(/[\u0300-\u036f]/g, '') // Remover acentos
+    .replace(/[^a-z0-9_]/g, '_')     // Substituir caracteres inválidos por _
+    .replace(/_+/g, '_')              // Remover underscores duplicados
+    .replace(/^_|_$/g, '');           // Remover underscores do início/fim
 
+  try {
     console.log(`[CREATE TEMPLATE] Nome original: "${templateData.name}" → Nome convertido: "${templateName}"`);
     console.log(`[CREATE TEMPLATE] Categoria: ${templateData.category}`);
     console.log(`[CREATE TEMPLATE] Idioma: ${templateData.language}`);
@@ -300,7 +300,7 @@ const CreateTemplateService = async (data: Request) => {
 
       // Salvar template como rejeitado
       const quickMessage = await QuickMessage.create({
-        shortcode: templateData.name,
+        shortcode: templateName,  // ✅ Usar nome convertido (igual ao aprovado)
         message: bodyComp?.text || '',
         companyId,
         userId: 1,
