@@ -2,6 +2,7 @@ import Whatsapp from "../../models/Whatsapp";
 import QuickMessage from "../../models/QuickMessage";
 import AppError from "../../errors/AppError";
 import axios from "axios";
+import { Op } from "sequelize";
 import { IResultTemplates } from "../../libs/whatsAppOficial/IWhatsAppOficial.interfaces";
 
 interface Request {
@@ -64,12 +65,14 @@ const ListTemplatesService = async ({ companyId, whatsappId }: Request): Promise
     console.log(`[TEMPLATES] ✅ Encontrados ${templates.length} templates da Meta API`);
 
     // ✅ NOVO: Buscar templates rejeitados salvos localmente
+    // Critério: status = 'REJECTED' + rejectionReason preenchido + isOficial = true
     const rejectedTemplates = await QuickMessage.findAll({
       where: {
         companyId,
         whatsappId,
-        isTemplate: true,
-        status: 'REJECTED'  // ✅ Campo correto: 'status' (não 'templateStatus')
+        isOficial: true,  // ✅ Templates da API Oficial
+        status: 'REJECTED',  // ✅ Status rejeitado
+        rejectionReason: { [Op.ne]: null }  // ✅ Tem motivo de rejeição
       },
       attributes: ['id', 'shortcode', 'message', 'rejectionReason', 'createdAt']
     });
