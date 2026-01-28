@@ -172,7 +172,7 @@ export interface IMetaMessageTemplateComponents {
 export interface IMetaMessageTemplateComponentsParameters {
     type: 'location' | 'currency' | 'date_time' | 'text' | 'payload' | 'location' | 'url' | 'image' | 'video';
     text?: string;
-    url?: string;    
+    url?: string;
     location?: IMetaMessageTemplateComponentsParametersLocation
     currency?: IMetaMessageTemplateComponentsParametersCurrency;
     image?: IMetaMessageTemplateComponentsParametersImage;
@@ -346,6 +346,7 @@ export interface IResultTemplatesData {
     status: string;
     category: string;
     id: string;
+    rejectionReason?: string; // ✅ NOVO: Motivo da rejeição (apenas para templates locais rejeitados)
 }
 
 export interface IResultTemplatesDataComponents {

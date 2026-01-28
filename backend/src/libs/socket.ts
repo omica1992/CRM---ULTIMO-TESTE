@@ -281,11 +281,14 @@ export const initIO = (httpServer: Server): SocketIO => {
 
           logger.info(`[SOCKET] ✅ Mensagem ${messageId} atualizada com erro: [${errorCode}] ${errorMessage}`);
 
+          // ✅ Recarregar mensagem para garantir que todos os campos estejam atualizados
+          await message.reload();
+
           // Emitir evento para atualizar UI
           const io = getIO();
           io.of(String(companyId)).emit(`company-${companyId}-appMessage`, {
             action: "update",
-            message
+            message: message.toJSON() // ✅ Serializar explicitamente para garantir que todos os campos sejam enviados
           });
         }
         // Se status é sucesso, atualizar ack
