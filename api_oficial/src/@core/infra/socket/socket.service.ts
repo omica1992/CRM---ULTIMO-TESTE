@@ -40,7 +40,7 @@ export class SocketService implements OnModuleDestroy {
 
     // Criar nova conexão
     this.logger.log(`[SOCKET] Criando nova conexão para empresa ${companyId}`);
-    
+
     try {
       if (!this.url) {
         throw new Error('URL_BACKEND_MULT100 não configurada');
@@ -105,6 +105,33 @@ export class SocketService implements OnModuleDestroy {
     }
   }
 
+  // ✅ NOVO: Enviar status update de mensagem (sent, delivered, read, failed)
+  sendStatusUpdate(data: {
+    companyId: number;
+    messageId: string;
+    status: string;
+    timestamp: string;
+    error?: any;
+    token: string;
+  }) {
+    try {
+      this.logger.log(
+        `[SOCKET STATUS UPDATE] Enviando status update para empresa ${data.companyId} - MessageId: ${data.messageId}, Status: ${data.status}`,
+      );
+
+      const socket = this.getOrCreateSocket(data.companyId);
+      socket.emit('messageStatusUpdateWhatsAppOficial', data);
+
+      this.logger.log(
+        `[SOCKET STATUS UPDATE SUCCESS] Status update enviado para empresa ${data.companyId}`,
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `[SOCKET STATUS UPDATE ERROR] Erro ao enviar status update para empresa ${data.companyId}: ${error?.message}`,
+      );
+    }
+  }
+
   private setupSocketEvents(socket: Socket, companyId: number): void {
     socket.on('connect', () => {
       this.logger.log(
@@ -122,7 +149,7 @@ export class SocketService implements OnModuleDestroy {
       this.logger.warn(
         `[SOCKET DISCONNECTED] Empresa ${companyId} desconectada. Razão: ${reason}`,
       );
-      
+
       // Remover do cache se desconexão não foi intencional
       if (reason !== 'io client disconnect') {
         this.logger.log(

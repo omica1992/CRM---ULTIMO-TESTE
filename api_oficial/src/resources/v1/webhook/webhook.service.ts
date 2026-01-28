@@ -38,7 +38,7 @@ export class WebhookService {
     private readonly redis: RedisService,
     private readonly socket: SocketService,
     private readonly meta: MetaService,
-  ) {}
+  ) { }
 
   async forwardToWebhook(whats: WhatsAppOficial, body: any) {
     try {
@@ -124,7 +124,7 @@ export class WebhookService {
   async webhookCompanyConexao(companyId: number, conexaoId: number, data: any) {
     const startTime = Date.now();
     this.logger.log(`[WEBHOOK START] CompanyId: ${companyId}, ConexaoId: ${conexaoId}`);
-    
+
     try {
       const company = await this.whatsAppService.prisma.company.findUnique({
         where: { id: companyId },
@@ -151,35 +151,35 @@ export class WebhookService {
       if (!body || !body.object) {
         throw new AppError('Estrutura do webhook inválida: objeto não encontrado', HttpStatus.BAD_REQUEST);
       }
-      
+
       if (body.object === 'whatsapp_business_account' && !body.entry) {
         throw new AppError('Estrutura do webhook inválida: entry não encontrado', HttpStatus.BAD_REQUEST);
       }
 
       // Proteção contra reprocessamento de mensagens duplicadas
       this.logger.log(`[WEBHOOK] Body object: ${body.object}`);
-      
+
       if (body.object == 'whatsapp_business_account' && body.entry) {
         this.logger.log(`[WEBHOOK] Processando ${body.entry.length} entries`);
-        
+
         for (const entry of body.entry) {
           for (const change of entry.changes) {
             if (change.field == 'messages' && change.value?.messages) {
               this.logger.log(`[WEBHOOK] Processando ${change.value.messages.length} mensagens`);
-              
+
               for (const message of change.value.messages) {
                 const messageKey = `webhook:processed:${companyId}:${message.id}`;
                 this.logger.log(`[WEBHOOK CHECK] Verificando duplicata para mensagem ${message.id}`);
-                
+
                 const alreadyProcessed = await this.redis.get(messageKey);
-                
+
                 if (alreadyProcessed) {
                   this.logger.warn(
                     `[WEBHOOK DUPLICATE] Mensagem ${message.id} já foi processada. Ignorando para evitar loop.`,
                   );
                   return true;
                 }
-                
+
                 // Marcar como processada por 5 minutos
                 this.logger.log(`[WEBHOOK MARK] Marcando mensagem ${message.id} como processada`);
                 await this.redis.setex(messageKey, 300, 'true');
@@ -204,7 +204,7 @@ export class WebhookService {
                   this.logger.log(
                     `[WEBHOOK STATUS] 📨 MessageId: ${status.id}, Status: ${status.status}, Timestamp: ${status.timestamp}, Recipient: ${status.recipient_id || 'N/A'}`,
                   );
-                  
+
                   // Log adicional para status de entrega
                   if (status.status === 'delivered') {
                     this.logger.log(`[WEBHOOK STATUS] ✅ DELIVERED - Mensagem ${status.id} foi ENTREGUE ao destinatário`);
@@ -215,12 +215,25 @@ export class WebhookService {
                   } else if (status.status === 'failed') {
                     this.logger.error(`[WEBHOOK STATUS] ❌ FAILED - Mensagem ${status.id} FALHOU: ${JSON.stringify((status as any).errors || {})}`);
                   }
-                  
-                  this.socket.readMessage({
+
+                  // ✅ NOVO: Enviar status update completo via socket para aplicação principal
+                  this.socket.sendStatusUpdate({
                     companyId: company.idEmpresaMult100,
                     messageId: status.id,
+                    status: status.status,
+                    timestamp: status.timestamp,
+                    error: (status as any).errors?.[0], // Incluir erro se houver
                     token: whats.token_mult100,
                   });
+
+                  // Manter compatibilidade: ainda enviar readMessage para status de leitura
+                  if (status.status === 'read') {
+                    this.socket.readMessage({
+                      companyId: company.idEmpresaMult100,
+                      messageId: status.id,
+                      token: whats.token_mult100,
+                    });
+                  }
                 }
               } else {
                 const contact = value.contacts?.[0];
@@ -229,7 +242,7 @@ export class WebhookService {
 
                 for (const message of value.messages) {
                   this.logger.log(`[WEBHOOK MESSAGE] Tipo: ${message.type}, ID: ${message.id}`);
-                  
+
                   if (this.messagesPermitidas.some((m) => m == message.type)) {
                     this.logger.log(`[WEBHOOK MESSAGE PROCESSING] Tipo de mensagem permitido: ${message.type}`);
 
@@ -246,7 +259,7 @@ export class WebhookService {
                     }
 
                     this.logger.log(`[WEBHOOK REDIS] Salvando mensagem no Redis`);
-                    
+
                     try {
                       const messages = await this.redis.get(
                         `messages:${companyId}:${conexaoId}`,
@@ -457,15 +470,15 @@ export class WebhookService {
       this.logger.error(
         `[WEBHOOK ERROR] Erro no POST /webhook/:companyId/:conexaoId após ${duration}ms - ${error.message}`,
       );
-      
+
       if (error.stack) {
         // Mostrar apenas as primeiras 10 linhas do stack para não poluir
         const stackLines = error.stack.split('\n').slice(0, 10).join('\n');
         this.logger.error(`[WEBHOOK ERROR STACK]\n${stackLines}`);
       }
-      
+
       this.logger.error(`[WEBHOOK ERROR CONTEXT] CompanyId: ${companyId}, ConexaoId: ${conexaoId}`);
-      
+
       throw new AppError(error.message, HttpStatus.BAD_REQUEST);
     }
   }
