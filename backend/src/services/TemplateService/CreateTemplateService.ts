@@ -179,6 +179,12 @@ const CreateTemplateService = async (data: Request) => {
       })
     };
 
+    // ✅ NOVO: Adicionar parameter_format se fornecido (para variáveis nomeadas)
+    if (templateData.parameter_format) {
+      cleanedData.parameter_format = templateData.parameter_format;
+      console.log(`[CREATE TEMPLATE] 🏷️ Usando parameter_format: ${templateData.parameter_format}`);
+    }
+
     // ========================================
     // 📋 LOGS DETALHADOS DO PAYLOAD PARA META
     // ========================================
