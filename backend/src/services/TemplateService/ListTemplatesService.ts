@@ -79,29 +79,49 @@ const ListTemplatesService = async ({ companyId, whatsappId }: Request): Promise
 
     console.log(`[TEMPLATES] ✅ Encontrados ${rejectedTemplates.length} templates rejeitados no banco local`);
 
-    // ✅ Converter templates rejeitados para formato da Meta API
-    const rejectedTemplatesFormatted = rejectedTemplates.map(qt => ({
-      id: `local_${qt.id}`,
-      name: qt.shortcode,
-      status: 'REJECTED' as const,
-      category: 'UTILITY' as const,
-      language: 'pt_BR',
-      components: [
-        {
-          type: 'BODY',
-          text: qt.message || '',
-          example: null,
-          format: '',
-          buttons: null
-        }
-      ],
-      rejectionReason: qt.rejectionReason || undefined
-    }));
+    // ✅ Criar mapa de rejectionReason por nome de template
+    const rejectionReasonMap = new Map();
+    rejectedTemplates.forEach(qt => {
+      rejectionReasonMap.set(qt.shortcode.toLowerCase(), qt.rejectionReason);
+    });
 
-    // ✅ Mesclar templates da Meta com templates rejeitados locais
-    const allTemplates = [...templates, ...rejectedTemplatesFormatted];
+    // ✅ Mesclar rejectionReason nos templates da Meta que estão rejeitados
+    const templatesWithReasons = templates.map(template => {
+      if (template.status === 'REJECTED' && rejectionReasonMap.has(template.name.toLowerCase())) {
+        return {
+          ...template,
+          rejectionReason: rejectionReasonMap.get(template.name.toLowerCase())
+        };
+      }
+      return template;
+    });
 
-    console.log(`[TEMPLATES] ✅ Total de templates (Meta + Locais): ${allTemplates.length}`);
+    // ✅ Adicionar templates rejeitados que NÃO estão na Meta (foram deletados da Meta mas salvos localmente)
+    const metaTemplateNames = new Set(templates.map(t => t.name.toLowerCase()));
+    const orphanedRejected = rejectedTemplates
+      .filter(qt => !metaTemplateNames.has(qt.shortcode.toLowerCase()))
+      .map(qt => ({
+        id: `local_${qt.id}`,
+        name: qt.shortcode,
+        status: 'REJECTED' as const,
+        category: 'UTILITY' as const,
+        language: 'pt_BR',
+        components: [
+          {
+            type: 'BODY',
+            text: qt.message || '',
+            example: null,
+            format: '',
+            buttons: null
+          }
+        ],
+        rejectionReason: qt.rejectionReason || undefined
+      }));
+
+    // ✅ Combinar: templates da Meta (com rejectionReason mesclado) + templates órfãos
+    const allTemplates = [...templatesWithReasons, ...orphanedRejected];
+
+    console.log(`[TEMPLATES] ✅ Total de templates: ${allTemplates.length} (${templates.length} da Meta + ${orphanedRejected.length} órfãos locais, ${templatesWithReasons.filter(t => t.rejectionReason).length} mesclados)`);
 
     if (templates.length > 0) {
       // Mostrar estrutura do primeiro template
