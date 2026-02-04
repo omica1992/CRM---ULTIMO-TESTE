@@ -554,8 +554,7 @@ const backToMainMenu = async (
       );
 
       const sentMessage = await wbot.sendMessage(
-        `${ticket.contact.number}@${
-          ticket.isGroup ? "g.us" : "s.whatsapp.net"
+        `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"
         }`,
         { ...optionsMsg }
       );
@@ -806,6 +805,8 @@ export const sayChatbot = async (
     getBodyMessage(msg);
 
   if (!queueId && selectedOption && msg.key.fromMe) return;
+
+  if (ticket.userId) return;
 
   const getStageBot = await ShowDialogChatBotsServices(contact.id);
 
@@ -1499,8 +1500,7 @@ export const sayChatbot = async (
 
     if (!isNil(complationMessage)) {
       const sendMsg = await wbot.sendMessage(
-        `${ticket?.contact?.number}@${
-          ticket.isGroup ? "g.us" : "s.whatsapp.net"
+        `${ticket?.contact?.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"
         }`,
         textMessage
       );

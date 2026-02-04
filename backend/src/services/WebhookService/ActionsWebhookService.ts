@@ -753,11 +753,11 @@ export const ActionsWebhookService = async (
           // Verifica se este input específico já foi respondido
           const inputIdentifier = `${ticket.id}_${variableName}`;
           const thisInputResponded = global.flowVariables[inputIdentifier];
-          
+
           // ✅ CORREÇÃO: Verificar se estamos retomando após aguardar input
-          const isWaitingForThisInput = ticket?.dataWebhook?.waitingInput && 
-                                        ticket?.dataWebhook?.inputVariableName === variableName &&
-                                        ticket?.lastFlowId === nodeSelected.id;
+          const isWaitingForThisInput = ticket?.dataWebhook?.waitingInput &&
+            ticket?.dataWebhook?.inputVariableName === variableName &&
+            ticket?.lastFlowId === nodeSelected.id;
 
           logger.info(`[INPUT NODE] Debug - Ticket ${ticket.id}, Variable: ${variableName}, InputIdentifier: ${inputIdentifier}`);
           logger.info(`[INPUT NODE] Debug - inputResponded: ${inputResponded}, thisInputResponded: ${thisInputResponded}, isWaitingForThisInput: ${isWaitingForThisInput}`);
@@ -875,7 +875,7 @@ export const ActionsWebhookService = async (
 
               global.flowVariables = global.flowVariables || {};
               global.flowVariables[`${inputIdentifier}_next`] = nextNodeId;
-              
+
               // ✅ LOG DE DEBUG: Rastrear salvamento do próximo nó
               logger.info(`[INPUT NODE] Salvando próximo nó para ${inputIdentifier}: ${nextNodeId}`);
               logger.info(`[INPUT NODE] Estado atual de flowVariables para este ticket: ${JSON.stringify(Object.keys(global.flowVariables).filter(k => k.includes(`${ticket.id}_`)))}`);
@@ -1262,7 +1262,7 @@ export const ActionsWebhookService = async (
             }
 
             console.log('if da api oficial', whatsapp.channel)
-            
+
             if (whatsapp.channel === "whatsapp_oficial") {
               console.log('chamando api oficial')
               await SendWhatsAppOficialMessage({
@@ -1562,7 +1562,7 @@ export const ActionsWebhookService = async (
                 ticket: ticketDetails,
                 quotedMsg: null
               });
-              
+
               // ✅ Baileys: Salvar mensagem manualmente
               const messageData: MessageData = {
                 wid: randomString(50),
@@ -1620,6 +1620,13 @@ export const ActionsWebhookService = async (
               break;
             }
 
+            // ✅ CORREÇÃO: Verificar se existe atendente no ticket antes de enviar erro
+            const ticketVerificacao = await ShowTicketService(ticket.id, companyId);
+            if (ticketVerificacao.userId) {
+              logger.info(`[MENU NODE] Ticket ${ticket.id} possui atendente (${ticketVerificacao.userId}). Ignorando mensagem de opção inválida.`);
+              return "attendant_active";
+            }
+
             let optionsText = "";
             nodeSelected.data.arrayOption.forEach(item => {
               optionsText += `[${item.number}] ${item.value}\n`;
@@ -1635,7 +1642,7 @@ export const ActionsWebhookService = async (
                 ticket: ticketDetails,
                 quotedMsg: null
               });
-              
+
               // ✅ Baileys: Salvar mensagem manualmente
               const messageData: MessageData = {
                 wid: randomString(50),
@@ -1668,7 +1675,7 @@ export const ActionsWebhookService = async (
             });
 
             logger.info(`[MENU NODE] Fallback enviado para ticket ${ticket.id}. Ticket configurado para aguardar nova resposta (flowWebhook=true, lastFlowId=${nodeSelected.id}).`);
-            
+
             // ✅ CORREÇÃO: Retornar imediatamente para evitar duplicação
             // O ticket permanece em estado de aguardando resposta
             return "fallback_sent"; // ✅ Sai completamente para evitar reprocessamento
@@ -1901,11 +1908,11 @@ export const ActionsWebhookService = async (
           pressKey = undefined;
         } else if (isSwitchFlow) {
           // ✅ CORREÇÃO: Verificar se é API Oficial antes de chamar getWbot
-          const isOficial = whatsapp.provider === "oficial" || 
-                           
-                           whatsapp.channel === "whatsapp-oficial" || 
-                           whatsapp.channel === "whatsapp_oficial";
-          
+          const isOficial = whatsapp.provider === "oficial" ||
+
+            whatsapp.channel === "whatsapp-oficial" ||
+            whatsapp.channel === "whatsapp_oficial";
+
           const wbot = isOficial ? null : await getWbot(whatsapp.id);
           const contact = await Contact.findOne({
             where: {
@@ -2080,20 +2087,20 @@ const switchFlow = async (data: any, companyId: number, ticket: Ticket, recursio
 
   // ✅ CORREÇÃO: Carregar whatsapp primeiro para verificar se é API Oficial
   const whatsapp = await Whatsapp.findByPk(ticket.whatsappId);
-  
+
   if (!whatsapp) {
     logger.error(`[SWITCH FLOW] Whatsapp não encontrado para ticket ${ticket.id}`);
     return;
   }
 
   // ✅ Verificar se é API Oficial antes de chamar getWbot
-  const isOficial = whatsapp.provider === "oficial" || 
-                   
-                   whatsapp.channel === "whatsapp-oficial" || 
-                   whatsapp.channel === "whatsapp_oficial";
-  
+  const isOficial = whatsapp.provider === "oficial" ||
+
+    whatsapp.channel === "whatsapp-oficial" ||
+    whatsapp.channel === "whatsapp_oficial";
+
   const wbot = isOficial ? null : await getWbot(ticket.whatsappId);
-  
+
   const contact = await Contact.findOne({
     where: {
       id: ticket?.contactId,

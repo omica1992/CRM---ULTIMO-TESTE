@@ -15,6 +15,7 @@ import { isNil } from "lodash";
 import { sendFacebookMessage } from "../FacebookServices/sendFacebookMessage";
 import { verifyMessageFace } from "../FacebookServices/facebookMessageListener";
 import ShowUserService from "../UserServices/ShowUserService";
+import DeleteDialogChatBotsServices from "../DialogChatBotsServices/DeleteDialogChatBotsServices";
 import User from "../../models/User";
 import CompaniesSettings from "../../models/CompaniesSettings";
 import CreateLogTicketService from "./CreateLogTicketService";
@@ -155,7 +156,9 @@ const UpdateTicketService = async ({
     // ⚠️ IMPORTANTE: NÃO desabilitar isBot se ticket está em fluxo ativo (flowWebhook)
     if (userId && userId !== oldUserId && status === "open") {
       logger.info(`[TICKET ACCEPTED] Ticket ${ticketId} aceito por usuário ${userId} - desabilitando integração`);
-      
+
+      await DeleteDialogChatBotsServices(ticket.contactId);
+
       // Verificar se ticket está em fluxo ativo
       if (ticket.flowWebhook && ticket.lastFlowId) {
         logger.info(`[TICKET ACCEPTED] Ticket ${ticketId} está em fluxo ativo - mantendo isBot=true para continuar fluxo`);
@@ -163,7 +166,7 @@ const UpdateTicketService = async ({
       } else {
         isBot = false;
       }
-      
+
       useIntegration = false; // Sempre desabilitar integrações externas (Typebot, n8n)
     }
 
@@ -210,7 +213,7 @@ const UpdateTicketService = async ({
             });
             await verifyMessage(msg, ticket, ticket.contact);
           } else if (
-            ticket.channel === "whatsapp_oficial" || 
+            ticket.channel === "whatsapp_oficial" ||
             ticket.channel === "whatsapp-oficial"
           ) {
             // ✅ NOVO: Suporte para mensagem de avaliação (NPS) na API Oficial
@@ -502,9 +505,9 @@ const UpdateTicketService = async ({
             ticket.whatsapp.status === "CONNECTED"
           ) {
             // ✅ CORREÇÃO: Verificar se é API Oficial antes de usar wbot
-            const isOficial = ticket.whatsapp.provider === "oficial" || 
-                             ticket.whatsapp.channel === "whatsapp-oficial" || 
-                             ticket.whatsapp.channel === "whatsapp_oficial";
+            const isOficial = ticket.whatsapp.provider === "oficial" ||
+              ticket.whatsapp.channel === "whatsapp-oficial" ||
+              ticket.whatsapp.channel === "whatsapp_oficial";
 
             const msgtxt = formatBody(
               `\u200e ${settings.transferMessage.replace(
@@ -515,7 +518,7 @@ const UpdateTicketService = async ({
             );
 
             let queueChangedMessage;
-            
+
             if (isOficial) {
               // Para API Oficial, usar SendWhatsAppOficialMessage
               const SendWhatsAppOficialMessage = (await import("../WhatsAppOficial/SendWhatsAppOficialMessage")).default;
@@ -695,9 +698,9 @@ const UpdateTicketService = async ({
               ticket.whatsapp.status === "CONNECTED")
           ) {
             // ✅ CORREÇÃO: Verificar se é API Oficial antes de usar wbot
-            const isOficial = ticket.whatsapp.provider === "oficial" || 
-                             ticket.whatsapp.channel === "whatsapp-oficial" || 
-                             ticket.whatsapp.channel === "whatsapp_oficial";
+            const isOficial = ticket.whatsapp.provider === "oficial" ||
+              ticket.whatsapp.channel === "whatsapp-oficial" ||
+              ticket.whatsapp.channel === "whatsapp_oficial";
 
             const msgtxt = formatBody(
               `\u200e ${settings.transferMessage.replace(
@@ -708,7 +711,7 @@ const UpdateTicketService = async ({
             );
 
             let queueChangedMessage;
-            
+
             if (isOficial) {
               // Para API Oficial, usar SendWhatsAppOficialMessage
               const SendWhatsAppOficialMessage = (await import("../WhatsAppOficial/SendWhatsAppOficialMessage")).default;
@@ -722,15 +725,14 @@ const UpdateTicketService = async ({
               // Para Baileys, usar o método original
               const wbot = await GetTicketWbot(ticket);
               queueChangedMessage = await wbot.sendMessage(
-                `${ticket.contact.number}@${
-                  ticket.isGroup ? "g.us" : "s.whatsapp.net"
+                `${ticket.contact.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"
                 }`,
                 {
                   text: msgtxt
                 }
               );
             }
-            
+
             if (queueChangedMessage) {
               await verifyMessage(
                 queueChangedMessage,
@@ -912,8 +914,8 @@ const UpdateTicketService = async ({
         status === "closed"
           ? 0
           : amountUsedBotQueues
-          ? amountUsedBotQueues
-          : ticket.amountUsedBotQueues,
+            ? amountUsedBotQueues
+            : ticket.amountUsedBotQueues,
       lastMessage: lastMessage ? lastMessage : ticket.lastMessage,
       useIntegration,
       integrationId,
@@ -984,7 +986,7 @@ const UpdateTicketService = async ({
           action: "delete",
           ticketId: ticket.id
         });
-        
+
       // Emitir evento global de mudança de status para atualizar contadores
       if (ticket.status !== oldStatus) {
         io.of(String(companyId)).emit('ticketStatus', {
