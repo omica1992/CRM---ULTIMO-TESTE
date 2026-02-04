@@ -24,6 +24,7 @@ interface Request {
 }
 
 const CreateTemplateService = async (data: Request) => {
+  console.log('[CREATE TEMPLATE SERVICE] Raw Data Received:', JSON.stringify(data, null, 2));
   const { companyId, whatsappId, ...templateData } = data;
 
   const whatsapp = await Whatsapp.findOne({
@@ -118,13 +119,19 @@ const CreateTemplateService = async (data: Request) => {
         // ✅ CORREÇÃO: Adicionar example se existir e não estiver vazio
         if (comp.example && Object.keys(comp.example).length > 0) {
           // Para BODY: verificar se tem body_text COM CONTEÚDO
-          if (comp.type === 'BODY' && comp.example.body_text) {
-            // ✅ Só adicionar se body_text for array com elementos
-            if (Array.isArray(comp.example.body_text) && comp.example.body_text.length > 0) {
+          // Para BODY: verificar se tem body_text ou body_text_named_params
+          if (comp.type === 'BODY') {
+            if (comp.example.body_text && Array.isArray(comp.example.body_text) && comp.example.body_text.length > 0) {
               cleanedComp.example = comp.example;
               console.log(`[CREATE TEMPLATE] BODY com example.body_text:`, comp.example.body_text);
-            } else {
-              console.log(`[CREATE TEMPLATE] BODY sem variáveis - removendo example vazio`);
+            }
+            // ✅ NOVO: Suporte a body_text_named_params
+            else if (comp.example.body_text_named_params && Array.isArray(comp.example.body_text_named_params) && comp.example.body_text_named_params.length > 0) {
+              cleanedComp.example = comp.example;
+              console.log(`[CREATE TEMPLATE] BODY com example.body_text_named_params:`, JSON.stringify(comp.example.body_text_named_params));
+            }
+            else {
+              console.log(`[CREATE TEMPLATE] BODY sem variáveis válidas - removendo example vazio`);
             }
           }
           // Para HEADER: verificar se tem header_handle (mídia)

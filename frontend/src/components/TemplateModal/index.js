@@ -125,6 +125,15 @@ const buttonTypes = [
     { value: 'COPY_CODE', label: 'Copiar Código' }
 ];
 
+const availableVariables = [
+    { name: 'Nome', value: '{{name}}' },
+    { name: 'Primeiro Nome', value: '{{firstName}}' },
+    { name: 'Saudação', value: '{{ms}}' },
+    { name: 'Protocolo', value: '{{protocol}}' },
+    { name: 'Hora', value: '{{hour}}' },
+    { name: 'Data', value: '{{date}}' },
+];
+
 const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
     const classes = useStyles();
     const [loading, setLoading] = useState(false);
@@ -253,15 +262,76 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                 }
             }
 
+            // ✅ CORREÇÃO: Converter variáveis nomeadas para posicionais ({{name}} -> {{1}})
+            // para garantir aprovação da Meta
+            // ✅ CORREÇÃO: Suporte a parâmetros nomeados e posicionais
+            const processComponents = (components) => {
+                return components.map(component => {
+                    if (component.type === 'BODY' || component.type === 'HEADER' || component.type === 'FOOTER') {
+                        if (component.text) {
+                            // Se for posicional, faz a conversão para garantir compatibilidade
+                            if (values.parameter_format === 'positional') {
+                                let variableCount = 1;
+                                const variableMap = new Map();
+
+                                const newText = component.text.replace(/\{\{([^{}]+)\}\}/g, (match, variable) => {
+                                    const varName = variable.trim();
+                                    if (!isNaN(varName)) return match; // Já é número
+                                    if (!variableMap.has(varName)) {
+                                        variableMap.set(varName, variableCount++);
+                                    }
+                                    return `{{${variableMap.get(varName)}}}`;
+                                });
+
+                                // Gera exemplos para posicionais
+                                let example = component.example;
+                                if (component.type === 'BODY' && variableCount > 1) {
+                                    const examples = Array(variableCount - 1).fill("Exemplo");
+                                    example = { body_text: [examples] };
+                                }
+                                return { ...component, text: newText, example };
+                            }
+                            // Se for nomeado, mantém as variáveis originais
+                            else {
+                                // Encontrar variáveis no texto
+                                const variables = [...component.text.matchAll(/\{\{([^{}]+)\}\}/g)].map(m => m[1].trim());
+                                const uniqueVariables = [...new Set(variables)];
+
+                                // Gera exemplos nomeados para BODY
+                                let example = component.example;
+                                if (component.type === 'BODY' && uniqueVariables.length > 0) {
+                                    // Para parâmetros nomeados, deve-se usar body_text_named_params
+                                    const examples = uniqueVariables.map(varName => ({
+                                        param_name: varName,
+                                        example: "Exemplo"
+                                    }));
+                                    example = { body_text_named_params: examples };
+                                }
+                                return { ...component, example };
+                            }
+                        }
+                    }
+                    return component;
+                });
+            };
+
+            const processedComponents = processComponents(values.components);
+
+            const valuesToSend = {
+                ...values,
+                components: processedComponents,
+                // parameter_format já vem de values (positional ou named)
+            };
+
             setLoading(true);
 
-            console.log('[TEMPLATE MODAL] Enviando template:', JSON.stringify(values, null, 2));
+            console.log('[TEMPLATE MODAL] Enviando template (Processado):', JSON.stringify(valuesToSend, null, 2));
 
             if (templateId) {
-                await api.put(`/templates/${whatsappId}/${templateId}`, values);
+                await api.put(`/templates/${whatsappId}/${templateId}`, valuesToSend);
                 toast.success("Template atualizado com sucesso!");
             } else {
-                await api.post(`/templates/${whatsappId}`, values);
+                await api.post(`/templates/${whatsappId}`, valuesToSend);
                 toast.success("Template criado com sucesso!");
             }
 
@@ -402,6 +472,11 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
         } finally {
             setUploadingMedia(false);
         }
+    };
+
+    const handleAddVariable = (componentIndex, variableValue, setFieldValue, currentText) => {
+        const newValue = currentText + variableValue;
+        setFieldValue(`components[${componentIndex}].text`, newValue);
     };
 
     return (
@@ -647,15 +722,32 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                                                     {(component.type !== 'HEADER' || !component.format) && (
                                                         <Field name={`components[${index}].text`}>
                                                             {({ field }) => (
-                                                                <TextField
-                                                                    {...field}
-                                                                    label="Texto"
-                                                                    fullWidth
-                                                                    multiline
-                                                                    rows={3}
-                                                                    helperText={`Use {1}, {2} para parâmetros posicionais ou {nome}, {data} para nomeados`}
-                                                                    style={{ marginTop: 16 }}
-                                                                />
+                                                                <div>
+                                                                    <TextField
+                                                                        {...field}
+                                                                        label="Texto"
+                                                                        fullWidth
+                                                                        multiline
+                                                                        rows={3}
+                                                                        helperText={`Use {1}, {2} para parâmetros posicionais ou use as variáveis abaixo`}
+                                                                        style={{ marginTop: 16 }}
+                                                                    />
+                                                                    <Grid container spacing={1} style={{ marginTop: 8 }}>
+                                                                        {availableVariables.map((variable) => (
+                                                                            <Grid item key={variable.value}>
+                                                                                <Chip
+                                                                                    label={variable.name}
+                                                                                    // icon={<AddIcon />}
+                                                                                    size="small"
+                                                                                    color="primary"
+                                                                                    variant="outlined"
+                                                                                    onClick={() => handleAddVariable(index, variable.value, setFieldValue, field.value)}
+                                                                                    clickable
+                                                                                />
+                                                                            </Grid>
+                                                                        ))}
+                                                                    </Grid>
+                                                                </div>
                                                             )}
                                                         </Field>
                                                     )}
