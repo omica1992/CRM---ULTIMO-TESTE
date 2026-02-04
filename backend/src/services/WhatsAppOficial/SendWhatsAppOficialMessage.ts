@@ -136,6 +136,32 @@ const SendWhatsAppOficialMessage = async ({
     case 'location':
       throw new Error(`Tipo ${type} não configurado para enviar mensagem a Meta`);
     case 'template':
+      // ✅ Processamento de variáveis no template
+      if (!ticket.contact) {
+        const ContactModel = (await import("../../models/Contact")).default;
+        ticket.contact = await ContactModel.findByPk(ticket.contactId);
+      }
+
+      if (template && template.components) {
+        const componentsList: any[] = Array.isArray(template.components)
+          ? template.components
+          : [template.components];
+
+        componentsList.forEach((component) => {
+          if (component.parameters) {
+            const parametersList: any[] = Array.isArray(component.parameters)
+              ? component.parameters
+              : [component.parameters];
+
+            parametersList.forEach((parameter) => {
+              if (parameter.type === 'text' && parameter.text) {
+                // Substitui variáveis como {{name}}, {{firstName}}, etc.
+                parameter.text = formatBody(parameter.text, ticket);
+              }
+            });
+          }
+        });
+      }
       options.body_template = template;
       mediaType = 'template';
       break;

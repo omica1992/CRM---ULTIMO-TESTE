@@ -8,7 +8,9 @@ import {
     List,
     ListItem,
     ListItemText,
-    Button
+    Button,
+    Chip,
+    Grid
 } from '@material-ui/core';
 import SearchIcon from '@material-ui/icons/Search';
 import { makeStyles } from '@material-ui/core/styles';
@@ -61,6 +63,16 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
     const [variables, setVariables] = useState([]);
     const [variableValues, setVariableValues] = useState({});
     const [renderedContent, setRenderedContent] = useState('');
+
+    const availableVariables = [
+        { name: 'Nome', value: '{{name}}' },
+        { name: 'Primeiro Nome', value: '{{firstName}}' },
+        { name: 'Saudação', value: '{{ms}}' },
+        { name: 'Protocolo', value: '{{protocol}}' },
+        { name: 'Hora', value: '{{hour}}' },
+        { name: 'Data', value: '{{date}}' },
+    ];
+
 
     const handleSearchChange = (event) => {
         setSearch(event.target.value);
@@ -186,7 +198,7 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
                     Object.keys(componentVariables).forEach((key, index) => {
                         const value = componentVariables[key]?.value || '';
                         console.log("value", value, value.startsWith("http"))
-                        if (value.startsWith("http")) {                            
+                        if (value.startsWith("http")) {
                             bodyToSave = `${value} \n ${bodyToSave}`
                             console.log("bodyToSave", bodyToSave)
                         } else {
@@ -219,7 +231,7 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
             variables: variableValues,
             bodyToSave
         };
-        
+
         // Log antes de enviar para o componente pai
         console.log("Enviando template para o componente pai:", {
             id: templateWithVariables.id,
@@ -227,7 +239,7 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
             shortcode: templateWithVariables.shortcode,
             language: templateWithVariables.language
         });
-        
+
         onSelectTemplate(templateWithVariables);
     };
 
@@ -236,6 +248,12 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
         const newComponentValues = { ...variableValues[componentType], [index]: { value, buttonIndex } };
         const newValues = { ...variableValues, [componentType]: newComponentValues };
         setVariableValues(newValues);
+    };
+
+    const handleAddVariable = (componentType, index, variableValue, buttonIndex) => {
+        const currentValue = variableValues[componentType]?.[index]?.value || '';
+        const newValue = currentValue + variableValue;
+        handleVariableChange(componentType, index, newValue, buttonIndex);
     };
 
     const filteredTemplates = templates.filter((template) => {
@@ -276,8 +294,8 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
                                 const isExpanded = expandedTemplates[template.id];
                                 const maxPreviewLength = 150;
                                 const needsExpand = bodyText.length > maxPreviewLength;
-                                const displayText = isExpanded || !needsExpand 
-                                    ? bodyText 
+                                const displayText = isExpanded || !needsExpand
+                                    ? bodyText
                                     : bodyText.substring(0, maxPreviewLength) + '...';
 
                                 return (
@@ -299,10 +317,10 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
                                             }
                                             secondary={
                                                 <>
-                                                    <Typography 
-                                                        variant="body2" 
-                                                        component="div" 
-                                                        style={{ 
+                                                    <Typography
+                                                        variant="body2"
+                                                        component="div"
+                                                        style={{
                                                             whiteSpace: 'pre-wrap',
                                                             marginTop: '8px',
                                                             marginBottom: '8px'
@@ -317,7 +335,7 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
                                                                 e.stopPropagation();
                                                                 toggleExpand(template.id);
                                                             }}
-                                                            style={{ 
+                                                            style={{
                                                                 marginBottom: '8px',
                                                                 textTransform: 'none'
                                                             }}
@@ -360,14 +378,29 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
                                     <>
                                         <Typography variant="h6">{componentType.toUpperCase()}</Typography>
                                         {variables[componentType].map((variable, index) => (
-                                            <TextField
-                                                key={`${componentType}-${index}`}
-                                                label={`${variable?.prompt}`}
-                                                value={variableValues[componentType]?.[index]?.value || ''}
-                                                onChange={(e) => handleVariableChange(componentType, index, e.target.value, variable?.index || 0)}
-                                                fullWidth
-                                                margin="normal"
-                                            />
+                                            <div key={`${componentType}-${index}`}>
+                                                <TextField
+                                                    label={`${variable?.prompt}`}
+                                                    value={variableValues[componentType]?.[index]?.value || ''}
+                                                    onChange={(e) => handleVariableChange(componentType, index, e.target.value, variable?.index || 0)}
+                                                    fullWidth
+                                                    margin="normal"
+                                                />
+                                                <Grid container spacing={1} style={{ marginBottom: 16 }}>
+                                                    {availableVariables.map((availVar) => (
+                                                        <Grid item key={availVar.value}>
+                                                            <Chip
+                                                                label={availVar.name}
+                                                                size="small"
+                                                                color="primary"
+                                                                variant="outlined"
+                                                                onClick={() => handleAddVariable(componentType, index, availVar.value, variable?.index || 0)}
+                                                                clickable
+                                                            />
+                                                        </Grid>
+                                                    ))}
+                                                </Grid>
+                                            </div>
                                         ))}
                                     </>
                                 )}

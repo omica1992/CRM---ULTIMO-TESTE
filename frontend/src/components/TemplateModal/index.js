@@ -121,7 +121,8 @@ const languages = [
 const buttonTypes = [
     { value: 'QUICK_REPLY', label: 'Resposta Rápida' },
     { value: 'URL', label: 'Link' },
-    { value: 'PHONE_NUMBER', label: 'Telefone' }
+    { value: 'PHONE_NUMBER', label: 'Telefone' },
+    { value: 'COPY_CODE', label: 'Copiar Código' }
 ];
 
 const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
@@ -149,7 +150,7 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
             setInitialValues({
                 name: "",
                 category: "",
-                language: "pt_BR", 
+                language: "pt_BR",
                 parameter_format: "positional",
                 components: [
                     {
@@ -226,7 +227,7 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
             // Validar cada componente
             for (let i = 0; i < values.components.length; i++) {
                 const component = values.components[i];
-                
+
                 // HEADER com formato de mídia precisa ter example.header_handle
                 if (component.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(component.format)) {
                     if (!component.example?.header_handle || !Array.isArray(component.example.header_handle) || component.example.header_handle.length === 0) {
@@ -235,7 +236,7 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                     }
                     continue; // Não precisa de texto
                 }
-                
+
                 // HEADER com formato TEXT ou sem formato precisa de texto
                 if (component.type === 'HEADER' && (!component.format || component.format === 'TEXT')) {
                     if (!component.text || component.text.trim() === '') {
@@ -244,7 +245,7 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                     }
                     continue;
                 }
-                
+
                 // Outros componentes precisam de texto
                 if (!component.text || component.text.trim() === '') {
                     toast.error(`O componente ${componentTypes.find(t => t.value === component.type)?.label || component.type} precisa de texto`);
@@ -253,9 +254,9 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
             }
 
             setLoading(true);
-            
+
             console.log('[TEMPLATE MODAL] Enviando template:', JSON.stringify(values, null, 2));
-            
+
             if (templateId) {
                 await api.put(`/templates/${whatsappId}/${templateId}`, values);
                 toast.success("Template atualizado com sucesso!");
@@ -263,7 +264,7 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                 await api.post(`/templates/${whatsappId}`, values);
                 toast.success("Template criado com sucesso!");
             }
-            
+
             onSave();
             onClose();
         } catch (err) {
@@ -286,6 +287,15 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
         buttons.push({
             type: "QUICK_REPLY",
             text: ""
+        });
+        setFieldValue(`components[${index}].buttons`, buttons);
+    };
+
+    const addOptOutButton = (component, index, setFieldValue) => {
+        const buttons = component.buttons || [];
+        buttons.push({
+            type: "QUICK_REPLY",
+            text: "Parar promoções"
         });
         setFieldValue(`components[${index}].buttons`, buttons);
     };
@@ -317,25 +327,25 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
             setUploadingMedia(true);
             const formData = new FormData();
             formData.append('file', file);
-            
+
             // ✅ CORREÇÃO: Adicionar parâmetros para upload na Meta API
             formData.append('uploadToMeta', 'true');
-            
+
             // Buscar dados da conexão WhatsApp
             const { data: whatsappData } = await api.get(`/whatsapp/${whatsappId}`);
-            
+
             console.log('[TEMPLATE MODAL] 📋 Resposta completa da API /whatsapp:', whatsappData);
-            
+
             // ✅ Usar o token da conexão (api_oficial vai buscar credenciais corretas do próprio banco)
             const whatsappToken = whatsappData.token;
-            
+
             console.log('[TEMPLATE MODAL] 📋 Dados da conexão:', {
                 hasToken: !!whatsappToken,
                 token: whatsappToken || 'VAZIO',
                 provider: whatsappData.provider,
                 channel: whatsappData.channel
             });
-            
+
             if (whatsappToken) {
                 formData.append('whatsappToken', whatsappToken);
                 console.log('[TEMPLATE MODAL] 🚀 Upload para Meta API habilitado via api_oficial');
@@ -364,7 +374,7 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
 
             // ✅ CORREÇÃO: Usar metaHandle se disponível, senão usar publicUrl
             const handleValue = data.metaHandle || data.publicUrl;
-            
+
             if (data.metaHandle) {
                 console.log('[TEMPLATE MODAL] ✅ Usando Meta Handle (CORRETO):', data.metaHandle);
                 toast.success('Mídia enviada com sucesso! Handle da Meta gerado.');
@@ -432,7 +442,7 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                                                 fullWidth
                                                 error={touched.name && !!errors.name}
                                                 helperText={
-                                                    (touched.name && errors.name) || 
+                                                    (touched.name && errors.name) ||
                                                     "Apenas letras minúsculas, números e underscore (_)"
                                                 }
                                                 disabled={!!templateId}
@@ -450,7 +460,7 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                                         )}
                                     </Field>
                                 </Grid>
-                                
+
                                 <Grid item xs={12} sm={6}>
                                     <Field name="category">
                                         {({ field }) => (
@@ -530,8 +540,8 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                                                                 </FormControl>
                                                             )}
                                                         </Field>
-                                                        
-                                                        <IconButton 
+
+                                                        <IconButton
                                                             onClick={() => remove(index)}
                                                             disabled={values.components.length === 1}
                                                         >
@@ -548,16 +558,16 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                                                             <Typography variant="caption" color="textSecondary" display="block" gutterBottom>
                                                                 ℹ️ O cabeçalho pode ter OU texto OU mídia, nunca os dois. Ao adicionar mídia, o campo de texto será ocultado.
                                                             </Typography>
-                                                            
+
                                                             {/* Alerta se tem formato mas não tem mídia */}
-                                                            {component.format && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(component.format) && 
-                                                             (!component.example?.header_handle || component.example.header_handle.length === 0) && (
-                                                                <Box mt={1} mb={1} p={1} bgcolor="#fff3cd" borderRadius={4}>
-                                                                    <Typography variant="caption" style={{ color: '#856404' }}>
-                                                                        ⚠️ Formato {component.format} selecionado mas mídia não carregada. Faça upload da mídia abaixo.
-                                                                    </Typography>
-                                                                </Box>
-                                                            )}
+                                                            {component.format && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(component.format) &&
+                                                                (!component.example?.header_handle || component.example.header_handle.length === 0) && (
+                                                                    <Box mt={1} mb={1} p={1} bgcolor="#fff3cd" borderRadius={4}>
+                                                                        <Typography variant="caption" style={{ color: '#856404' }}>
+                                                                            ⚠️ Formato {component.format} selecionado mas mídia não carregada. Faça upload da mídia abaixo.
+                                                                        </Typography>
+                                                                    </Box>
+                                                                )}
                                                             <input
                                                                 accept="image/*,video/mp4,application/pdf"
                                                                 style={{ display: 'none' }}
@@ -604,16 +614,16 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                                                                         </Button>
                                                                     </Box>
                                                                     {component.format === 'IMAGE' && (
-                                                                        <img 
-                                                                            src={component.example.header_handle[0]} 
-                                                                            alt="Preview" 
+                                                                        <img
+                                                                            src={component.example.header_handle[0]}
+                                                                            alt="Preview"
                                                                             className={classes.imagePreview}
                                                                         />
                                                                     )}
                                                                     {component.format === 'VIDEO' && (
-                                                                        <video 
-                                                                            src={component.example.header_handle[0]} 
-                                                                            controls 
+                                                                        <video
+                                                                            src={component.example.header_handle[0]}
+                                                                            controls
                                                                             className={classes.imagePreview}
                                                                         />
                                                                     )}
@@ -678,27 +688,28 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                                                                         </Grid>
                                                                         <Grid item xs={12} sm={6}>
                                                                             <TextField
-                                                                                label="Texto"
+                                                                                label="Texto do Botão"
                                                                                 fullWidth
                                                                                 value={button.text}
                                                                                 onChange={(e) => setFieldValue(
                                                                                     `components[${index}].buttons[${buttonIndex}].text`,
                                                                                     e.target.value
                                                                                 )}
+                                                                                helperText={button.type === 'COPY_CODE' ? "Texto que aparece no botão (ex: Copiar Código)" : ""}
                                                                             />
                                                                         </Grid>
                                                                         <Grid item xs={12} sm={2}>
-                                                                            <IconButton 
+                                                                            <IconButton
                                                                                 onClick={() => removeButton(component, buttonIndex, index, setFieldValue)}
                                                                             >
                                                                                 <DeleteIcon />
                                                                             </IconButton>
                                                                         </Grid>
                                                                     </Grid>
-                                                                    
+
                                                                     {button.type === 'URL' && (
                                                                         <TextField
-                                                                            label="URL"
+                                                                            label="URL (Website)"
                                                                             fullWidth
                                                                             style={{ marginTop: 8 }}
                                                                             value={button.url || ''}
@@ -706,9 +717,10 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                                                                                 `components[${index}].buttons[${buttonIndex}].url`,
                                                                                 e.target.value
                                                                             )}
+                                                                            placeholder="https://www.exemplo.com"
                                                                         />
                                                                     )}
-                                                                    
+
                                                                     {button.type === 'PHONE_NUMBER' && (
                                                                         <TextField
                                                                             label="Número de Telefone"
@@ -719,23 +731,55 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                                                                                 `components[${index}].buttons[${buttonIndex}].phone_number`,
                                                                                 e.target.value
                                                                             )}
+                                                                            placeholder="+5511999999999"
+                                                                            helperText="Inclua o código do país (ex: +55...)"
+                                                                        />
+                                                                    )}
+
+                                                                    {button.type === 'COPY_CODE' && (
+                                                                        <TextField
+                                                                            label="Exemplo de Código (Obrigatório)"
+                                                                            fullWidth
+                                                                            style={{ marginTop: 8 }}
+                                                                            value={button.example?.[0] || ''}
+                                                                            onChange={(e) => setFieldValue(
+                                                                                `components[${index}].buttons[${buttonIndex}].example`,
+                                                                                [e.target.value]
+                                                                            )}
+                                                                            placeholder="Ex: 123456 (Cupom ou Código de Autenticação)"
+                                                                            helperText="Este valor é usado pela Meta para validar o botão de cópia."
                                                                         />
                                                                     )}
                                                                 </Box>
                                                             ))}
-                                                            
-                                                            <Button
-                                                                startIcon={<AddIcon />}
-                                                                onClick={() => addButton(component, index, setFieldValue)}
-                                                            >
-                                                                Adicionar Botão
-                                                            </Button>
+
+                                                            <Box display="flex" gap={1}>
+                                                                <Button
+                                                                    startIcon={<AddIcon />}
+                                                                    onClick={() => addButton(component, index, setFieldValue)}
+                                                                    variant="outlined"
+                                                                >
+                                                                    Adicionar Botão
+                                                                </Button>
+
+                                                                {values.category === 'MARKETING' && (
+                                                                    <Button
+                                                                        startIcon={<AddIcon />}
+                                                                        onClick={() => addOptOutButton(component, index, setFieldValue)}
+                                                                        variant="outlined"
+                                                                        color="secondary"
+                                                                        title="Adiciona um botão de resposta rápida padrão para Opt-out"
+                                                                    >
+                                                                        Botão Opt-out
+                                                                    </Button>
+                                                                )}
+                                                            </Box>
                                                         </Box>
                                                     )}
                                                 </CardContent>
                                             </Card>
                                         ))}
-                                        
+
                                         <Button
                                             startIcon={<AddIcon />}
                                             onClick={() => addComponent(push)}
@@ -752,9 +796,9 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                             <Button onClick={onClose}>
                                 Cancelar
                             </Button>
-                            <Button 
-                                type="submit" 
-                                variant="contained" 
+                            <Button
+                                type="submit"
+                                variant="contained"
                                 color="primary"
                                 disabled={loading}
                             >
