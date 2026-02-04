@@ -969,22 +969,22 @@ const MessagesList = ({
     // ✅ NOVO: Erro de entrega (ack: -1)
     if (message.ack === -1) {
       return (
-        <Tooltip
-          title={message.deliveryError || 'Falha na entrega'}
-          arrow
-          placement="top"
+        <span
+          style={{
+            fontSize: 10,
+            color: "#fff",
+            backgroundColor: "#f44336",
+            padding: "2px 4px",
+            borderRadius: 4,
+            marginLeft: 4,
+            display: "inline-flex",
+            alignItems: "center",
+            verticalAlign: "middle"
+          }}
         >
-          <ErrorOutline
-            fontSize="small"
-            style={{
-              color: '#f44336',
-              fontSize: 18,
-              verticalAlign: 'middle',
-              marginLeft: 4,
-              cursor: 'help'
-            }}
-          />
-        </Tooltip>
+          <ErrorOutline style={{ fontSize: 12, marginRight: 2 }} />
+          Meta: {message.deliveryError || "Falha"}
+        </span>
       );
     }
 

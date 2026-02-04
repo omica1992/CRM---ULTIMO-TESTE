@@ -130,7 +130,9 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
     let whereCondition: Filterable["where"];
 
     whereCondition = {
-      status: "open",
+      status: {
+        [Op.or]: ["open", "pending"]
+      },
       companyId,
       whatsappId: whatsapp.id,
       updatedAt: {

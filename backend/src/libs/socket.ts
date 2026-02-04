@@ -269,7 +269,7 @@ export const initIO = (httpServer: Server): SocketIO => {
 
         // Se status é falha, atualizar com erro
         if (status === 'failed' || status === 'undelivered') {
-          const errorMessage = error?.message || error?.error_data?.details || 'Falha na entrega';
+          const errorMessage = error?.error_data?.details || error?.message || error?.title || 'Falha na entrega';
           const errorCode = error?.code?.toString() || 'UNKNOWN';
 
           await message.update({
