@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Modal,
     Box,
@@ -14,6 +14,7 @@ import {
 } from '@material-ui/core';
 import SearchIcon from '@material-ui/icons/Search';
 import { makeStyles } from '@material-ui/core/styles';
+import api from "../../services/api";
 
 const useStyles = makeStyles((theme) => ({
     modal: {
@@ -55,7 +56,7 @@ const useStyles = makeStyles((theme) => ({
     },
 }));
 
-const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
+const TemplateModal = ({ open, handleClose, templates, onSelectTemplate, contactId }) => {
     const classes = useStyles();
     const [search, setSearch] = useState('');
     const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -63,6 +64,15 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
     const [variables, setVariables] = useState([]);
     const [variableValues, setVariableValues] = useState({});
     const [renderedContent, setRenderedContent] = useState('');
+    const [contactName, setContactName] = useState('');
+
+    useEffect(() => {
+        if (contactId) {
+            api.get(`/contacts/${contactId}`).then(({ data }) => {
+                setContactName(data.name);
+            }).catch(err => console.error(err));
+        }
+    }, [contactId]);
 
     const availableVariables = [
         { name: 'Nome', value: '{{name}}' },
@@ -86,7 +96,7 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
     };
 
     const extractVariablesByComponent = (components) => {
-        const regex = /{{(\d+)}}/g;
+        const regex = /{{([^{}]+)}}/g;
         let variables = {
             header: [],
             body: [],
@@ -118,7 +128,7 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
                 });
             } else if (variables[type]) {
                 while ((match = regex.exec(text)) !== null) {
-                    variables[type].push({ type: 'text', prompt: match[0] });
+                    variables[type].push({ type: 'text', prompt: match[0], name: match[1] });
                 }
             } else {
                 console.warn(`Tipo de componente desconhecido: ${type}`);
@@ -127,7 +137,19 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
         return variables;
     };
 
+    const getAutoFillValue = (paramName) => {
+        if (!contactName) return '';
+        const lowerName = paramName?.toLowerCase();
 
+        if (lowerName === 'name' || lowerName === 'nome') {
+            return contactName;
+        }
+        if (lowerName === 'firstname' || lowerName === 'primeiro nome') {
+            return contactName.split(' ')[0];
+        }
+        // Adicionar outros mapeamentos conforme necessário
+        return '';
+    };
 
     const handleSelectTemplate = (template) => {
         const components = template?.components || [];
@@ -145,37 +167,25 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
         setSelectedTemplate(template);
         setVariables(extractedVariables);
         setRenderedContent(components.map((component) => component?.text).join(`\n`));
+
+        // ✅ INICIALIZAR variableValues para garantir que nada vá vazio/undefined
+        // E verificar auto-preenchimento
+        const initialValues = {};
+        Object.keys(extractedVariables).forEach((key) => {
+            if (extractedVariables[key].length > 0) {
+                initialValues[key] = {};
+                extractedVariables[key].forEach((variable, index) => {
+                    const autoFill = getAutoFillValue(variable.name);
+                    initialValues[key][index] = {
+                        value: autoFill || '',
+                        name: variable.name || '' // Garante que o nome seja passado
+                    };
+                });
+            }
+        });
+        setVariableValues(initialValues);
     };
 
-    // const generateBodyToSave = (content, variables) => {
-    //     let bodyToSave = content;
-    //     console.log("variables", variables)
-    //     console.log("bodyToSave", bodyToSave)
-    //     Object.keys(variables).forEach((componentType) => {
-    //         console.log("componentType", componentType)
-    //         const componentVariables = variables[componentType];
-    //         console.log("componentVariables", componentVariables, typeof componentVariables)
-    //         // Verificar se componentVariables é um array
-    //         if (Array.isArray(componentVariables)) {
-    //             componentVariables.forEach((variable, index) => {
-    //                 const placeholder = `{{${index + 1}}}`;
-    //                 const value = variable?.value || '';
-    //                 bodyToSave = bodyToSave.replace(placeholder, value);
-    //             });
-    //         } else if (typeof componentVariables === 'object') {
-    //             Object.keys(componentVariables).forEach((key, index) => {
-    //                 const placeholder = `{{${index + 1}}}`;
-    //                 const value = componentVariables[key]?.value || '';
-    //                 bodyToSave = bodyToSave.replace(placeholder, value);
-    //             });
-    //         } else {
-    //             console.error(`Expected array or object for componentType: ${componentType}, but got`, componentVariables);
-    //         }
-    //     });
-    //     console.log("bodyToSave", bodyToSave)
-
-    //     return bodyToSave;
-    // };
     const generateBodyToSave = (content, variables) => {
         let bodyToSave = content;
         Object.keys(variables).forEach((componentType) => {
@@ -243,17 +253,17 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
         onSelectTemplate(templateWithVariables);
     };
 
-    const handleVariableChange = (componentType, index, value, buttonIndex) => {
+    const handleVariableChange = (componentType, index, value, buttonIndex, paramName) => {
         // Atualiza o estado das variáveis por tipo de componente
-        const newComponentValues = { ...variableValues[componentType], [index]: { value, buttonIndex } };
+        const newComponentValues = { ...variableValues[componentType], [index]: { value, buttonIndex, name: paramName } };
         const newValues = { ...variableValues, [componentType]: newComponentValues };
         setVariableValues(newValues);
     };
 
-    const handleAddVariable = (componentType, index, variableValue, buttonIndex) => {
+    const handleAddVariable = (componentType, index, variableValue, buttonIndex, paramName) => {
         const currentValue = variableValues[componentType]?.[index]?.value || '';
         const newValue = currentValue + variableValue;
-        handleVariableChange(componentType, index, newValue, buttonIndex);
+        handleVariableChange(componentType, index, newValue, buttonIndex, paramName);
     };
 
     const filteredTemplates = templates.filter((template) => {
@@ -262,6 +272,22 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
         const searchTerm = search?.toLowerCase() || '';
         return searchField.toLowerCase().includes(searchTerm);
     })
+
+    // Validação para desabilitar botão
+    const isSendDisabled = () => {
+        // Loop por todos os tipos de componentes em variableValues
+        for (const componentType in variableValues) {
+            const componentVars = variableValues[componentType];
+            // componentVars é um objeto onde keys são índices '0', '1', etc.
+            for (const index in componentVars) {
+                const variable = componentVars[index];
+                if (!variable.value || variable.value.trim() === '') {
+                    return true; // Encontrou variável vazia
+                }
+            }
+        }
+        return false; // Todas preenchidas
+    };
 
     return (
         <Modal
@@ -382,9 +408,11 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
                                                 <TextField
                                                     label={`${variable?.prompt}`}
                                                     value={variableValues[componentType]?.[index]?.value || ''}
-                                                    onChange={(e) => handleVariableChange(componentType, index, e.target.value, variable?.index || 0)}
+                                                    onChange={(e) => handleVariableChange(componentType, index, e.target.value, variable?.index || 0, variable?.name)}
                                                     fullWidth
                                                     margin="normal"
+                                                    error={!variableValues[componentType]?.[index]?.value}
+                                                    helperText={!variableValues[componentType]?.[index]?.value ? "Campo obrigatório" : ""}
                                                 />
                                                 <Grid container spacing={1} style={{ marginBottom: 16 }}>
                                                     {availableVariables.map((availVar) => (
@@ -394,7 +422,7 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
                                                                 size="small"
                                                                 color="primary"
                                                                 variant="outlined"
-                                                                onClick={() => handleAddVariable(componentType, index, availVar.value, variable?.index || 0)}
+                                                                onClick={() => handleAddVariable(componentType, index, availVar.value, variable?.index || 0, variable?.name)}
                                                                 clickable
                                                             />
                                                         </Grid>
@@ -412,6 +440,7 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate }) => {
                             onClick={handleSendTemplate}
                             fullWidth
                             style={{ marginTop: 16 }}
+                            disabled={isSendDisabled()}
                         >
                             Enviar
                         </Button>

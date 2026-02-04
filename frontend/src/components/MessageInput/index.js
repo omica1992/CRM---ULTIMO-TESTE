@@ -560,13 +560,13 @@ const MessageInput = ({
   const shouldBlockSending = useCallback(() => {
     if (isTicketPending()) return false; // Mensagens internas sempre permitidas
     if (ticketStatus !== "open" && ticketStatus !== "group") return true; // Ticket fechado
-    
+
     // Para canais Meta (Facebook/Instagram/WhatsApp Oficial), bloquear se janela expirou
     const isMetaChannel = ticketChannel && ticketChannel !== "whatsapp";
     if (isMetaChannel && is24HourWindowExpired) {
       return true;
     }
-    
+
     return false;
   }, [ticketStatus, ticketChannel, is24HourWindowExpired]);
 
@@ -580,7 +580,7 @@ const MessageInput = ({
   useEffect(() => {
     async function fetchTemplates() {
       console.log("🔍 Verificando templates - useWhatsappOfficial:", useWhatsappOfficial, "whatsappId:", whatsappId);
-      
+
       // ✅ CORREÇÃO: Buscar templates da Meta API, não quick-messages
       if (!whatsappId || whatsappId === "null" || whatsappId === "undefined" || isNaN(whatsappId)) {
         console.log("⚠️ whatsappId inválido para buscar templates:", whatsappId);
@@ -599,7 +599,7 @@ const MessageInput = ({
         setTemplates([]);
       }
     }
-    
+
     if (useWhatsappOfficial && whatsappId && whatsappId !== "null" && whatsappId !== "undefined") {
       fetchTemplates();
     } else {
@@ -1232,13 +1232,13 @@ const MessageInput = ({
 
   const handleSendMessage = async () => {
     if (!inputMessage || inputMessage.trim() === "") return;
-    
+
     // ✅ Verificar se envio está bloqueado - EXCETO para mensagens internas/privadas
     if (!privateMessage && !isTicketPending() && shouldBlockSending()) {
       console.warn("🚫 Envio bloqueado - janela de 24h expirada ou ticket fechado");
       return;
     }
-    
+
     setLoading(true);
 
     const userName = (privateMessage || isTicketPending())
@@ -1434,13 +1434,13 @@ const MessageInput = ({
   // ✅ Função especial para menu de anexos - permite abrir se for API Oficial com janela expirada (para templates)
   const disableAttachMenu = useCallback(() => {
     const isFlowProcessing = flowProcessingRef.current || flowProcessing;
-    
+
     // Se janela de 24h expirou mas é API Oficial, permite abrir menu (para templates)
     const isMetaChannel = ticketChannel && ticketChannel !== "whatsapp";
     if (isMetaChannel && is24HourWindowExpired && useWhatsappOfficial) {
       return loading || recording || isFlowProcessing; // Só bloqueia se loading/recording
     }
-    
+
     // Caso contrário, usa lógica normal
     return disableOption();
   }, [loading, recording, flowProcessing, ticketStatus, is24HourWindowExpired, ticketChannel, useWhatsappOfficial]);
@@ -1863,6 +1863,7 @@ const MessageInput = ({
             handleClose={() => setTemplateModalOpen(false)}
             onSelectTemplate={(e) => handleSendMessageTemplate(e)}
             templates={templates}
+            contactId={contactId}
           />
         )}
         {modalCameraOpen && (

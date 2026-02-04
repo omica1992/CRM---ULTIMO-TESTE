@@ -153,7 +153,7 @@ const isAudioFile = (media: Express.Multer.File): boolean => {
   if (media.originalname) {
     const audioExtensions = ['.mp3', '.ogg', '.wav', '.webm', '.m4a', '.aac', '.opus'];
     const extension = path.extname(media.originalname).toLowerCase();
-    
+
     if (audioExtensions.includes(extension)) {
       console.log("✅ Detectado como áudio pela extensão:", extension);
       return true;
@@ -161,10 +161,10 @@ const isAudioFile = (media: Express.Multer.File): boolean => {
   }
 
   // 4. Verificar padrões no nome do arquivo
-  if (media.originalname && 
-      (media.originalname.includes('audio_') || 
-       media.originalname.includes('áudio') ||
-       media.originalname.includes('voice'))) {
+  if (media.originalname &&
+    (media.originalname.includes('audio_') ||
+      media.originalname.includes('áudio') ||
+      media.originalname.includes('voice'))) {
     console.log("✅ Detectado como áudio pelo padrão do nome");
     return true;
   }
@@ -188,7 +188,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   // ✅ VERIFICAÇÃO: Janela de 24h para API Oficial (não se aplica a mensagens privadas)
   if (isPrivate === "false") {
     const check24h = await CheckApiOficial24hWindow(ticket);
-    
+
     if (check24h.isOficial) {
       if (check24h.hasClientMessages) {
         console.log(`[API OFICIAL - 24H CHECK] Ticket ${ticket.id}: Última mensagem do cliente há ${check24h.hoursSinceLastMessage?.toFixed(2)} horas`);
@@ -228,7 +228,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
             fieldname: media.fieldname,
             size: media.size
           });
-          
+
           // ✅ CORREÇÃO: Verificação melhorada para áudio
           if (isAudioFile(media)) {
             console.log("🎵 Processando como arquivo de áudio");
@@ -240,9 +240,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
           if (ticket.channel === "whatsapp" || ticket.channel === "whatsapp_oficial") {
             const whatsapp = await Whatsapp.findByPk(ticket.whatsappId);
             const isOficial = whatsapp && (
-              whatsapp.provider === "oficial" || 
-              
-              whatsapp.channel === "whatsapp-oficial" || 
+              whatsapp.provider === "oficial" ||
+
+              whatsapp.channel === "whatsapp-oficial" ||
               whatsapp.channel === "whatsapp_oficial"
             );
 
@@ -251,20 +251,20 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
             if (isOficial) {
               console.log(`[MEDIA DISPATCH] ✅ Enviando mídia via API Oficial`);
               await SendWhatsAppOficialMessage({
-                media, 
-                body: Array.isArray(body) ? body[index] : body, 
-                ticket, 
-                type: null, 
+                media,
+                body: Array.isArray(body) ? body[index] : body,
+                ticket,
+                type: null,
                 quotedMsg
               });
             } else {
               console.log(`[MEDIA DISPATCH] ✅ Enviando mídia via Baileys`);
-              await SendWhatsAppMedia({ 
-                media, 
-                ticket, 
-                body: Array.isArray(body) ? body[index] : body, 
-                isPrivate: isPrivate === "true", 
-                isForwarded: false 
+              await SendWhatsAppMedia({
+                media,
+                ticket,
+                body: Array.isArray(body) ? body[index] : body,
+                isPrivate: isPrivate === "true",
+                isForwarded: false
               });
             }
           }
@@ -306,14 +306,14 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       if (isPrivate === "false" && ["whatsapp", "whatsapp_oficial", "whatsapp-oficial"].includes(ticket.channel)) {
         // ✅ Verificar se é API Oficial pelo provider da conexão
         const whatsapp = await Whatsapp.findByPk(ticket.whatsappId);
-        
+
         console.log(`[MESSAGE DISPATCH] Ticket ${ticket.id} - WhatsappId: ${ticket.whatsappId}`);
         console.log(`[MESSAGE DISPATCH] Whatsapp Provider: ${whatsapp?.provider}, Channel: ${whatsapp?.channel}`);
-        
+
         const isOficial = whatsapp && (
-          whatsapp.provider === "oficial" || 
-          
-          whatsapp.channel === "whatsapp-oficial" || 
+          whatsapp.provider === "oficial" ||
+
+          whatsapp.channel === "whatsapp-oficial" ||
           whatsapp.channel === "whatsapp_oficial"
         );
 
@@ -642,14 +642,14 @@ export const edit = async (req: Request, res: Response): Promise<Response> => {
 export const storeTemplate = async (req: Request, res: Response): Promise<Response> => {
   const { ticketId } = req.params;
 
-  const { 
-    quotedMsg, 
-    templateId, 
+  const {
+    quotedMsg,
+    templateId,
     templateName,
     templateLanguage,
     templateComponents,
-    variables, 
-    bodyToSave 
+    variables,
+    bodyToSave
   }: MessageTemplateData = req.body;
   const medias = req.files as Express.Multer.File[];
   const { companyId } = req.user;
@@ -748,11 +748,17 @@ export const storeTemplate = async (req: Request, res: Response): Promise<Respon
                   })
                 }
                 else {
-                  const variableValue = variables[componentType][key].value;
-                  newComponent.parameters.push({
+                  const variableObj = variables[componentType][key];
+                  const parameter: any = {
                     type: "text",
-                    text: variableValue
-                  });
+                    text: variableObj.value
+                  };
+                  // ✅ Se tiver nome da variável (parâmetro nomeado), enviar parameter_name
+                  if (variableObj.name) {
+                    parameter.parameter_name = variableObj.name;
+                  }
+
+                  newComponent.parameters.push(parameter);
                 }
               }
             });
@@ -773,7 +779,7 @@ export const storeTemplate = async (req: Request, res: Response): Promise<Respon
       }
     }
   }
-  console.log(JSON.stringify(templateData, null, 2))
+  console.log("Values to save", JSON.stringify(templateData, null, 2))
   const newBodyToSave = bodyToSave.concat('||||', JSON.stringify(buttonsToSave))
   if (["whatsapp_oficial"].includes(ticket.channel) && ticket.whatsappId) {
     SetTicketMessagesAsRead(ticket);
