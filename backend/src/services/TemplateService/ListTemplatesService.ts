@@ -132,6 +132,16 @@ const ListTemplatesService = async ({ companyId, whatsappId }: Request): Promise
       console.log(`[TEMPLATES] - status: ${firstTemplate.status}`);
       console.log(`[TEMPLATES] - category: ${firstTemplate.category}`);
       console.log(`[TEMPLATES] - language: ${firstTemplate.language}`);
+
+      const debugTemplate = templates.find(t => t.name === 'somos_teste_botao4');
+      if (debugTemplate) {
+        console.log(`[TEMPLATES DEBUG] Template somos_teste_botao4 found:`);
+        console.log(JSON.stringify(debugTemplate, null, 2));
+        const fs = require('fs');
+        fs.writeFileSync('debug_template.json', JSON.stringify(debugTemplate, null, 2));
+      } else {
+        console.log(`[TEMPLATES DEBUG] Template somos_teste_botao4 NOT FOUND in list`);
+      }
     }
 
     // ✅ CORREÇÃO: Retornar a estrutura completa { data, paging } com templates mesclados

@@ -58,9 +58,10 @@ export const sendMessageWhatsAppOficial = async (
         campaignLogger.error('Erro ao enviar mensagem via API Oficial', error, {
             to: data.to,
             type: data.type,
-            apiUrl: urlApi
+            apiUrl: urlApi,
+            response: error.response?.data
         });
-        
+
         console.log(error.message);
         throw new Error('Mensagem não enviada para a meta');
     }

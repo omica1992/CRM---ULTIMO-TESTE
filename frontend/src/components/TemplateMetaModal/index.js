@@ -138,16 +138,40 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate, contact
     };
 
     const getAutoFillValue = (paramName) => {
-        if (!contactName) return '';
-        const lowerName = paramName?.toLowerCase();
+        const lowerName = paramName?.toLowerCase() || '';
 
-        if (lowerName === 'name' || lowerName === 'nome') {
-            return contactName;
+        // Se tiver contactName (Contexto de Ticket/Atendimento Individual)
+        if (contactName) {
+            if (lowerName === 'name' || lowerName === 'nome') {
+                return contactName;
+            }
+            if (lowerName === 'firstname' || lowerName === 'primeiro nome') {
+                return contactName.split(' ')[0];
+            }
+            return '';
         }
-        if (lowerName === 'firstname' || lowerName === 'primeiro nome') {
-            return contactName.split(' ')[0];
+
+        // Se NÃO tiver contactName (Contexto de Campanha/Disparo em Massa)
+        // Auto-preencher com as variáveis dinâmicas que o backend suporta
+        if (lowerName.includes('name') || lowerName.includes('nome')) {
+            return '{{name}}';
         }
-        // Adicionar outros mapeamentos conforme necessário
+        if (lowerName.includes('firstname') || lowerName.includes('primeiro nome')) {
+            return '{{name}}'; // Fallback seguro para nome completo pois backend ainda não suporta firstname
+        }
+        if (lowerName.includes('email')) {
+            return '{{email}}';
+        }
+        if (lowerName.includes('numero') || lowerName.includes('number') || lowerName.includes('phone') || lowerName.includes('celular')) {
+            return '{{numero}}';
+        }
+        if (lowerName.includes('date') || lowerName.includes('data')) {
+            return '{{data}}'; // Necessita suporte no backend ou é apenas placeholder
+        }
+        if (lowerName.includes('hour') || lowerName.includes('hora')) {
+            return '{{hora}}'; // Necessita suporte no backend ou é apenas placeholder
+        }
+
         return '';
     };
 

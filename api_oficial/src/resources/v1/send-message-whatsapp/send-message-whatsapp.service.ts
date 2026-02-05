@@ -96,7 +96,10 @@ export class SendMessageWhatsappService extends BaseService<SendMessageWhatsApp>
     file: Express.Multer.File,
   ) {
     try {
+      console.log('🔍 [API_OFICIAL DEBUG] Received message data:', dados_mensagem);
       const data: CreateSendMessageWhatsappDto = JSON.parse(dados_mensagem);
+      console.log('🔍 [API_OFICIAL DEBUG] Parsed object:', JSON.stringify(data, null, 2));
+
       const regex = /^\+55\d{2}\d{8,9}$/;
 
       if (!data.to)

@@ -1292,26 +1292,40 @@ function getCampaignValidConfirmationMessages(campaign) {
 function getProcessedMessage(msg: string, variables: any[], contact: any) {
   let finalMessage = msg;
 
-  if (finalMessage.includes("{nome}")) {
-    finalMessage = finalMessage.replace(/{nome}/g, contact.name);
+  // LOG DEBUG: Trace entering - UNCONDITIONAL
+  campaignLogger.info(`[DEBUG VARS] Processing variables. Msg: "${msg}". Contact: ${JSON.stringify(contact)}`);
+
+  if (finalMessage.includes("{nome}") || finalMessage.includes("{{nome}}")) {
+    finalMessage = finalMessage.replace(/\{\{nome\}\}/g, contact.name).replace(/\{nome\}/g, contact.name);
   }
 
-  if (finalMessage.includes("{email}")) {
-    finalMessage = finalMessage.replace(/{email}/g, contact.email);
+  if (finalMessage.includes("{name}") || finalMessage.includes("{{name}}")) {
+    finalMessage = finalMessage.replace(/\{\{name\}\}/g, contact.name).replace(/\{name\}/g, contact.name);
   }
 
-  if (finalMessage.includes("{numero}")) {
-    finalMessage = finalMessage.replace(/{numero}/g, contact.number);
+  if (finalMessage.includes("{email}") || finalMessage.includes("{{email}}")) {
+    finalMessage = finalMessage.replace(/\{\{email\}\}/g, contact.email).replace(/\{email\}/g, contact.email);
   }
 
-  if (variables[0]?.value !== "[]") {
+  if (finalMessage.includes("{numero}") || finalMessage.includes("{{numero}}")) {
+    finalMessage = finalMessage.replace(/\{\{numero\}\}/g, contact.number).replace(/\{numero\}/g, contact.number);
+  }
+
+  if (variables && variables.length > 0 && variables[0]?.value !== "[]") {
     variables.forEach(variable => {
+      if (finalMessage.includes(`{{${variable.key}}}`)) {
+        const regex = new RegExp(`\\{\\{${variable.key}\\}\\}`, "g");
+        finalMessage = finalMessage.replace(regex, variable.value);
+      }
       if (finalMessage.includes(`{${variable.key}}`)) {
-        const regex = new RegExp(`{${variable.key}}`, "g");
+        const regex = new RegExp(`\\{${variable.key}\\}`, "g");
         finalMessage = finalMessage.replace(regex, variable.value);
       }
     });
   }
+
+  // LOG DEBUG: Trace exit - UNCONDITIONAL
+  campaignLogger.info(`[DEBUG VARS] Result: "${finalMessage}"`);
 
   return finalMessage;
 }
@@ -1890,28 +1904,49 @@ async function handleDispatchCampaign(job) {
                     };
                   }
 
+
                   if (newComponent) {
                     Object.keys(variables[componentType]).forEach(key => {
+                      // Ensure we have a valid contact object
+                      const contactObj = contact || (campaignShipping.contact ? {
+                        name: campaignShipping.contact.name,
+                        email: campaignShipping.contact.email,
+                        number: campaignShipping.number
+                      } : {
+                        name: "Cliente", // Fallback
+                        email: "",
+                        number: campaignShipping.number
+                      });
+
+                      logger.info(`[DEBUG VARS CALL] calling with value: ${variables[componentType][key].value}`);
+
+                      const variableValue = getProcessedMessage(
+                        variables[componentType][key].value,
+                        variables,
+                        contactObj
+                      );
+
+                      logger.info(`[DEBUG VARS RET] returned: ${variableValue}`);
+
                       if (componentType.replace("buttons", "button") === "button") {
                         if ((newComponent as any)?.sub_type === "COPY_CODE") {
                           newComponent.parameters.push({
                             type: "coupon_code",
-                            coupon_code: variables[componentType][key].value
+                            coupon_code: variableValue
                           });
                         } else {
                           newComponent.parameters.push({
                             type: "text",
-                            text: variables[componentType][key].value
+                            text: variableValue
                           });
                         }
                       } else {
                         if (templateComponents[index].format === 'IMAGE') {
                           newComponent.parameters.push({
                             type: "image",
-                            image: { link: variables[componentType][key].value }
+                            image: { link: variableValue }
                           });
                         } else {
-                          const variableValue = variables[componentType][key].value;
                           newComponent.parameters.push({
                             type: "text",
                             text: variableValue
@@ -2189,29 +2224,47 @@ async function handleDispatchCampaign(job) {
 
                   if (newComponent) {
                     Object.keys(variables[componentType]).forEach(key => {
+                      const contactObj = {
+                        name: campaignShipping.contact ? campaignShipping.contact.name : "Cliente",
+                        email: campaignShipping.contact ? campaignShipping.contact.email : "",
+                        number: campaignShipping.number
+                      };
+
+                      const variableValue = getProcessedMessage(
+                        variables[componentType][key].value,
+                        variables,
+                        contactObj
+                      );
+
+                      campaignLogger.info(`[DEBUG VARS CALL] calling with value: ${variables[componentType][key].value} -> params: ${variableValue}`);
+
                       if (componentType.replace("buttons", "button") === "button") {
                         if ((newComponent as any)?.sub_type === "COPY_CODE") {
                           newComponent.parameters.push({
                             type: "coupon_code",
-                            coupon_code: variables[componentType][key].value
+                            coupon_code: variableValue
                           });
                         } else {
                           newComponent.parameters.push({
                             type: "text",
-                            text: variables[componentType][key].value
+                            text: variableValue
                           });
                         }
                       } else {
                         if (templateComponents[index].format === 'IMAGE') {
                           newComponent.parameters.push({
                             type: "image",
-                            image: { link: variables[componentType][key].value }
+                            image: { link: variableValue }
                           });
                         } else {
-                          newComponent.parameters.push({
+                          const paramObj: any = {
                             type: "text",
-                            text: variables[componentType][key].value
-                          });
+                            text: variableValue
+                          };
+                          if (variables[componentType][key].name) {
+                            paramObj.parameter_name = variables[componentType][key].name;
+                          }
+                          newComponent.parameters.push(paramObj);
                         }
                       }
                     });
@@ -2255,6 +2308,8 @@ async function handleDispatchCampaign(job) {
         };
 
         logger.info(`Enviando template via API Meta: Numero original=${campaignShipping.number}, Numero formatado=${formattedNumber}`);
+        // Log payload to campaign logger for debugging
+        campaignLogger.info(`PAYLOAD META DEBUG`, { options });
 
         // Log detalhado para arquivo
         campaignLogger.info(`Iniciando envio de template`, {

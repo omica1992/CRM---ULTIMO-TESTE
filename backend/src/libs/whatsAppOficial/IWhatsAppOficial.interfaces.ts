@@ -14,6 +14,7 @@ export interface ISendMessageOficial {
     body_interactive?: IMetaMessageinteractive;
     body_sticket?: IMetaMessageSticker;
     body_template?: IMetaMessageTemplate;
+    template?: IMetaMessageTemplate;
 }
 
 export interface IMetaMessageinteractive {
