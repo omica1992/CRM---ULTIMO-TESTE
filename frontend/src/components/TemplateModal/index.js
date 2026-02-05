@@ -14,15 +14,15 @@ import {
     Typography,
     Chip,
     IconButton,
-    Divider,
-    Grid,
-    Card,
     CardContent,
     FormHelperText,
     Accordion,
     AccordionSummary,
     AccordionDetails,
-    CircularProgress
+    CircularProgress,
+    Divider,
+    Grid,
+    Card
 } from "@material-ui/core";
 import {
     Close as CloseIcon,
@@ -30,7 +30,11 @@ import {
     Delete as DeleteIcon,
     ExpandMore as ExpandMoreIcon,
     CloudUpload as CloudUploadIcon,
-    Image as ImageIcon
+    Image as ImageIcon,
+    Link as LinkIcon,
+    Phone as PhoneIcon,
+    Code as CodeIcon,
+    Message as MessageIcon
 } from "@material-ui/icons";
 import { makeStyles } from "@material-ui/core/styles";
 import { Formik, Form, Field, FieldArray } from "formik";
@@ -479,6 +483,48 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
         setFieldValue(`components[${componentIndex}].text`, newValue);
     };
 
+    const handleQuickAddButton = (type, values, setFieldValue, push) => {
+        let buttonsComponentIndex = values.components.findIndex(c => c.type === 'BUTTONS');
+        let buttonObj = {};
+
+        switch (type) {
+            case 'URL':
+                buttonObj = { type: 'URL', text: '', url: '' };
+                break;
+            case 'PHONE_NUMBER':
+                buttonObj = { type: 'PHONE_NUMBER', text: '', phone_number: '' };
+                break;
+            case 'COPY_CODE':
+                buttonObj = { type: 'COPY_CODE', text: 'Copiar Código', example: [] };
+                break;
+            case 'QUICK_REPLY':
+            default:
+                buttonObj = { type: 'QUICK_REPLY', text: '' };
+                break;
+        }
+
+        if (buttonsComponentIndex === -1) {
+            // Criar componente de botões se não existir
+            push({
+                type: 'BUTTONS',
+                buttons: [buttonObj]
+            });
+        } else {
+            // Adicionar ao componente existente
+            const currentButtons = values.components[buttonsComponentIndex].buttons || [];
+
+            // Verificações de limites (simplificadas)
+            if (currentButtons.length >= 10) { // Limite teórico da interface, meta valida 3 para marketing
+                toast.error("Limite de botões atingido");
+                return;
+            }
+
+            // Copia o array para não mutar estado diretamente (Formik lida com isso, mas é bom garantir)
+            const newButtons = [...currentButtons, buttonObj];
+            setFieldValue(`components[${buttonsComponentIndex}].buttons`, newButtons);
+        }
+    };
+
     return (
         <Dialog
             open={open}
@@ -597,6 +643,44 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                             <FieldArray name="components">
                                 {({ push, remove }) => (
                                     <>
+                                        <Box mb={2} display="flex" gap={1} flexWrap="wrap">
+                                            <Button
+                                                variant="outlined"
+                                                color="primary"
+                                                size="small"
+                                                startIcon={<LinkIcon />}
+                                                onClick={() => handleQuickAddButton('URL', values, setFieldValue, push)}
+                                            >
+                                                Website
+                                            </Button>
+                                            <Button
+                                                variant="outlined"
+                                                color="primary"
+                                                size="small"
+                                                startIcon={<PhoneIcon />}
+                                                onClick={() => handleQuickAddButton('PHONE_NUMBER', values, setFieldValue, push)}
+                                            >
+                                                Telefone
+                                            </Button>
+                                            <Button
+                                                variant="outlined"
+                                                color="default"
+                                                size="small"
+                                                startIcon={<CodeIcon />}
+                                                onClick={() => handleQuickAddButton('COPY_CODE', values, setFieldValue, push)}
+                                            >
+                                                Copiar Código
+                                            </Button>
+                                            <Button
+                                                variant="outlined"
+                                                color="default"
+                                                size="small"
+                                                startIcon={<MessageIcon />}
+                                                onClick={() => handleQuickAddButton('QUICK_REPLY', values, setFieldValue, push)}
+                                            >
+                                                Resposta Rápida
+                                            </Button>
+                                        </Box>
                                         {values.components.map((component, index) => (
                                             <Card key={index} className={classes.componentCard}>
                                                 <CardContent>
