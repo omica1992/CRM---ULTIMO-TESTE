@@ -16,13 +16,16 @@ import {
     Select,
     MenuItem,
     Box,
-    Grid
+    Grid,
+    TextField,
+    InputAdornment
 } from "@material-ui/core";
 import {
     Edit as EditIcon,
     Delete as DeleteIcon,
     Add as AddIcon,
-    Refresh as RefreshIcon
+    Refresh as RefreshIcon,
+    Search as SearchIcon
 } from "@material-ui/icons";
 import { makeStyles } from "@material-ui/core/styles";
 import { toast } from "react-toastify";
@@ -96,6 +99,7 @@ const Templates = () => {
     const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [confirmModalOpen, setConfirmModalOpen] = useState(false);
     const [templateToDelete, setTemplateToDelete] = useState(null);
+    const [searchParam, setSearchParam] = useState("");
 
     useEffect(() => {
         fetchWhatsapps();
@@ -234,6 +238,10 @@ const Templates = () => {
         }
     };
 
+    const filteredTemplates = state.templates.filter((template) => {
+        return template.name.toLowerCase().includes(searchParam.toLowerCase());
+    });
+
     return (
         <MainContainer>
             <MainHeader>
@@ -263,7 +271,7 @@ const Templates = () => {
             <Paper className={classes.mainPaper} variant="outlined">
                 <Box className={classes.selectContainer}>
                     <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={12} sm={6}>
+                        <Grid item xs={12} sm={4}>
                             <FormControl fullWidth variant="outlined">
                                 <InputLabel>Conexão WhatsApp</InputLabel>
                                 <Select
@@ -279,9 +287,26 @@ const Templates = () => {
                                 </Select>
                             </FormControl>
                         </Grid>
-                        <Grid item xs={12} sm={6}>
+                        <Grid item xs={12} sm={4}>
+                            <TextField
+                                fullWidth
+                                placeholder="Pesquisar template..."
+                                type="search"
+                                value={searchParam}
+                                onChange={(e) => setSearchParam(e.target.value)}
+                                InputProps={{
+                                    startAdornment: (
+                                        <InputAdornment position="start">
+                                            <SearchIcon style={{ color: "gray" }} />
+                                        </InputAdornment>
+                                    ),
+                                }}
+                                variant="outlined"
+                            />
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
                             <Typography variant="body2" color="textSecondary">
-                                {state.templates.length} templates encontrados
+                                {filteredTemplates.length} templates encontrados
                             </Typography>
                         </Grid>
                     </Grid>
@@ -299,7 +324,7 @@ const Templates = () => {
                     </TableHead>
                     <TableBody>
                         {state.loading && <TableRowSkeleton columns={5} />}
-                        {state.templates.map((template) => (
+                        {filteredTemplates.map((template) => (
                             <TableRow key={template.id}>
                                 <TableCell>
                                     <Typography variant="subtitle2">
@@ -355,7 +380,7 @@ const Templates = () => {
                                 </TableCell>
                             </TableRow>
                         ))}
-                        {!state.loading && state.templates.length === 0 && selectedWhatsapp && (
+                        {!state.loading && filteredTemplates.length === 0 && selectedWhatsapp && (
                             <TableRow>
                                 <TableCell colSpan={5} align="center">
                                     <Typography variant="body2" color="textSecondary">
