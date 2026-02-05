@@ -259,6 +259,11 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                     continue;
                 }
 
+                // BUTTONS não precisa de texto no nível do componente (apenas nos botões individuais)
+                if (component.type === 'BUTTONS') {
+                    continue;
+                }
+
                 // Outros componentes precisam de texto
                 if (!component.text || component.text.trim() === '') {
                     toast.error(`O componente ${componentTypes.find(t => t.value === component.type)?.label || component.type} precisa de texto`);
@@ -271,6 +276,14 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
             // ✅ CORREÇÃO: Suporte a parâmetros nomeados e posicionais
             const processComponents = (components) => {
                 return components.map(component => {
+                    if (component.type === 'BUTTONS') {
+                        // Limpar propriedades inválidas para BUTTONS (como text)
+                        return {
+                            type: 'BUTTONS',
+                            buttons: component.buttons || []
+                        };
+                    }
+
                     if (component.type === 'BODY' || component.type === 'HEADER' || component.type === 'FOOTER') {
                         if (component.text) {
                             // Se for posicional, faz a conversão para garantir compatibilidade
@@ -802,8 +815,8 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                                                         </Box>
                                                     )}
 
-                                                    {/* Campo de texto (para todos os tipos exceto HEADER com mídia) */}
-                                                    {(component.type !== 'HEADER' || !component.format) && (
+                                                    {/* Campo de texto (para todos os tipos exceto HEADER com mídia e BUTTONS) */}
+                                                    {component.type !== 'BUTTONS' && (component.type !== 'HEADER' || !component.format) && (
                                                         <Field name={`components[${index}].text`}>
                                                             {({ field }) => (
                                                                 <div>

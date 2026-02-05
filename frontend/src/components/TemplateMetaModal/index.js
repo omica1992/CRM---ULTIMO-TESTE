@@ -114,7 +114,7 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate, contact
             }
             // Para os botões, verifique a URL para variáveis
             if (type === 'buttons') {
-                const buttons = JSON.parse(component.buttons)
+                const buttons = typeof component.buttons === 'string' ? JSON.parse(component.buttons) : (component.buttons || []);
                 buttons.forEach((button, index) => {
                     if (button.example) {
                         console.log("button", button, index)
