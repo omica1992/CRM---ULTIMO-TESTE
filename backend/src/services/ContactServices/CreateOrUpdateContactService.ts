@@ -11,6 +11,7 @@ import Whatsapp from "../../models/Whatsapp";
 import * as Sentry from "@sentry/node";
 import { ENABLE_LID_DEBUG } from "../../config/debug";
 import { normalizeJid } from "../../utils";
+import { Op } from "sequelize";
 const axios = require("axios");
 
 interface ExtraInfo extends ContactCustomField {
@@ -123,7 +124,29 @@ const CreateOrUpdateContactService = async ({
       contact = await Contact.findOne({ where: { lid, companyId } });
     }
     if (!contact) {
-      contact = await Contact.findOne({ where: { number: cleanNumber, companyId } });
+      // Conciliação de 9º dígito (Brasil)
+      const numbersToSearch = [cleanNumber];
+
+      // Se for número do Brasil (começa com 55) e não for grupo
+      if (!isGroup && cleanNumber.startsWith("55")) {
+        // Se tem 13 dígitos (55 + DDD + 9 + 8 dígitos) -> remove o 9
+        if (cleanNumber.length === 13 && cleanNumber[4] === "9") {
+          const numberWithoutNine = cleanNumber.slice(0, 4) + cleanNumber.slice(5);
+          numbersToSearch.push(numberWithoutNine);
+        }
+        // Se tem 12 dígitos (55 + DDD + 8 dígitos) -> adiciona o 9
+        else if (cleanNumber.length === 12) {
+          const numberWithNine = cleanNumber.slice(0, 4) + "9" + cleanNumber.slice(4);
+          numbersToSearch.push(numberWithNine);
+        }
+      }
+
+      contact = await Contact.findOne({
+        where: {
+          number: { [Op.in]: numbersToSearch },
+          companyId
+        }
+      });
     }
 
     let updateImage =
