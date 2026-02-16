@@ -224,6 +224,50 @@ const BulkActionsBar = () => {
     }
   };
 
+  const handleBulkClose = async () => {
+    setBulkCloseLoading(true);
+
+    try {
+      const selectedTicketIds = getSelectedTicketsArray();
+
+      const response = await api.post("/tickets/bulk-close", {
+        ticketIds: selectedTicketIds,
+      });
+
+      const { closedTickets, failedTickets, totalTickets } = response.data.data;
+
+      if (closedTickets.length > 0) {
+        toast.success(
+          `${closedTickets.length} de ${totalTickets} tickets encerrados com sucesso!`
+        );
+
+        // Remover tickets encerrados da seleção
+        removeTicketsFromSelection(closedTickets);
+      }
+
+      if (failedTickets.length > 0) {
+        console.log("Falhas no encerramento:", failedTickets);
+
+        let errorMessage = `${failedTickets.length} tickets não puderam ser encerrados:\n\n`;
+        failedTickets.forEach((f) => {
+          errorMessage += `• Ticket ${f.ticketId}: ${f.error}\n`;
+        });
+
+        toast.error(errorMessage, {
+          autoClose: 10000,
+          style: { whiteSpace: "pre-line" },
+        });
+      }
+
+      setBulkCloseOpen(false);
+    } catch (error) {
+      console.error("Erro no encerramento em massa:", error);
+      toast.error("Erro ao realizar encerramento em massa");
+    } finally {
+      setBulkCloseLoading(false);
+    }
+  };
+
   return (
     <>
       <Paper className={classes.root} elevation={8}>
