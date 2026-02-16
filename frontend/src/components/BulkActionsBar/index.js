@@ -13,12 +13,14 @@ import {
   Checkbox,
   FormControlLabel,
   TextField,
+  Box,
 } from "@material-ui/core";
 import {
   Close as CloseIcon,
   SwapHoriz as TransferIcon,
   SelectAll as SelectAllIcon,
   Clear as ClearIcon,
+  Block as BlockIcon,
 } from "@material-ui/icons";
 import { toast } from "react-toastify";
 import { useCallback } from "react";
@@ -85,7 +87,7 @@ const BulkActionsBar = () => {
   const [includeMessage, setIncludeMessage] = useState(false);
   const [transferMessage, setTransferMessage] = useState("");
   const [openPendingTickets, setOpenPendingTickets] = useState(false);
-  
+
   // Estados para usuários e filas
   const [users, setUsers] = useState([]);
   const [queues, setQueues] = useState([]);
@@ -93,10 +95,13 @@ const BulkActionsBar = () => {
   const [dataLoaded, setDataLoaded] = useState(false);
   const { findAll: findAllQueues } = useQueues();
 
+  const [bulkCloseOpen, setBulkCloseOpen] = useState(false);
+  const [bulkCloseLoading, setBulkCloseLoading] = useState(false);
+
   // Funções de carregamento memoizadas
   const loadUsers = useCallback(async () => {
     if (users.length > 0 || usersLoading) return; // Já carregou ou está carregando
-    
+
     setUsersLoading(true);
     try {
       // ✅ Usar /users/list que retorna TODOS os usuários sem paginação
@@ -113,7 +118,7 @@ const BulkActionsBar = () => {
 
   const loadQueues = useCallback(async () => {
     if (queues.length > 0) return; // Já carregou
-    
+
     try {
       const queuesList = await findAllQueues();
       setQueues(queuesList || []);
@@ -131,7 +136,7 @@ const BulkActionsBar = () => {
       loadUsers();
       loadQueues();
     }
-    
+
     if (!bulkTransferOpen) {
       setDataLoaded(false);
     }
@@ -164,7 +169,7 @@ const BulkActionsBar = () => {
 
     try {
       const selectedTicketIds = getSelectedTicketsArray();
-      
+
       const transferData = {
         ticketIds: selectedTicketIds,
         ...(transferToUser && { userId: transferToUser.id }),
@@ -181,14 +186,14 @@ const BulkActionsBar = () => {
         toast.success(
           `${successfulTransfers.length} de ${totalTickets} tickets transferidos com sucesso!`
         );
-        
+
         // Remover tickets transferidos da seleção
         removeTicketsFromSelection(successfulTransfers);
       }
 
       if (failedTransfers.length > 0) {
         console.log("Falhas na transferência:", failedTransfers);
-        
+
         // Agrupar erros por tipo para uma mensagem mais clara
         const errorGroups = {};
         failedTransfers.forEach(f => {
@@ -203,7 +208,7 @@ const BulkActionsBar = () => {
           errorMessage += `• ${error}: Tickets ${ticketIds.join(", ")}\n`;
         });
 
-        toast.error(errorMessage, { 
+        toast.error(errorMessage, {
           autoClose: 10000,
           style: { whiteSpace: "pre-line" }
         });
@@ -226,7 +231,7 @@ const BulkActionsBar = () => {
           <Typography variant="subtitle1" className={classes.title}>
             {selectedCount} {selectedCount === 1 ? "ticket selecionado" : "tickets selecionados"}
           </Typography>
-          
+
           <Button
             variant="outlined"
             size="small"
@@ -259,6 +264,19 @@ const BulkActionsBar = () => {
             Transferir
           </Button>
 
+          <Button
+            variant="contained"
+            color="secondary"
+            size="small"
+            startIcon={<BlockIcon />}
+            onClick={() => setBulkCloseOpen(true)}
+            disabled={selectedCount === 0}
+            className={classes.actionButton}
+            style={{ marginLeft: 8 }}
+          >
+            Encerrar
+          </Button>
+
           <IconButton onClick={toggleSelectionMode}>
             <CloseIcon />
           </IconButton>
@@ -266,7 +284,7 @@ const BulkActionsBar = () => {
       </Paper>
 
       {/* Modal de Transferência em Massa */}
-      <Dialog 
+      <Dialog
         open={bulkTransferOpen}
         onClose={handleCloseModal}
         className={classes.bulkTransferDialog}
@@ -322,7 +340,7 @@ const BulkActionsBar = () => {
             )}
             style={{ marginBottom: 16 }}
           />
-          
+
           {/* Checkbox para abrir tickets pendentes - só aparece na aba pending */}
           {currentTab === "pending" && (
             <FormControlLabel
@@ -337,7 +355,7 @@ const BulkActionsBar = () => {
               style={{ marginTop: 16 }}
             />
           )}
-          
+
           <FormControlLabel
             control={
               <Checkbox
@@ -374,6 +392,42 @@ const BulkActionsBar = () => {
             disabled={bulkTransferLoading || (!transferToUser && !transferToQueue)}
           >
             {bulkTransferLoading ? "Transferindo..." : "Transferir"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirmation Dialog for Bulk Close */}
+      <Dialog
+        open={bulkCloseOpen}
+        onClose={() => setBulkCloseOpen(false)}
+      >
+        <DialogTitle>Encerrar Tickets em Massa</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Tem certeza que deseja encerrar {selectedCount} tickets selecionados?
+            Esta ação não pode ser desfeita.
+          </Typography>
+          {bulkCloseLoading && (
+            <Box display="flex" justifyContent="center" mt={2}>
+              <CircularProgress />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setBulkCloseOpen(false)}
+            color="primary"
+            disabled={bulkCloseLoading}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleBulkClose}
+            color="secondary"
+            variant="contained"
+            disabled={bulkCloseLoading}
+          >
+            {bulkCloseLoading ? "Encerrando..." : "Encerrar"}
           </Button>
         </DialogActions>
       </Dialog>

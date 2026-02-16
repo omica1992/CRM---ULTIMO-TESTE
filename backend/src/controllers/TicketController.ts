@@ -20,6 +20,7 @@ import ListTicketsServiceReport from "../services/TicketServices/ListTicketsServ
 import RelatorioVendasService from "../services/ReportService/RelatorioVendasService";
 import SetTicketMessagesAsRead from "../helpers/SetTicketMessagesAsRead";
 import BulkTransferTicketsService from "../services/TicketServices/BulkTransferTicketsService";
+import BulkCloseTicketsService from "../services/TicketServices/BulkCloseTicketsService";
 import { Mutex } from "async-mutex";
 
 type IndexQuery = {
@@ -685,7 +686,7 @@ export const bulkTransfer = async (req: Request, res: Response): Promise<Respons
   try {
     console.log(`[BULK TRANSFER CONTROLLER] Iniciando transferência múltipla para ${ticketIds.length} tickets`);
     console.log(`[BULK TRANSFER CONTROLLER] openPendingTickets: ${openPendingTickets}`);
-    
+
     const result = await BulkTransferTicketsService({
       ticketIds,
       userId,
@@ -704,6 +705,37 @@ export const bulkTransfer = async (req: Request, res: Response): Promise<Respons
 
   } catch (error) {
     console.error("Erro na transferência múltipla:", error);
+    return res.status(500).json({
+      error: error.message || "Erro interno do servidor"
+    });
+  }
+};
+
+export const bulkClose = async (req: Request, res: Response): Promise<Response> => {
+  const { ticketIds } = req.body;
+  const { companyId } = req.user;
+  const userId = Number(req.user.id);
+
+  if (!ticketIds || !Array.isArray(ticketIds) || ticketIds.length === 0) {
+    return res.status(400).json({
+      error: "Lista de tickets é obrigatória e não pode estar vazia"
+    });
+  }
+
+  try {
+    const result = await BulkCloseTicketsService({
+      ticketIds,
+      companyId,
+      userId
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Encerramento em massa concluído. ${result.closedTickets.length} tickets encerrados com sucesso.`,
+      data: result
+    });
+  } catch (error) {
+    console.error("Erro no encerramento em massa:", error);
     return res.status(500).json({
       error: error.message || "Erro interno do servidor"
     });

@@ -49,4 +49,10 @@ ticketRoutes.post(
   TicketController.bulkTransfer
 );
 
+ticketRoutes.post(
+  "/tickets/bulk-close",
+  isAuth,
+  TicketController.bulkClose
+);
+
 export default ticketRoutes;
