@@ -98,7 +98,8 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
         },
         imported: null,
         sendInactiveMessage: false,
-        userId: null // Excluir tickets atribuídos a atendentes
+        userId: null, // Excluir tickets atribuídos a atendentes
+        queueId: null // Excluir tickets atribuídos a uma fila
       };
 
       if (Number(whatsapp.whenExpiresTicket) === 1) {
@@ -141,7 +142,8 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
         })
       },
       imported: null,
-      userId: null // Excluir tickets atribuídos a atendentes
+      userId: null, // Excluir tickets atribuídos a atendentes
+      queueId: null // Excluir tickets atribuídos a uma fila
     }
 
     if (timeInactiveMessage > 0) {
@@ -366,7 +368,8 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
         },
         imported: null,
         sendInactiveMessage: false,
-        userId: null // Excluir tickets atribuídos a atendentes
+        userId: null, // Excluir tickets atribuídos a atendentes
+        queueId: null // Excluir tickets atribuídos a uma fila
       };
 
       if (Number(whatsapp.whenExpiresTicket) === 1) {
@@ -409,7 +412,8 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
         })
       },
       imported: null,
-      userId: null // Excluir tickets atribuídos a atendentes
+      userId: null, // Excluir tickets atribuídos a atendentes
+      queueId: null // Excluir tickets atribuídos a uma fila
     }
 
     if (timeInactiveMessage > 0) {
