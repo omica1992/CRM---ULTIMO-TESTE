@@ -363,7 +363,40 @@ export class ReceibedWhatsAppService {
 
             await ticket.update({ lastMessage: message.type === "contacts" ? "Contato" : !!message?.text ? message?.text : '', unreadMessages: ticket.unreadMessages + 1 })
 
-            await verifyMessageOficial(message, ticket, contact, companyId, fileName, fromNumber, data, quoteMessageId);
+            // ✅ CORREÇÃO CRÍTICA: Envolver verifyMessageOficial em try/catch para evitar perda silenciosa de mensagens
+            // Se falhar, salvar mensagem via fallback e continuar fluxo normalmente
+            try {
+                await verifyMessageOficial(message, ticket, contact, companyId, fileName, fromNumber, data, quoteMessageId);
+                logger.info(`[WHATSAPP OFICIAL - MSG SAVE] ✅ Mensagem salva com sucesso para ticket ${ticket.id} - wid: ${message.idMessage}`);
+            } catch (msgSaveError) {
+                logger.error(`[WHATSAPP OFICIAL - MSG SAVE CRITICAL] ❌ Falha ao salvar mensagem para ticket ${ticket.id}: ${msgSaveError.message}`);
+                logger.error(`[WHATSAPP OFICIAL - MSG SAVE CRITICAL] ❌ Detalhes: type=${message.type}, text="${message.text?.substring(0, 100)}", idMessage=${message.idMessage}`);
+
+                // Tentar salvar mensagem via SafeCreateMessage como fallback
+                try {
+                    const SafeCreateMessage = (await import("../../helpers/SafeCreateMessage")).default;
+                    await SafeCreateMessage({
+                        messageData: {
+                            wid: message.idMessage,
+                            ticketId: ticket.id,
+                            contactId: contact.id,
+                            body: message.text || '[Mensagem recebida - erro ao processar conteúdo original]',
+                            fromMe: false,
+                            mediaType: message.type === 'text' ? 'conversation' : message.type || 'conversation',
+                            read: false,
+                            ack: 0,
+                            channel: 'whatsapp_oficial'
+                        },
+                        companyId,
+                        maxRetries: 3,
+                        context: `RECOVERY_VERIFY_MSG_${ticket.id}`
+                    });
+                    logger.info(`[WHATSAPP OFICIAL - MSG SAVE CRITICAL] ✅ Mensagem salva via FALLBACK para ticket ${ticket.id}`);
+                } catch (fallbackError) {
+                    logger.error(`[WHATSAPP OFICIAL - MSG SAVE CRITICAL] ❌ FALLBACK também falhou para ticket ${ticket.id}: ${fallbackError.message}`);
+                    logger.error(`[WHATSAPP OFICIAL - MSG SAVE CRITICAL] ⚠️ MENSAGEM PERDIDA - ticket ${ticket.id}, wid: ${message.idMessage}, text: "${message.text?.substring(0, 100)}"`);
+                }
+            }
 
             // ✅ NOVO: Tratamento para avaliação NPS (API Oficial)
             if (
@@ -568,6 +601,7 @@ export class ReceibedWhatsAppService {
             }
 
             logger.info(`[WHATSAPP OFICIAL - DEBUG] *** CHEGOU NA VERIFICAÇÃO DE FILA - ticket ${ticket.id} ***`);
+            logger.info(`[WHATSAPP OFICIAL - DEBUG] *** Mensagem que disparou o fluxo: type=${message.type}, text="${message.text?.substring(0, 80)}", idMessage=${message.idMessage}, timestamp=${message.timestamp} ***`);
             logger.info(`[WHATSAPP OFICIAL - DEBUG] Verificando condições para verifyQueue - ticket ${ticket.id}:`);
             logger.info(`[WHATSAPP OFICIAL - DEBUG] - imported: ${ticket.imported}, queue: ${!!ticket.queue}, isGroup: ${ticket.isGroup}, userId: ${ticket.userId}, queues.length: ${whatsapp?.queues?.length}, useIntegration: ${ticket.useIntegration}, whatsapp.integrationId: ${whatsapp.integrationId}`);
 

@@ -159,12 +159,13 @@ class Schedule extends Model<Schedule> {
   reminderStatus: string;
 
   // ✅ Campos para templates da API Oficial
-  @ForeignKey(() => QuickMessage)
-  @Column
-  templateMetaId: string; // ID do template (QuickMessage) - ✅ CORREÇÃO: String para aceitar IDs grandes da Meta
+  // NOTA: NÃO usar @ForeignKey aqui! templateMetaId é VARCHAR mas QuickMessage.id é INTEGER.
+  // O @ForeignKey forçaria Sequelize a gerar JOINs com VARCHAR = INTEGER, causando erro no PostgreSQL.
+  @Column(DataType.STRING)
+  templateMetaId: string;
 
   @Column
-  templateName: string; // ✅ Nome do template (shortcode) como usado na API da Meta
+  templateName: string;
 
   @Column
   templateLanguage: string;
@@ -176,12 +177,12 @@ class Schedule extends Model<Schedule> {
   @Column
   isTemplate: boolean;
 
-  // ✅ CORREÇÃO: Associação com QuickMessage usando configuração personalizada
+  // ✅ CORREÇÃO: Associação manual SEM @ForeignKey para evitar incompatibilidade de tipos
+  // Queries que precisam incluir template devem usar on: { ... } com CAST explícito
   @BelongsTo(() => QuickMessage, {
     foreignKey: "templateMetaId",
     targetKey: "id",
-    constraints: false // Desabilitar constraints para evitar erros de tipo
-    // Removido scope de isTemplate - essa coluna não existe na tabela QuickMessages
+    constraints: false
   })
   template: QuickMessage;
 

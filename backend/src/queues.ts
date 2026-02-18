@@ -152,18 +152,9 @@ async function handleVerifyReminders(job) {
       },
       include: [
         { model: Contact, as: "contact" },
-        { model: User, as: "user", attributes: ["name"] },
-        {
-          model: QuickMessage,
-          as: "template",
-          required: false,
-          // ✅ CORREÇÃO: Usar expressão literal com função cast_to_int_safe para resolver incompatibilidade
-          on: {
-            id: literal(`cast_to_int_safe("Schedule"."templateMetaId") = "template"."id"`)
-          },
-          // Não usar filtro de isTemplate aqui - essa coluna não existe na tabela QuickMessages
-          include: [{ model: QuickMessageComponent, as: "components" }]
-        }
+        { model: User, as: "user", attributes: ["name"] }
+        // NOTA: Template (QuickMessage) removido do include para evitar erro VARCHAR = INTEGER.
+        // O template é carregado manualmente abaixo quando necessário.
       ],
       distinct: true,
       subQuery: false
@@ -171,6 +162,23 @@ async function handleVerifyReminders(job) {
 
     if (count > 0) {
       schedules.map(async schedule => {
+        // ✅ Carregar template manualmente se templateMetaId existir
+        if (schedule.templateMetaId) {
+          try {
+            const templateId = parseInt(schedule.templateMetaId, 10);
+            if (!isNaN(templateId)) {
+              const template = await QuickMessage.findByPk(templateId, {
+                include: [{ model: QuickMessageComponent, as: "components" }]
+              });
+              if (template) {
+                (schedule as any).template = template;
+              }
+            }
+          } catch (templateError) {
+            logger.warn(`[SendReminder] Erro ao carregar template para schedule ${schedule.id}: ${templateError.message}`);
+          }
+        }
+
         await schedule.update({
           reminderStatus: "AGENDADA"
         });
@@ -207,18 +215,9 @@ async function handleVerifySchedules(job) {
       },
       include: [
         { model: Contact, as: "contact" },
-        { model: User, as: "user", attributes: ["name"] },
-        {
-          model: QuickMessage,
-          as: "template",
-          required: false,
-          // ✅ CORREÇÃO: Usar expressão literal com função cast_to_int_safe para resolver incompatibilidade
-          on: {
-            id: literal(`cast_to_int_safe("Schedule"."templateMetaId") = "template"."id"`)
-          },
-          // Não usar filtro de isTemplate aqui - essa coluna não existe na tabela QuickMessages
-          include: [{ model: QuickMessageComponent, as: "components" }]
-        }
+        { model: User, as: "user", attributes: ["name"] }
+        // NOTA: Template (QuickMessage) removido do include para evitar erro VARCHAR = INTEGER.
+        // O template é carregado manualmente abaixo quando necessário.
       ],
       distinct: true,
       subQuery: false
@@ -226,6 +225,23 @@ async function handleVerifySchedules(job) {
 
     if (count > 0) {
       schedules.map(async schedule => {
+        // ✅ Carregar template manualmente se templateMetaId existir
+        if (schedule.templateMetaId) {
+          try {
+            const templateId = parseInt(schedule.templateMetaId, 10);
+            if (!isNaN(templateId)) {
+              const template = await QuickMessage.findByPk(templateId, {
+                include: [{ model: QuickMessageComponent, as: "components" }]
+              });
+              if (template) {
+                (schedule as any).template = template;
+              }
+            }
+          } catch (templateError) {
+            logger.warn(`[SendScheduledMessage] Erro ao carregar template para schedule ${schedule.id}: ${templateError.message}`);
+          }
+        }
+
         await schedule.update({
           status: "AGENDADA"
         });
