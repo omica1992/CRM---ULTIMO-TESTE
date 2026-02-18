@@ -60,6 +60,7 @@ import QueueState from "../models/QueueStates";
 import TicketFinalizationReason from "../models/TicketFinalizationReason";
 import PresetWebhookModel from "../models/PresetWebhook";
 import WhatsappLidMap from "../models/WhatsapplidMap";
+import FailedMessage from "../models/FailedMessage";
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
@@ -127,7 +128,8 @@ const models = [
   TicketFinalizationReason,
   PresetWebhookModel,
   BirthdaySettings,
-  WhatsappLidMap
+  WhatsappLidMap,
+  FailedMessage
 ];
 
 sequelize.addModels(models);

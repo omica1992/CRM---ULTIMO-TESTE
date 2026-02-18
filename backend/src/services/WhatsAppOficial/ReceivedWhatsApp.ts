@@ -372,6 +372,41 @@ export class ReceibedWhatsAppService {
                 logger.error(`[WHATSAPP OFICIAL - MSG SAVE CRITICAL] ❌ Falha ao salvar mensagem para ticket ${ticket.id}: ${msgSaveError.message}`);
                 logger.error(`[WHATSAPP OFICIAL - MSG SAVE CRITICAL] ❌ Detalhes: type=${message.type}, text="${message.text?.substring(0, 100)}", idMessage=${message.idMessage}`);
 
+                // ✅ Registrar mensagem com falha no banco para análise de suporte
+                let failedRecord = null;
+                try {
+                    const FailedMessage = (await import("../../models/FailedMessage")).default;
+                    failedRecord = await FailedMessage.create({
+                        wid: message.idMessage || null,
+                        body: message.text?.substring(0, 5000) || null,
+                        messageType: message.type || null,
+                        fromNumber: fromNumber || null,
+                        toNumber: (data as any)?.toNumber || null,
+                        channel: 'whatsapp_oficial',
+                        errorMessage: msgSaveError.message || 'Erro desconhecido',
+                        errorStack: msgSaveError.stack?.substring(0, 3000) || null,
+                        rawData: {
+                            messageId: message.idMessage,
+                            type: message.type,
+                            text: message.text?.substring(0, 1000),
+                            timestamp: message.timestamp,
+                            fileName: fileName,
+                            quoteMessageId: quoteMessageId,
+                            hasFile: !!message.file,
+                            dataKeys: data ? Object.keys(data) : []
+                        },
+                        status: 'pending',
+                        recoveredByFallback: false,
+                        retryCount: 1,
+                        ticketId: ticket.id,
+                        contactId: contact.id,
+                        companyId
+                    });
+                    logger.info(`[WHATSAPP OFICIAL - MSG SAVE CRITICAL] 📋 Falha registrada em FailedMessages ID: ${failedRecord.id}`);
+                } catch (registerError) {
+                    logger.error(`[WHATSAPP OFICIAL - MSG SAVE CRITICAL] ❌ Não foi possível registrar falha em FailedMessages: ${registerError.message}`);
+                }
+
                 // Tentar salvar mensagem via SafeCreateMessage como fallback
                 try {
                     const SafeCreateMessage = (await import("../../helpers/SafeCreateMessage")).default;
@@ -392,9 +427,22 @@ export class ReceibedWhatsAppService {
                         context: `RECOVERY_VERIFY_MSG_${ticket.id}`
                     });
                     logger.info(`[WHATSAPP OFICIAL - MSG SAVE CRITICAL] ✅ Mensagem salva via FALLBACK para ticket ${ticket.id}`);
+
+                    // Atualizar registro de falha indicando que foi recuperado
+                    if (failedRecord) {
+                        await failedRecord.update({ recoveredByFallback: true, status: 'resolved' });
+                    }
                 } catch (fallbackError) {
                     logger.error(`[WHATSAPP OFICIAL - MSG SAVE CRITICAL] ❌ FALLBACK também falhou para ticket ${ticket.id}: ${fallbackError.message}`);
                     logger.error(`[WHATSAPP OFICIAL - MSG SAVE CRITICAL] ⚠️ MENSAGEM PERDIDA - ticket ${ticket.id}, wid: ${message.idMessage}, text: "${message.text?.substring(0, 100)}"`);
+
+                    // Atualizar registro de falha com erro do fallback
+                    if (failedRecord) {
+                        await failedRecord.update({
+                            retryCount: 2,
+                            errorMessage: `Original: ${msgSaveError.message} | Fallback: ${fallbackError.message}`
+                        });
+                    }
                 }
             }
 
