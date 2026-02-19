@@ -128,6 +128,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
     orderQueue: "",
     tempoRoteador: 0,
     ativarRoteador: false,
+    isBotQueue: false,
     integrationId: "",
     fileListId: "",
     closeTicket: false,
@@ -243,6 +244,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
         orderQueue: "",
         tempoRoteador: "",
         ativarRoteador: false,
+        isBotQueue: false,
         integrationId: "",
         fileListId: "",
         closeTicket: false,
@@ -525,7 +527,7 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
                     }}
                     currentColor={values.color}
                   />
-                  
+
                   <Field
                     as={TextField}
                     label={i18n.t("queueModal.form.orderQueue")}
@@ -547,6 +549,17 @@ const QueueModal = ({ open, onClose, queueId, onEdit }) => {
                       />
                     }
                     label={i18n.t("queueModal.form.closeTicket")}
+                  />
+                  <FormControlLabel
+                    control={
+                      <Field
+                        as={Switch}
+                        color="primary"
+                        name="isBotQueue"
+                        checked={values.isBotQueue}
+                      />
+                    }
+                    label="Fila do Bot (ignorar no encerramento automático)"
                   />
                   <div>
                     <FormControlLabel

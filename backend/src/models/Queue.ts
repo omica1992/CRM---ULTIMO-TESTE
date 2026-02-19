@@ -112,10 +112,16 @@ class Queue extends Model<Queue> {
 
   @BelongsTo(() => Files)
   files: Files;
-  
+
   @Default(false)
   @Column
   closeTicket: boolean;
+
+  // ✅ Flag para indicar que esta é uma fila de bot
+  // Quando true, o auto-close NÃO ignora tickets nesta fila
+  @Default(false)
+  @Column
+  isBotQueue: boolean;
 
   @HasMany(() => Prompt, {
     onUpdate: "SET NULL",

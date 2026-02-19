@@ -1,6 +1,7 @@
 import { Filterable, Op } from "sequelize";
 import Ticket from "../../models/Ticket"
 import Whatsapp from "../../models/Whatsapp"
+import Queue from "../../models/Queue"
 import { getIO } from "../../libs/socket"
 import formatBody from "../../helpers/Mustache";
 import SendWhatsAppMessage from "./SendWhatsAppMessage";
@@ -77,8 +78,21 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
   let expiresTime = Number(whatsapp.expiresTicket || 0);
   let flowInactiveTime = Number(whatsapp.flowInactiveTime || 0);
 
+  // ✅ Buscar filas marcadas como bot para INCLUIR tickets dessas filas no auto-close
+  const botQueues = await Queue.findAll({
+    where: { companyId, isBotQueue: true },
+    attributes: ['id']
+  });
+  const botQueueIds = botQueues.map(q => q.id);
+
+  // Condição de fila: sem fila OU em fila de bot
+  const queueCondition = botQueueIds.length > 0
+    ? { [Op.or]: [{ [Op.eq]: null as any }, { [Op.in]: botQueueIds }] }
+    : { [Op.eq]: null as any };
+
   logger.info(`[AUTO-CLOSE] Verificando tickets inativos - Empresa: ${companyId}, Conexão: ${whatsapp.name} (ID: ${whatsapp.id}), Canal: ${whatsapp.channel}`);
   logger.info(`[AUTO-CLOSE] Configurações - timeInactiveMessage: ${timeInactiveMessage}min, expiresTime: ${expiresTime}min, whenExpiresTicket: ${whatsapp.whenExpiresTicket}`);
+  if (botQueueIds.length > 0) logger.info(`[AUTO-CLOSE] Filas de bot incluídas: ${botQueueIds.join(', ')}`);
 
   if (!isNil(expiresTime) && expiresTime > 0) {
 
@@ -99,7 +113,7 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
         imported: null,
         sendInactiveMessage: false,
         userId: null, // Excluir tickets atribuídos a atendentes
-        queueId: null // Excluir tickets atribuídos a uma fila
+        queueId: queueCondition // Sem fila OU em fila de bot
       };
 
       if (Number(whatsapp.whenExpiresTicket) === 1) {
@@ -143,7 +157,7 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
       },
       imported: null,
       userId: null, // Excluir tickets atribuídos a atendentes
-      queueId: null // Excluir tickets atribuídos a uma fila
+      queueId: queueCondition // Sem fila OU em fila de bot
     }
 
     if (timeInactiveMessage > 0) {
@@ -347,8 +361,21 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
   let expiresTime = Number(whatsapp.expiresTicket || 0);
   let flowInactiveTime = Number(whatsapp.flowInactiveTime || 0);
 
+  // ✅ Buscar filas marcadas como bot para INCLUIR tickets dessas filas no auto-close
+  const botQueues = await Queue.findAll({
+    where: { companyId, isBotQueue: true },
+    attributes: ['id']
+  });
+  const botQueueIds = botQueues.map(q => q.id);
+
+  // Condição de fila: sem fila OU em fila de bot
+  const queueCondition = botQueueIds.length > 0
+    ? { [Op.or]: [{ [Op.eq]: null as any }, { [Op.in]: botQueueIds }] }
+    : { [Op.eq]: null as any };
+
   logger.info(`[AUTO-CLOSE] Verificando tickets pendentes inativos - Empresa: ${companyId}, Conexão: ${whatsapp.name} (ID: ${whatsapp.id}), Canal: ${whatsapp.channel}`);
   logger.info(`[AUTO-CLOSE] Configurações - timeInactiveMessage: ${timeInactiveMessage}min, expiresTime: ${expiresTime}min, whenExpiresTicket: ${whatsapp.whenExpiresTicket}`);
+  if (botQueueIds.length > 0) logger.info(`[AUTO-CLOSE] Filas de bot incluídas (pending): ${botQueueIds.join(', ')}`);
 
   if (!isNil(expiresTime) && expiresTime > 0) {
 
@@ -369,7 +396,7 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
         imported: null,
         sendInactiveMessage: false,
         userId: null, // Excluir tickets atribuídos a atendentes
-        queueId: null // Excluir tickets atribuídos a uma fila
+        queueId: queueCondition // Sem fila OU em fila de bot
       };
 
       if (Number(whatsapp.whenExpiresTicket) === 1) {
@@ -413,7 +440,7 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
       },
       imported: null,
       userId: null, // Excluir tickets atribuídos a atendentes
-      queueId: null // Excluir tickets atribuídos a uma fila
+      queueId: queueCondition // Sem fila OU em fila de bot
     }
 
     if (timeInactiveMessage > 0) {

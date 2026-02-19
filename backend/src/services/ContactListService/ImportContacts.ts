@@ -16,7 +16,7 @@ export async function ImportContacts(
   const workbook = XLSX.readFile(file?.path as string);
   const worksheet = head(Object.values(workbook.Sheets)) as any;
   const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 0 });
-  
+
   logger.info(`[ImportContacts] Iniciando importação: ${rows.length} contatos para lista ${contactListId}`);
 
   const contacts = rows.map((row, index) => {
@@ -94,13 +94,14 @@ export async function ImportContacts(
     }
 
     try {
+      const { importError: _err, rawInput: _raw, ...contactData } = contact;
       const [newContact, created] = await ContactListItem.findOrCreate({
         where: {
           number: `${contact.number}`,
           contactListId: contact.contactListId,
           companyId: contact.companyId
         },
-        defaults: contact
+        defaults: contactData
       });
 
       if (created) {
@@ -159,7 +160,7 @@ export async function ImportContacts(
         try {
           const wbot = getWbot(whatsapp.id);
           const response = await wbot.onWhatsApp(`${newContact.number}@s.whatsapp.net`);
-          
+
           newContact.isWhatsappValid = response[0]?.exists ? true : false;
           if (response[0]?.exists) {
             newContact.number = response[0]?.jid.split("@")[0];
