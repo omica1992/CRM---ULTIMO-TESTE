@@ -33,7 +33,7 @@ const CreateMessageService = async ({
   messageData,
   companyId
 }: Request): Promise<Message> => {
-  
+
   const correctMediaType = (data: MessageData): MessageData => {
     // Se já tem mediaType definido como audio, manter
     if (data.mediaType === 'audio') {
@@ -49,7 +49,7 @@ const CreateMessageService = async ({
         if (audioExtensions.some(ext => url.includes(ext))) {
           return true;
         }
-        
+
         // Verificar se tem padrão de nome de áudio
         if (url.includes('audio_')) {
           return true;
@@ -80,7 +80,7 @@ const CreateMessageService = async ({
   };
 
   const correctedMessageData = correctMediaType(messageData);
-  
+
   // ✅ CORREÇÃO: Verificar se mensagem já existe para evitar sobrescrever
   const existingMessage = await Message.findOne({
     where: {
@@ -101,12 +101,12 @@ const CreateMessageService = async ({
     // Criar nova mensagem
     // ✅ CORREÇÃO: Remover campo 'id' se existir (deve ser auto-gerado)
     const { id, ...dataToCreate } = correctedMessageData as any;
-    
+
     // Log para debug
     if (id !== undefined) {
       console.log(`[CREATE MESSAGE] ⚠️ Removendo campo 'id' com valor: ${id}`);
     }
-    
+
     await Message.create({ ...dataToCreate, companyId });
     console.log(`[CREATE MESSAGE] ➕ Nova mensagem criada ${correctedMessageData.wid}`);
   }
@@ -154,16 +154,17 @@ const CreateMessageService = async ({
     ]
   });
 
+  // ✅ CORREÇÃO: Verificar null ANTES de acessar propriedades da mensagem
+  if (!message) {
+    throw new Error("ERR_CREATING_MESSAGE");
+  }
+
   if (message.ticket.queueId !== null && message.queueId === null) {
     await message.update({ queueId: message.ticket.queueId });
   }
 
   if (message.isPrivate) {
     await message.update({ wid: `PVT${message.id}` });
-  }
-
-  if (!message) {
-    throw new Error("ERR_CREATING_MESSAGE");
   }
 
   const io = getIO();

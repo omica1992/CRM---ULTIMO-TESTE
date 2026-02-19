@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 import path from "path";
 import Whatsapp from "../../models/Whatsapp";
 import logger from "../../utils/logger";
@@ -271,8 +272,19 @@ export class ReceibedWhatsAppService {
 
             console.log(`[RECEIVED WHATSAPP] WhatsApp carregado - ID: ${whatsapp.id}, Status: ${whatsapp.status}`);
 
-            // ✅ USAR CreateOrUpdateContactService para manter consistência com Baileys
-            let contact = await Contact.findOne({ where: { number: fromNumber, companyId } });
+            // ✅ CORREÇÃO: Busca com conciliação do 9º dígito brasileiro
+            // O mesmo contato pode chegar com 5511999887766 (com 9) ou 551199887766 (sem 9)
+            const numbersToSearch = [fromNumber];
+            if (fromNumber.startsWith("55")) {
+                if (fromNumber.length === 13 && fromNumber[4] === "9") {
+                    // Com 9 → também busca sem 9
+                    numbersToSearch.push(fromNumber.slice(0, 4) + fromNumber.slice(5));
+                } else if (fromNumber.length === 12) {
+                    // Sem 9 → também busca com 9
+                    numbersToSearch.push(fromNumber.slice(0, 4) + "9" + fromNumber.slice(4));
+                }
+            }
+            let contact = await Contact.findOne({ where: { number: { [Op.in]: numbersToSearch }, companyId } });
 
             if (!contact) {
                 // Preparar dados do contato com todos os campos necessários
@@ -312,27 +324,31 @@ export class ReceibedWhatsAppService {
             if (!!file) {
                 logger.info(`[ReceivedWhatsApp] Iniciando processamento de arquivo - MimeType: ${mimeType}, IdFile: ${idFile}`);
 
-                const base64Data = file.replace(/^data:image\/\w+;base64,/, '');
+                // ✅ CORREÇÃO: Envolver writeFileSync em try/catch para não perder a mensagem de texto
+                // se o salvamento do arquivo falhar (disco cheio, permissão, etc.)
+                try {
+                    const base64Data = file.replace(/^data:image\/\w+;base64,/, '');
 
-                const buffer = Buffer.from(base64Data, 'base64');
+                    const buffer = Buffer.from(base64Data, 'base64');
 
-                fileName = `${idFile}.${mimeToExtension[mimeType]}`;
+                    fileName = `${idFile}.${mimeToExtension[mimeType]}`;
 
-                logger.info(`[ReceivedWhatsApp] Nome do arquivo gerado: ${fileName}, Tamanho do buffer: ${buffer.length} bytes`);
+                    logger.info(`[ReceivedWhatsApp] Nome do arquivo gerado: ${fileName}, Tamanho do buffer: ${buffer.length} bytes`);
 
-                const folder = path.resolve(__dirname, "..", "..", "..", "public", `company${companyId}`);
+                    const folder = path.resolve(__dirname, "..", "..", "..", "public", `company${companyId}`);
 
-                // const folder = `public/company${companyId}`; // Correção adicionada por Altemir 16-08-2023
-                if (!existsSync(folder)) {
-                    logger.info(`[ReceivedWhatsApp] Criando pasta: ${folder}`);
-                    mkdirSync(folder, { recursive: true }); // Correção adicionada por Altemir 16-08-2023
-                    chmodSync(folder, 0o777)
+                    if (!existsSync(folder)) {
+                        logger.info(`[ReceivedWhatsApp] Criando pasta: ${folder}`);
+                        mkdirSync(folder, { recursive: true });
+                        chmodSync(folder, 0o777)
+                    }
+
+                    writeFileSync(`${folder}/${fileName}`, new Uint8Array(buffer));
+                    logger.info(`[ReceivedWhatsApp] ✅ Arquivo salvo com sucesso: ${folder}/${fileName}`);
+                } catch (fileError) {
+                    logger.error(`[ReceivedWhatsApp] ❌ Erro ao salvar arquivo (continuando sem mídia): ${fileError.message}`);
+                    fileName = undefined; // Continuar sem arquivo para não perder a mensagem de texto
                 }
-
-                // Escrever arquivo binário (buffer já está decodificado de base64)
-                // ✅ CORREÇÃO: Cast para Uint8Array para compatibilidade de tipos
-                writeFileSync(`${folder}/${fileName}`, new Uint8Array(buffer));
-                logger.info(`[ReceivedWhatsApp] ✅ Arquivo salvo com sucesso: ${folder}/${fileName}`);
             } else {
                 logger.info(`[ReceivedWhatsApp] Mensagem sem arquivo anexo`);
             }
@@ -1194,18 +1210,23 @@ export class ReceibedWhatsAppService {
                     }
                 };
 
-                await handleMessageIntegration(
-                    simulatedMsg as any,
-                    null, // wbot é null
-                    companyId,
-                    integrations,
-                    ticket
-                );
+                // ✅ CORREÇÃO: Envolver handleMessageIntegration em try/catch para evitar estado inconsistente
+                try {
+                    await handleMessageIntegration(
+                        simulatedMsg as any,
+                        null, // wbot é null
+                        companyId,
+                        integrations,
+                        ticket
+                    );
 
-                await ticket.update({
-                    useIntegration: true,
-                    integrationId: integrations.id
-                });
+                    await ticket.update({
+                        useIntegration: true,
+                        integrationId: integrations.id
+                    });
+                } catch (integrationError) {
+                    logger.error(`[WHATSAPP OFICIAL] ❌ Erro em handleMessageIntegration para ticket ${ticket.id}: ${integrationError.message}`);
+                }
 
                 return;
             }
@@ -1361,7 +1382,7 @@ export class ReceibedWhatsAppService {
                 logger.error(`readMessage - Mensagem não encontrada - ${messageId}`);
                 return;
             }
-            message.update({ read: true, ack: 2 });
+            await message.update({ read: true, ack: 2 });
         } catch (error) {
             logger.error(`Erro ao atualizar ack da mensagem ${messageId} - ${error}`);
         }

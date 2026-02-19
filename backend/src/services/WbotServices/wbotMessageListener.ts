@@ -760,27 +760,27 @@ const downloadMedia = async (
       );
     } else {
       logger.warn(`[MEDIA DOWNLOAD] ❌ Falha no downloadMediaMessage, tentando fallback com downloadContentFromMessage - Key: ${msg.key?.id}`);
-      
+
       // ✅ NOVO: Fallback com downloadContentFromMessage (EvolutionAPI#1660)
       try {
         await delay(5000); // Aguardar 5 segundos antes de tentar novamente
-        
+
         const msgType = getTypeMessage(msg);
         const mediaType = mapMediaType(msgType);
-        
+
         // Extrair o conteúdo da mensagem corretamente
         const messageContent = msg.message?.[msgType];
         if (!messageContent) {
           throw new Error(`Tipo de mensagem ${msgType} não encontrado`);
         }
-        
+
         const stream = await downloadContentFromMessage(messageContent as any, mediaType);
-        
+
         const chunks: Uint8Array[] = [];
         for await (const chunk of stream) {
           chunks.push(chunk);
         }
-        
+
         buffer = Buffer.concat(chunks as any);
         logger.info(`[MEDIA DOWNLOAD] ✅ Fallback bem-sucedido usando downloadContentFromMessage - Key: ${msg.key?.id}`);
       } catch (fallbackErr) {
@@ -1086,11 +1086,11 @@ export const verifyMediaMessage = async (
     return newMessage;
   } catch (error) {
     logger.error(`[VERIFY MEDIA] ❌ Erro ao processar mídia - Ticket: ${ticket.id}`, error);
-    
+
     // ✅ CRÍTICO: Tentar salvar mensagem mesmo com erro no download de mídia
     try {
       logger.warn(`[VERIFY MEDIA] Tentando salvar mensagem sem mídia devido a erro no download`);
-      
+
       const fallbackMessageData = {
         wid: msg.key.id,
         ticketId: ticket.id,
@@ -1110,19 +1110,19 @@ export const verifyMediaMessage = async (
         ticketImported: ticket.imported,
         isForwarded
       };
-      
+
       await SafeCreateMessage({
         messageData: fallbackMessageData,
         companyId: companyId,
         maxRetries: 3,
         context: `VERIFY_MEDIA_ERROR_${ticket.id}`
       });
-      
+
       logger.info(`[VERIFY MEDIA] ✅ Mensagem de erro salva com sucesso`);
     } catch (saveError) {
       logger.error(`[VERIFY MEDIA] ❌ CRÍTICO: Falha ao salvar mensagem de erro`, saveError);
     }
-    
+
     // Retornar undefined para não quebrar o fluxo
     return undefined;
   }
@@ -3025,7 +3025,7 @@ export const flowbuilderIntegration = async (
 
     try {
       let webhook = null;
-      
+
       // ✅ CORREÇÃO: Só buscar webhook se hashFlowId existir
       if (ticket.hashFlowId) {
         webhook = await WebhookModel.findOne({
@@ -4249,102 +4249,102 @@ const handleMessage = async (
         !isNil(currentSchedule) &&
         currentSchedule.inActivity === false
       ) {
+        if (
+          whatsapp.maxUseBotQueues &&
+          whatsapp.maxUseBotQueues !== 0 &&
+          ticket.amountUsedBotQueues >= whatsapp.maxUseBotQueues
+        ) {
+          return;
+        }
+
+        if (whatsapp.timeUseBotQueues !== "0") {
           if (
-            whatsapp.maxUseBotQueues &&
-            whatsapp.maxUseBotQueues !== 0 &&
-            ticket.amountUsedBotQueues >= whatsapp.maxUseBotQueues
+            !ticket.isOutOfHour &&
+            ticketTraking.chatbotAt !== null
           ) {
-            return;
-          }
-
-          if (whatsapp.timeUseBotQueues !== "0") {
-            if (
-              !ticket.isOutOfHour &&
-              ticketTraking.chatbotAt !== null
-            ) {
-              await ticketTraking.update({
-                chatbotAt: null
-              });
-              await ticket.update({
-                amountUsedBotQueues: 0
-              });
-            }
-
-            //Regra para desabilitar o chatbot por x minutos/horas após o primeiro envio
-            let dataLimite = new Date();
-            let Agora = new Date();
-
-            if (ticketTraking.chatbotAt !== null) {
-              dataLimite.setMinutes(
-                ticketTraking.chatbotAt.getMinutes() +
-                Number(whatsapp.timeUseBotQueues)
-              );
-              if (
-                ticketTraking.chatbotAt !== null &&
-                Agora < dataLimite &&
-                whatsapp.timeUseBotQueues !== "0" &&
-                ticket.amountUsedBotQueues !== 0
-              ) {
-                return;
-              }
-            }
-
             await ticketTraking.update({
               chatbotAt: null
             });
-          }
-
-          if (whatsapp.outOfHoursMessage !== "" && !ticket.imported && ticket.amountUsedBotQueues === 0) {
-            // console.log("entrei");
-            const body = formatBody(`${whatsapp.outOfHoursMessage}`, ticket);
-
-            const debouncedSentMessage = debounce(
-              async () => {
-                const sentMessage = await wbot.sendMessage(getJidOf(ticket),
-                  {
-                    text: body
-                  }
-                );
-
-                wbot.store(sentMessage);
-              },
-              1000,
-              ticket.id
-            );
-            debouncedSentMessage();
-          } else if (whatsapp.outOfHoursMessage !== "" && ticket.amountUsedBotQueues > 0) {
-            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Mensagem de fora de expediente já foi enviada para ticket ${ticket.id}, pulando reenvio`);
-          }
-
-          //atualiza o contador de vezes que enviou o bot e que foi enviado fora de hora
-          const ticketUpdate: any = {
-            isOutOfHour: true,
-            amountUsedBotQueues: ticket.amountUsedBotQueues + 1
-          };
-
-          // ✅ CORREÇÃO: Fechar ticket se configuração habilitada E não tem atendente
-          if (settings?.closeTicketOutOfHours && ticket.userId === null) {
-            ticketUpdate.status = "closed";
-            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Fechando ticket ${ticket.id} fora de expediente (configuração habilitada)`);
-          } else if (settings?.closeTicketOutOfHours && ticket.userId !== null) {
-            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Ticket ${ticket.id} tem atendente, mantendo aberto`);
-          } else {
-            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (configuração desabilitada)`);
-          }
-
-          await ticket.update(ticketUpdate);
-
-          // ✅ CORREÇÃO: Emitir evento de socket quando ticket é fechado
-          if (ticketUpdate.status === "closed") {
-            const io = getIO();
-            io.of(String(companyId)).emit(`company-${companyId}-ticket`, {
-              action: "delete",
-              ticketId: ticket.id
+            await ticket.update({
+              amountUsedBotQueues: 0
             });
           }
 
-          return;
+          //Regra para desabilitar o chatbot por x minutos/horas após o primeiro envio
+          let dataLimite = new Date();
+          let Agora = new Date();
+
+          if (ticketTraking.chatbotAt !== null) {
+            dataLimite.setMinutes(
+              ticketTraking.chatbotAt.getMinutes() +
+              Number(whatsapp.timeUseBotQueues)
+            );
+            if (
+              ticketTraking.chatbotAt !== null &&
+              Agora < dataLimite &&
+              whatsapp.timeUseBotQueues !== "0" &&
+              ticket.amountUsedBotQueues !== 0
+            ) {
+              return;
+            }
+          }
+
+          await ticketTraking.update({
+            chatbotAt: null
+          });
         }
+
+        if (whatsapp.outOfHoursMessage !== "" && !ticket.imported && ticket.amountUsedBotQueues === 0) {
+          // console.log("entrei");
+          const body = formatBody(`${whatsapp.outOfHoursMessage}`, ticket);
+
+          const debouncedSentMessage = debounce(
+            async () => {
+              const sentMessage = await wbot.sendMessage(getJidOf(ticket),
+                {
+                  text: body
+                }
+              );
+
+              wbot.store(sentMessage);
+            },
+            1000,
+            ticket.id
+          );
+          debouncedSentMessage();
+        } else if (whatsapp.outOfHoursMessage !== "" && ticket.amountUsedBotQueues > 0) {
+          logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Mensagem de fora de expediente já foi enviada para ticket ${ticket.id}, pulando reenvio`);
+        }
+
+        //atualiza o contador de vezes que enviou o bot e que foi enviado fora de hora
+        const ticketUpdate: any = {
+          isOutOfHour: true,
+          amountUsedBotQueues: ticket.amountUsedBotQueues + 1
+        };
+
+        // ✅ CORREÇÃO: Fechar ticket se configuração habilitada E não tem atendente
+        if (settings?.closeTicketOutOfHours && ticket.userId === null) {
+          ticketUpdate.status = "closed";
+          logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Fechando ticket ${ticket.id} fora de expediente (configuração habilitada)`);
+        } else if (settings?.closeTicketOutOfHours && ticket.userId !== null) {
+          logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Ticket ${ticket.id} tem atendente, mantendo aberto`);
+        } else {
+          logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (configuração desabilitada)`);
+        }
+
+        await ticket.update(ticketUpdate);
+
+        // ✅ CORREÇÃO: Emitir evento de socket quando ticket é fechado
+        if (ticketUpdate.status === "closed") {
+          const io = getIO();
+          io.of(String(companyId)).emit(`company-${companyId}-ticket`, {
+            action: "delete",
+            ticketId: ticket.id
+          });
+        }
+
+        return;
+      }
     } catch (e) {
       Sentry.captureException(e);
       console.log(e);
@@ -4544,7 +4544,7 @@ const handleMessage = async (
             } else {
               // ✅ NOVO: Tentar executar flowIdNotPhrase se não houver integrationId
               logger.info(`[RDS-FLOW-DEBUG] Sem integrationId para conexão ${whatsapp.id}, tentando flowIdNotPhrase`);
-              
+
               await flowbuilderIntegration(
                 msg,
                 wbot,
@@ -4772,7 +4772,7 @@ const hasKnownDecryptionError = (msg: WAMessage): boolean => {
       'SessionError',
       'failed to decrypt message'
     ];
-    
+
     for (const param of msg.messageStubParameters) {
       for (const error of knownErrors) {
         if (param.includes(error)) {
@@ -4797,74 +4797,81 @@ const wbotMessageListener = (wbot: Session, companyId: number): void => {
     if (!messages) return;
 
     // console.log("CIAAAAAAA WBOT " , companyId)
-    messages.forEach(async (message: proto.IWebMessageInfo) => {
-      if (
-        message?.messageStubParameters?.length &&
-        message.messageStubParameters[0].includes("absent")
-      ) {
-        const msg = {
-          companyId: companyId,
-          whatsappId: wbot.id,
-          message: message
-        };
-        logger.warn("MENSAGEM PERDIDA", JSON.stringify(msg));
-      }
-      const messageExists = await Message.count({
-        where: { wid: message.key.id!, companyId }
-      });
+    // ✅ CORREÇÃO: Usar for...of em vez de forEach(async) para processar mensagens sequencialmente
+    // forEach não aguarda promises, causando race conditions e erros silenciosos
+    for (const message of messages) {
+      try {
+        if (
+          message?.messageStubParameters?.length &&
+          message.messageStubParameters[0].includes("absent")
+        ) {
+          const msg = {
+            companyId: companyId,
+            whatsappId: wbot.id,
+            message: message
+          };
+          logger.warn("MENSAGEM PERDIDA", JSON.stringify(msg));
+        }
+        const messageExists = await Message.count({
+          where: { wid: message.key.id!, companyId }
+        });
 
-      if (!messageExists) {
-        let isCampaign = false;
-        let body = await getBodyMessage(message);
-        const fromMe = message?.key?.fromMe;
-        if (fromMe) {
-          isCampaign = /\u200c/.test(body);
-        } else {
-          if (/\u200c/.test(body)) body = body.replace(/\u200c/, "");
-          logger.debug(
-            "Validação de mensagem de campanha enviada por terceiros: " + body
-          );
+        if (!messageExists) {
+          let isCampaign = false;
+          let body = await getBodyMessage(message);
+          const fromMe = message?.key?.fromMe;
+          if (fromMe) {
+            isCampaign = /\u200c/.test(body);
+          } else {
+            if (/\u200c/.test(body)) body = body.replace(/\u200c/, "");
+            logger.debug(
+              "Validação de mensagem de campanha enviada por terceiros: " + body
+            );
+          }
+
+          if (!isCampaign) {
+            if (REDIS_URI_MSG_CONN !== "") {
+              //} && (!message.key.fromMe || (message.key.fromMe && !message.key.id.startsWith('BAE')))) {
+              try {
+                await BullQueues.add(
+                  `${process.env.DB_NAME}-handleMessage`,
+                  { message, wbot: wbot.id, companyId },
+                  {
+                    priority: 1,
+                    jobId: `${wbot.id}-handleMessage-${message.key.id}`
+                  }
+                );
+              } catch (e) {
+                Sentry.captureException(e);
+              }
+            } else {
+              await handleMessage(message, wbot, companyId);
+            }
+          }
+
+          await verifyRecentCampaign(message, companyId);
+          await verifyCampaignMessageAndCloseTicket(message, companyId, wbot);
         }
 
-        if (!isCampaign) {
+        if (message.key.remoteJid?.endsWith("@g.us")) {
           if (REDIS_URI_MSG_CONN !== "") {
-            //} && (!message.key.fromMe || (message.key.fromMe && !message.key.id.startsWith('BAE')))) {
-            try {
-              await BullQueues.add(
-                `${process.env.DB_NAME}-handleMessage`,
-                { message, wbot: wbot.id, companyId },
-                {
-                  priority: 1,
-                  jobId: `${wbot.id}-handleMessage-${message.key.id}`
-                }
-              );
-            } catch (e) {
-              Sentry.captureException(e);
-            }
+            BullQueues.add(
+              `${process.env.DB_NAME}-handleMessageAck`,
+              { msg: message, chat: 2 },
+              {
+                priority: 1,
+                jobId: `${wbot.id}-handleMessageAck-${message.key.id}`
+              }
+            );
           } else {
-            await handleMessage(message, wbot, companyId);
+            handleMsgAck(message as any, 2);
           }
         }
-
-        await verifyRecentCampaign(message, companyId);
-        await verifyCampaignMessageAndCloseTicket(message, companyId, wbot);
+      } catch (msgError) {
+        logger.error(`[WBOT MSG LISTENER] ❌ Erro ao processar mensagem ${message.key?.id}: ${msgError.message}`);
+        Sentry.captureException(msgError);
       }
-
-      if (message.key.remoteJid?.endsWith("@g.us")) {
-        if (REDIS_URI_MSG_CONN !== "") {
-          BullQueues.add(
-            `${process.env.DB_NAME}-handleMessageAck`,
-            { msg: message, chat: 2 },
-            {
-              priority: 1,
-              jobId: `${wbot.id}-handleMessageAck-${message.key.id}`
-            }
-          );
-        } else {
-          handleMsgAck(message as any, 2);
-        }
-      }
-    });
+    }
 
     // messages.forEach(async (message: proto.IWebMessageInfo) => {
     //   const messageExists = await Message.count({

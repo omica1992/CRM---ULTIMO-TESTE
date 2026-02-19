@@ -185,7 +185,7 @@ const SendWhatsAppOficialMessage = async ({
       + `VERSION:3.0\n`
       + `N:${lastName};${firstName};;;\n`
       + `FN:${vCard.name}\n`
-      + `TEL;type=CELL;waid=${numberContact}:${normalizedVCardNumber}\n`
+      + `TEL;type=CELL;waid=${numberContact}:+${normalizedVCardNumber}\n`
       + `END:VCARD`;
     console.log(vcard)
   }

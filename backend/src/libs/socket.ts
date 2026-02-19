@@ -229,13 +229,18 @@ export const initIO = (httpServer: Server): SocketIO => {
       socket.leave(ticketId);
     });
 
-    socket.on("receivedMessageWhatsAppOficial", (data: any) => {
+    socket.on("receivedMessageWhatsAppOficial", async (data: any) => {
       console.log(`[SOCKET] ===== MENSAGEM RECEBIDA VIA SOCKET =====`);
       console.log(`[SOCKET] CompanyId: ${data?.companyId}, From: ${data?.fromNumber}, Type: ${data?.message?.type}`);
       console.log(`[SOCKET] HasFile: ${!!data?.message?.file}, FileSize: ${data?.message?.file?.length || 0}`);
 
-      const receivedService = new ReceibedWhatsAppService();
-      receivedService.getMessage(data);
+      try {
+        const receivedService = new ReceibedWhatsAppService();
+        await receivedService.getMessage(data);
+      } catch (err) {
+        logger.error(`[SOCKET] ❌ Erro não tratado ao processar mensagem recebida: ${err.message}`);
+        logger.error(`[SOCKET] ❌ Stack: ${err.stack}`);
+      }
     });
 
     socket.on("readMessageWhatsAppOficial", (data: any) => {
