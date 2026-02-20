@@ -150,7 +150,7 @@ export const CreateCompanyWhatsAppOficial = async (companyId: string, companyNam
         throw new Error('Falha em criar a empresa na API Oficial do WhatsApp');
 
     } catch (error) {
-        console.log(`CreateCompanyWhatsAppOficial: ${JSON.stringify(error.response.data)}`);
+        console.log(`CreateCompanyWhatsAppOficial: ${JSON.stringify(error?.response?.data)}`);
         throw new Error(error.message || `Não foi possível criar a empresa na API Oficial do WhatsApp`);
     }
 }
@@ -175,7 +175,7 @@ export const CreateConnectionWhatsAppOficial = async (data: ICreateConnectionWha
         throw new Error(res.data.message || 'Falha em criar a empresa na API Oficial do WhatsApp');
 
     } catch (error) {
-        console.log(`CreateConnectionWhatsAppOficial: ${JSON.stringify(error.response.data)}`);
+        console.log(`CreateConnectionWhatsAppOficial: ${JSON.stringify(error?.response?.data)}`);
         throw new Error(error.message || `Não foi possível criar a empresa na API Oficial do WhatsApp`);
     }
 }
@@ -200,7 +200,7 @@ export const UpdateConnectionWhatsAppOficial = async (idWhatsApp: number, data: 
         throw new Error(res.data.message || 'Falha em criar a empresa na API Oficial do WhatsApp');
 
     } catch (error) {
-        console.log(`UpdateConnectionWhatsAppOficial: ${JSON.stringify(error.response.data)}`);
+        console.log(`UpdateConnectionWhatsAppOficial: ${JSON.stringify(error?.response?.data)}`);
         throw new Error(error.message || `Não foi possível atualizar a empresa na API Oficial do WhatsApp`);
     }
 }
@@ -224,7 +224,7 @@ export const DeleteConnectionWhatsAppOficial = async (idWhatsapp: number) => {
         throw new Error(res.data.message || 'Falha em criar a empresa na API Oficial do WhatsApp');
 
     } catch (error) {
-        console.log(`DeleteConnectionWhatsAppOficial: ${JSON.stringify(error.response.data)}`);
+        console.log(`DeleteConnectionWhatsAppOficial: ${JSON.stringify(error?.response?.data)}`);
         throw new Error(error.message || `Não foi possível deletar a empresa na API Oficial do WhatsApp`);
     }
 }
@@ -249,7 +249,7 @@ export const getTemplatesWhatsAppOficial = async (multi100_token: string) => {
         throw new Error(res.data.message || 'Falha em listar os templates da API Oficial do WhatsApp');
 
     } catch (error) {
-        console.log(`getTemplatesWhatsAppOficial: ${JSON.stringify(error.response.data)}`);
+        console.log(`getTemplatesWhatsAppOficial: ${JSON.stringify(error?.response?.data)}`);
         throw new Error(error.message || `Falha em listar os templates da API Oficial do WhatsApp`);
     }
 }
@@ -270,7 +270,7 @@ export const setReadMessageWhatsAppOficial = async (token: string, messageId: st
         throw new Error(res.data.message || 'Falha em marcar a mensagem como lida API Oficial do WhatsApp');
 
     } catch (error) {
-        console.log(`setReadMessageWhatsAppOficial: ${JSON.stringify(error.response.data)}`);
+        console.log(`setReadMessageWhatsAppOficial: ${JSON.stringify(error?.response?.data)}`);
         throw new Error(error.message || `Falha em marcar a mensagem como lida API Oficial do WhatsApp`);
     }
 }

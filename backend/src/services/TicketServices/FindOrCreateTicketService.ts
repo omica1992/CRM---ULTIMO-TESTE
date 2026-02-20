@@ -36,7 +36,7 @@ const FindOrCreateTicketService = async (
   try {
 
     let openAsLGPD = false
-    if (settings.enableLGPD) { //adicionar lgpdMessage
+    if (settings?.enableLGPD) { //adicionar lgpdMessage
 
       openAsLGPD = !isCampaign &&
         !isTransfered &&
@@ -48,7 +48,7 @@ const FindOrCreateTicketService = async (
 
     const io = getIO();
 
-    const DirectTicketsToWallets = settings.DirectTicketsToWallets;
+    const DirectTicketsToWallets = settings?.DirectTicketsToWallets;
 
     const contactId = groupContact ? groupContact.id : contact.id;
 
@@ -194,7 +194,7 @@ const FindOrCreateTicketService = async (
 
       const ticketData: any = {
         contactId: contactId,
-        status: (!isImported && !isNil(settings.enableLGPD)
+        status: (!isImported && !isNil(settings?.enableLGPD)
           && openAsLGPD && !groupContact) ?
           "lgpd" :
           (whatsapp.groupAsTicket === "enabled" || !groupContact) ?
@@ -225,7 +225,7 @@ const FindOrCreateTicketService = async (
             const userId = contactWallet.wallets[0].id
 
             if (wallets && wallets?.id) {
-              ticketData.status = (!isImported && !isNil(settings.enableLGPD)
+              ticketData.status = (!isImported && !isNil(settings?.enableLGPD)
                 && openAsLGPD && !groupContact) ?
                 "lgpd" :
                 (whatsapp.groupAsTicket === "enabled" || !groupContact) ?
