@@ -34,7 +34,7 @@ const verifyQueueOficial = async (
     // console.log("GETTING WHATSAPP VERIFY QUEUE", ticket.whatsappId, wbot.id)
     const whatsappData = await ShowWhatsAppService(ticket.whatsappId!, companyId);
     const { queues, greetingMessage, maxUseBotQueues, timeUseBotQueues } = whatsappData;
-    
+
     // Buscar integrationId da conexão se existir
     const whatsappIntegrationId = (whatsappData as any).integrationId || null;
     if (whatsappIntegrationId) {
@@ -48,10 +48,10 @@ const verifyQueueOficial = async (
         chatbot = queues[0]?.chatbots.length > 1;
     }
 
-    const enableQueuePosition = settings.sendQueuePosition === "enabled";
+    const enableQueuePosition = settings?.sendQueuePosition === "enabled";
 
     if (queues.length === 1 && !chatbot) {
-        const sendGreetingMessageOneQueues = settings.sendGreetingMessageOneQueues === "enabled" || false;
+        const sendGreetingMessageOneQueues = settings?.sendGreetingMessageOneQueues === "enabled" || false;
 
         if (greetingMessage.length > 1 && sendGreetingMessageOneQueues) {
 
@@ -126,12 +126,12 @@ const verifyQueueOficial = async (
         } else {
             // Verificar se fila ou conexão tem integração
             const integrationIdToUse = queues[0].integrationId || whatsappIntegrationId;
-            
+
             if (!ticket.isGroup && !isNil(integrationIdToUse)) {
                 logger.info(`[VERIFY QUEUE OFICIAL] Fila única usando integrationId ${integrationIdToUse} ${queues[0].integrationId ? '(da fila)' : '(da conexão)'}`);
                 try {
                     const integrations = await ShowQueueIntegrationService(integrationIdToUse, companyId);
-                    
+
                     const simulatedMsg = {
                         key: {
                             fromMe: false,
@@ -160,7 +160,7 @@ const verifyQueueOficial = async (
                     logger.error(`[VERIFY QUEUE OFICIAL] Erro na integração:`, error);
                 }
             }
-            
+
             await UpdateTicketService({
                 ticketData: { queueId: queues[0].id, status: ticket.status === "lgpd" ? "pending" : ticket.status },
                 ticketId: ticket.id,
@@ -181,7 +181,7 @@ const verifyQueueOficial = async (
         if (enableQueuePosition) {
             // Lógica para enviar posição da fila de atendimento
             const qtd = count.count === 0 ? 1 : count.count
-            const msgFila = `${settings.sendQueuePositionMessage} *${qtd}*`;
+            const msgFila = `${settings?.sendQueuePositionMessage || ''} *${qtd}*`;
             // const msgFila = `*Assistente Virtual:*\n{{ms}} *{{name}}*, sua posição na fila de atendimento é: *${qtd}*`;
             const bodyFila = formatBody(`${msgFila}`, ticket);
             await SendWhatsAppOficialMessage({
@@ -324,12 +324,12 @@ const verifyQueueOficial = async (
             // }
             // Verificar se fila escolhida ou conexão tem integração
             const integrationIdToUse = choosenQueue.integrationId || whatsappIntegrationId;
-            
+
             if (!ticket.isGroup && !isNil(integrationIdToUse)) {
                 logger.info(`[VERIFY QUEUE OFICIAL] Fila escolhida (botText) usando integrationId ${integrationIdToUse} ${choosenQueue.integrationId ? '(da fila)' : '(da conexão)'}`);
                 try {
                     const integrations = await ShowQueueIntegrationService(integrationIdToUse, companyId);
-                    
+
                     const simulatedMsg = {
                         key: {
                             fromMe: false,
@@ -505,7 +505,7 @@ const verifyQueueOficial = async (
             if (enableQueuePosition && !choosenQueue.chatbots.length) {
                 // Lógica para enviar posição da fila de atendimento
                 const qtd = count.count === 0 ? 1 : count.count
-                const msgFila = `${settings.sendQueuePositionMessage} *${qtd}*`;
+                const msgFila = `${settings?.sendQueuePositionMessage || ''} *${qtd}*`;
                 // const msgFila = `*Assistente Virtual:*\n{{ms}} *{{name}}*, sua posição na fila de atendimento é: *${qtd}*`;
                 const bodyFila = formatBody(`${msgFila}`, ticket);
 
@@ -594,7 +594,7 @@ const verifyQueueOficial = async (
                     }
                 } as IMetaMessageinteractive
             }
-           
+
             let bodyToSave = '';
             queues.forEach((queue, index) => {
                 options += `*[ ${index + 1} ]* - ${queue.name}\n`;
@@ -738,15 +738,15 @@ const verifyQueueOficial = async (
                 ticketId: ticket.id,
                 companyId
             });
-            
+
             // Verificar se fila escolhida ou conexão tem integração
             const integrationIdToUse = choosenQueue.integrationId || whatsappIntegrationId;
-            
+
             if (!ticket.isGroup && !isNil(integrationIdToUse)) {
                 logger.info(`[VERIFY QUEUE OFICIAL] Fila escolhida (botButton) usando integrationId ${integrationIdToUse} ${choosenQueue.integrationId ? '(da fila)' : '(da conexão)'}`);
                 try {
                     const integrations = await ShowQueueIntegrationService(integrationIdToUse, companyId);
-                    
+
                     const simulatedMsg = {
                         key: {
                             fromMe: false,
@@ -923,7 +923,7 @@ const verifyQueueOficial = async (
             if (enableQueuePosition && !choosenQueue.chatbots.length) {
                 // Lógica para enviar posição da fila de atendimento
                 const qtd = count.count === 0 ? 1 : count.count
-                const msgFila = `${settings.sendQueuePositionMessage} *${qtd}*`;
+                const msgFila = `${settings?.sendQueuePositionMessage || ''} *${qtd}*`;
                 // const msgFila = `*Assistente Virtual:*\n{{ms}} *{{name}}*, sua posição na fila de atendimento é: *${qtd}*`;
                 const bodyFila = formatBody(`${msgFila}`, ticket);
 
