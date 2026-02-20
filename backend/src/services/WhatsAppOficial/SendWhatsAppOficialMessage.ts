@@ -110,20 +110,24 @@ const SendWhatsAppOficialMessage = async ({
       mediaType = 'document';
       break;
     case 'image':
+      options.type = 'image';
       options.body_image = { caption: bodyMsg };
       options.fileName = media.originalname.replace('/', '-');
       bodyTicket = "📷 Arquivo de Imagem";
       mediaType = 'image';
       break;
     case 'text':
+      options.type = 'text';
       options.body_text = { body: bodyMsg };
       mediaType = 'conversation';
       break;
     case 'interactive':
+      options.type = 'interactive';
       mediaType = interative.type == 'button' ? 'interative' : 'listMessage';
       options.body_interactive = interative;
       break;
     case 'contacts':
+      options.type = 'contacts';
       mediaType = 'contactMessage';
       const first_name = vCard?.name?.split(' ')[0];
       const last_name = String(vCard?.name).replace(vCard?.name?.split(' ')[0], '');
@@ -136,6 +140,7 @@ const SendWhatsAppOficialMessage = async ({
     case 'location':
       throw new Error(`Tipo ${type} não configurado para enviar mensagem a Meta`);
     case 'template':
+      options.type = 'template';
       // ✅ Processamento de variáveis no template
       if (!ticket.contact) {
         const ContactModel = (await import("../../models/Contact")).default;

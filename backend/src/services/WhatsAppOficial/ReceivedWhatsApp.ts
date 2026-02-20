@@ -561,10 +561,8 @@ export class ReceibedWhatsAppService {
                 settings.scheduleType &&
                 !isNil(currentSchedule) &&
                 (!currentSchedule || currentSchedule.inActivity === false) &&
-                whatsapp.outOfHoursMessage !== "" &&
                 !ticket.imported &&
-                // ✅ CORREÇÃO: Só enviar UMA VEZ (amountUsedBotQueues === 0)
-                ticket.amountUsedBotQueues === 0 &&
+                (!ticket.isGroup || whatsapp.groupAsTicket === "enabled") &&
                 // ✅ CORREÇÃO: Só NÃO enviar se:
                 // - Já está sendo atendido (ticket.userId !== null)
                 // - Está sendo atendido por integração/bot (ticket.useIntegration === true)
