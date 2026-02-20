@@ -1005,7 +1005,8 @@ const MessagesList = ({
             marginLeft: 4,
             display: "inline-flex",
             alignItems: "center",
-            verticalAlign: "middle"
+            verticalAlign: "middle",
+            display: "block",
           }}
         >
           <ErrorOutline style={{ fontSize: 12, marginRight: 2 }} />

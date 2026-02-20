@@ -103,7 +103,7 @@ const ListMessagesService = async ({
 
   const { count, rows: messages } = await Message.findAndCountAll({
     where: { ticketId: tickets, companyId },
-    attributes: ["id", "wid", "fromMe", "mediaUrl", "body", "mediaType", "ack", "createdAt", "ticketId", "isDeleted", "queueId", "isForwarded", "isEdited", "isPrivate", "companyId"],
+    attributes: ["id", "wid", "fromMe", "mediaUrl", "body", "mediaType", "ack", "createdAt", "ticketId", "isDeleted", "queueId", "isForwarded", "isEdited", "isPrivate", "companyId", "deliveryError", "deliveryErrorCode"],
     limit,
     include: [
       {
@@ -140,7 +140,7 @@ const ListMessagesService = async ({
     distinct: true,
     offset,
     subQuery: false,
-    order: [["createdAt", "DESC"]] 
+    order: [["createdAt", "DESC"]]
   });
 
   const hasMore = count > offset + messages.length;
