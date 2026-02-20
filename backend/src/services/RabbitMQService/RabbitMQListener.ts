@@ -46,6 +46,10 @@ class RabbitMQListener {
         if (!this.channel) return;
 
         try {
+            // Configure prefetch carefully to process 1 message at a time
+            // This prevents race conditions and lock contention in the Node event loop (e.g. FindOrCreateTicketService)
+            await this.channel.prefetch(1);
+
             // 1. Queue for incoming messages
             const messageQueue = this.queues[0];
             await this.channel.assertQueue(messageQueue, { durable: true, arguments: { "x-queue-type": "quorum" } });
@@ -62,8 +66,17 @@ class RabbitMQListener {
                         this.channel?.ack(msg);
                     } catch (error) {
                         logger.error(`[RabbitMQ] ❌ Error processing message: ${error}`);
-                        // Nack the message and ask RabbitMQ to requeue or drop based on rules
-                        this.channel?.nack(msg, false, false);
+
+                        // Check if it's a lock timeout error (retriable)
+                        const isLockError = String(error).includes("Failed to acquire lock");
+
+                        // If it's a lock timeout, requeue it. Otherwise, drop it to avoid poison message loops.
+                        if (isLockError) {
+                            logger.warn(`[RabbitMQ] 🔄 Requeueing message due to lock contention`);
+                            this.channel?.nack(msg, false, true);
+                        } else {
+                            this.channel?.nack(msg, false, false);
+                        }
                     }
                 }
             });

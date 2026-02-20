@@ -226,10 +226,13 @@ export class WebhookService {
                   this.logger.log(`[WEBHOOK MESSAGE] Tipo: ${message.type}, ID: ${message.id}`);
 
                   const messageKey = `webhook:processed:${companyId}:${message.id}`;
-                  const alreadyProcessed = await this.redis.get(messageKey);
 
-                  if (alreadyProcessed) {
-                    this.logger.warn(`[WEBHOOK DUPLICATE] Mensagem ${message.id} já foi processada. Ignorando para evitar loop.`);
+                  // Usar SETNX (Set if Not eXists) do Redis para criar um lock atômico de 24 horas
+                  // Isso previne race conditions onde duas requisições simultâneas passam pelo GET inicial
+                  const isFirstProcessing = await this.redis.setnx(messageKey, 86400, '1');
+
+                  if (!isFirstProcessing) {
+                    this.logger.warn(`[WEBHOOK DUPLICATE] Mensagem ${message.id} já foi processada ou está em processamento. Ignorando para evitar loop.`);
                     continue;
                   }
 
@@ -251,73 +254,29 @@ export class WebhookService {
                     this.logger.log(`[WEBHOOK REDIS] Salvando mensagem no Redis`);
 
                     try {
-                      const messages = await this.redis.get(
-                        `messages:${companyId}:${conexaoId}`,
-                      );
+                      // Usar métodos de lista do lado do servidor Redis (RPUSH, LTRIM) para evitar
+                      // race conditions pesadas de GET / Array.push / SET em alta concorrência
+                      const messagesKey = `messages:${companyId}:${conexaoId}`;
 
-                      let messagesStored: Array<any> = [];
+                      const serializedBody = JSON.stringify(body);
 
-                      if (!!messages) {
-                        try {
-                          messagesStored = JSON.parse(messages) as Array<any>;
-                          // Garantir que é array
-                          if (!Array.isArray(messagesStored)) {
-                            messagesStored = [];
-                          }
-                        } catch (parseError: any) {
-                          this.logger.error(`[WEBHOOK REDIS] Erro ao parsear mensagens existentes: ${parseError?.message || 'Unknown error'}`);
-                          messagesStored = [];
-                        }
+                      // Verifica se client e pipeline estão disponíveis (dependendo da versão do ioredis exportada pelo módulo)
+                      // Se não, faz as operações sequencialmente
+                      if ((this.redis as any).client?.pipeline) {
+                        await (this.redis as any).client.pipeline()
+                          .rpush(messagesKey, serializedBody)
+                          .ltrim(messagesKey, -50, -1)
+                          .exec();
+                      } else {
+                        // Fallback em caso de API diferente
+                        await (this.redis as any).client.rpush(messagesKey, serializedBody);
+                        await (this.redis as any).client.ltrim(messagesKey, -50, -1);
                       }
 
-                      // Adicionar nova mensagem
-                      messagesStored.push(body);
-
-                      // Limitar a 50 mensagens para evitar crescimento infinito
-                      if (messagesStored.length > 50) {
-                        messagesStored = messagesStored.slice(-50);
-                        this.logger.log(`[WEBHOOK REDIS] Array limitado a 50 mensagens`);
-                      }
-
-                      // Serializar com tratamento de erro
-                      try {
-                        const serialized = JSON.stringify(messagesStored);
-                        await this.redis.set(
-                          `messages:${companyId}:${conexaoId}`,
-                          serialized,
-                        );
-                        this.logger.log(`[WEBHOOK REDIS] ${messagesStored.length} mensagens salvas no Redis`);
-                      } catch (stringifyError: any) {
-                        this.logger.error(`[WEBHOOK REDIS] Erro ao serializar JSON: ${stringifyError?.message || 'Unknown error'}`);
-                        // Tentar salvar apenas a mensagem atual sem histórico
-                        const simplifiedBody = {
-                          object: body.object,
-                          entry: body.entry?.map(e => ({
-                            id: e.id,
-                            changes: e.changes?.map(c => ({
-                              field: c.field,
-                              value: {
-                                messaging_product: c.value?.messaging_product,
-                                metadata: c.value?.metadata,
-                                messages: c.value?.messages?.map(m => ({
-                                  id: m.id,
-                                  type: m.type,
-                                  timestamp: m.timestamp,
-                                  from: m.from
-                                }))
-                              }
-                            }))
-                          }))
-                        };
-                        await this.redis.set(
-                          `messages:${companyId}:${conexaoId}`,
-                          JSON.stringify([simplifiedBody]),
-                        );
-                        this.logger.log(`[WEBHOOK REDIS] Salva versão simplificada devido a erro de serialização`);
-                      }
+                      this.logger.log(`[WEBHOOK REDIS] Mensagem adicionada na lista de histórico do Redis (máx 50)`);
                     } catch (redisError: any) {
-                      this.logger.error(`[WEBHOOK REDIS ERROR] Erro ao salvar no Redis: ${redisError?.message || 'Unknown error'}`);
-                      // Não propagar erro - continuar processamento mesmo se Redis falhar
+                      this.logger.error(`[WEBHOOK REDIS ERROR] Erro ao salvar histórico no Redis: ${redisError?.message || 'Unknown error'}`);
+                      // Não propagar erro - continuar processamento mesmo se histórico falhar
                     }
 
                     this.logger.log(

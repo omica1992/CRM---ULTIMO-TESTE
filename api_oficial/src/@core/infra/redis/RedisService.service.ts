@@ -23,6 +23,12 @@ export class RedisService {
     await this.client.setex(key, seconds, value);
   }
 
+  async setnx(key: string, seconds: number, value: string): Promise<boolean> {
+    // Retorna true se a chave foi definida, false se já existia
+    const result = await this.client.set(key, value, 'EX', seconds, 'NX');
+    return result === 'OK';
+  }
+
   async get(key: string): Promise<string | null> {
     return await this.client.get(key);
   }
