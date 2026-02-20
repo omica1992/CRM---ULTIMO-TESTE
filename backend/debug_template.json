@@ -1,0 +1,22 @@
+{
+  "name": "somos_teste_botao4",
+  "parameter_format": "NAMED",
+  "components": [
+    {
+      "type": "BODY",
+      "text": "olá {{name}} somos a timbre e estamos testando envio de template.",
+      "example": {
+        "body_text_named_params": [
+          {
+            "param_name": "name",
+            "example": "Exemplo"
+          }
+        ]
+      }
+    }
+  ],
+  "language": "pt_BR",
+  "status": "APPROVED",
+  "category": "MARKETING",
+  "id": "1263307765666277"
+}
