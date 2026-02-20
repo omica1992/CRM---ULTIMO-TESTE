@@ -140,8 +140,7 @@ export class MetaService {
     pathFile: string,
   ): Promise<IReturnMessageFile | null> {
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-
+      const FormData = require('form-data');
       const formData = new FormData();
 
       const file = readFileSync(pathFile);
@@ -151,25 +150,39 @@ export class MetaService {
         throw new Error('Could not determine the MIME type of the file.');
       }
 
-      const blob = new Blob([file], { type: mimeType });
+      const fileName = pathFile.split('/').pop() || pathFile.split('\\').pop() || 'file';
 
       formData.append('messaging_product', 'whatsapp');
-      formData.append('type', mimeType);
-      formData.append('file', blob);
+      // Adiciona o media type de forma limpa (tipo document/audio/video)
+      const baseType = mimeType.split('/')[0];
+      const tipoMeta = ['audio', 'video', 'image'].includes(baseType) ? mimeType : mimeType;
 
-      const result = await fetch(`${this.urlMeta}/${numberId}/media`, {
-        method: 'POST',
-        headers,
-        body: formData,
+      formData.append('file', file, {
+        filename: fileName,
+        contentType: mimeType
       });
 
-      if (result.status != 200)
+      const response = await axios.post(
+        `${this.urlMeta}/${numberId}/media`,
+        formData,
+        {
+          headers: {
+            ...formData.getHeaders(),
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      if (response.status != 200)
         throw new Error('Falha em baixar o arquivo da meta');
 
-      return (await result.json()) as IReturnMessageFile;
+      return response.data as IReturnMessageFile;
     } catch (error: any) {
       deleteFile(pathFile);
-      this.logger.error(`sendMessage - ${error.message}`);
+      this.logger.error(`[MEDIA UPLOAD ERROR] sendMessage - ${error.message}`);
+      if (error.response) {
+        this.logger.error(`[MEDIA UPLOAD ERROR] Response Data: ${JSON.stringify(error.response.data)}`);
+      }
       throw Error('Erro ao enviar o arquivo para a meta');
     }
   }
