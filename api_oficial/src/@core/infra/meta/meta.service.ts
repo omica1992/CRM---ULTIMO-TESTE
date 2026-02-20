@@ -142,10 +142,10 @@ export class MetaService {
     try {
       const FormData = require('form-data');
       const https = require('https');
-      const { createReadStream } = require('fs');
+      const { readFileSync } = require('fs');
 
       const formData = new FormData();
-      const fileStream = createReadStream(pathFile);
+      const fileBuffer = readFileSync(pathFile);
 
       const mimeType = lookup(pathFile);
       if (!mimeType) {
@@ -154,24 +154,30 @@ export class MetaService {
 
       const fileName = pathFile.split('/').pop() || pathFile.split('\\').pop() || 'file';
 
-      formData.append('messaging_product', 'whatsapp');
-
-      formData.append('file', fileStream, {
+      formData.append('file', fileBuffer, {
         filename: fileName,
         contentType: mimeType
       });
+      formData.append('messaging_product', 'whatsapp');
 
       const agent = new https.Agent({
         keepAlive: true,
         rejectUnauthorized: false
       });
 
+      const formHeaders = formData.getHeaders();
+      try {
+        formHeaders['Content-Length'] = formData.getLengthSync();
+      } catch (err: any) {
+        this.logger.warn(`[MEDIA UPLOAD WARN] Could not calculate Content-Length: ${err.message}`);
+      }
+
       const response = await axios.post(
         `${this.urlMeta}/${numberId}/media`,
         formData,
         {
           headers: {
-            ...formData.getHeaders(),
+            ...formHeaders,
             'Authorization': `Bearer ${token}`
           },
           httpsAgent: agent,
