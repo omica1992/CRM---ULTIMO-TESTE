@@ -4,8 +4,8 @@ import { ReceibedWhatsAppService } from "../WhatsAppOficial/ReceivedWhatsApp";
 import AppError from "../../errors/AppError";
 
 class RabbitMQListener {
-    private connection: Connection | null = null;
-    private channel: Channel | null = null;
+    private connection: any = null;
+    private channel: any = null;
     private readonly queues = ["whatsapp_oficial", "whatsapp_oficial_status"];
 
     public async connect(): Promise<void> {
