@@ -96,25 +96,18 @@ export class WebhookService {
 
   async sendToWebhook(webhook_url: string, token: string, body: any) {
     try {
-      const headers = {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      };
-
-      const response = await fetch(webhook_url, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(body),
+      const axios = require('axios');
+      const response = await axios.post(webhook_url, body, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        timeout: 10000, // 10s timeout para webhooks externos
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const responseData = await response.json();
       this.logger.log('Resposta do encaminhamento do webhook', {
         webhook_url,
-        responseData,
+        status: response.status,
       });
     } catch (error: any) {
       this.logger.error('Erro ao encaminhar para o webhook', {

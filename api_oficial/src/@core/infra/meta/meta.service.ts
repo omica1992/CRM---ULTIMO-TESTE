@@ -280,7 +280,7 @@ export class MetaService {
       this.logger.log(`[META] Fazendo upload de mídia: ${fileUrl}`);
 
       // Baixar o arquivo da URL
-      const fileResponse = await axios.get(fileUrl, { responseType: 'arraybuffer' });
+      const fileResponse = await axios.get(fileUrl, { responseType: 'arraybuffer', httpsAgent: this.ipv4Agent });
       const fileBuffer = Buffer.from(fileResponse.data);
 
       // Criar FormData
@@ -300,7 +300,10 @@ export class MetaService {
           headers: {
             ...formData.getHeaders(),
             'Authorization': `Bearer ${token}`
-          }
+          },
+          httpsAgent: this.ipv4Agent,
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity
         }
       );
 

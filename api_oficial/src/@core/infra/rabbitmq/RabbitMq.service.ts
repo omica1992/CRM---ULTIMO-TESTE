@@ -31,9 +31,35 @@ export class RabbitMQService {
       this.connection = await connect(this.url);
       this.channel = await this.connection.createChannel();
       this.logger.log('📡 Conexão com RabbitMQ estabelecida com sucesso');
+
+      // ✅ BLIND SPOT FIX: Handlers de erro/close para auto-reconexão
+      // Sem isso, o connection fica non-null mas inválido, e ensureConnection() não reconecta
+      this.connection.on('error', (err: any) => {
+        this.logger.error(`❌ RabbitMQ connection error: ${err.message}`);
+        this.connection = null;
+        this.channel = null;
+      });
+
+      this.connection.on('close', () => {
+        this.logger.warn('⚠️ RabbitMQ connection closed. Will reconnect on next message.');
+        this.connection = null;
+        this.channel = null;
+      });
+
+      this.channel.on('error', (err: any) => {
+        this.logger.error(`❌ RabbitMQ channel error: ${err.message}`);
+        this.channel = null;
+      });
+
+      this.channel.on('close', () => {
+        this.logger.warn('⚠️ RabbitMQ channel closed.');
+        this.channel = null;
+      });
+
     } catch (error) {
       this.logger.error(`❌ Erro ao conectar com RabbitMQ: ${error}`);
-      console.log(error);
+      this.connection = null;
+      this.channel = null;
     }
   }
 
@@ -101,7 +127,7 @@ export class RabbitMQService {
         exchange,
         routingKey,
         Buffer.from(JSON.stringify(body)),
-        { deliveryMode: 1 },
+        { deliveryMode: 2 },
       );
       this.logger.log(
         `Mensagem enviada para o RabbitMQ para a empresa ${whats.companyId}`,
