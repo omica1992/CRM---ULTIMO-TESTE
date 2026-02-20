@@ -160,8 +160,22 @@ const SendWhatsAppOficialMessage = async ({
 
             parametersList.forEach((parameter) => {
               if (parameter.type === 'text' && parameter.text) {
-                // Substitui variáveis como {{name}}, {{firstName}}, etc.
-                parameter.text = formatBody(parameter.text, ticket);
+                // Tenta substituir variáveis via Mustache primeiro
+                let formattedText = formatBody(parameter.text, ticket);
+
+                // Fallback manual se o Mustache retornar vazio para variáveis conhecidas,
+                // ou se o formato vier quebrado no req.body
+                if (!formattedText || formattedText.trim() === '') {
+                  const originalText = parameter.text;
+
+                  // Regex para preencher hardcoded se o Mustache falhar por falta de referência
+                  formattedText = originalText
+                    .replace(/\{\{\s*name\s*\}\}/g, ticket.contact?.name || "")
+                    .replace(/\{\{\s*firstName\s*\}\}/g, ticket.contact?.name ? ticket.contact.name.split(' ')[0] : "")
+                    .replace(/\{\{\s*ticket_id\s*\}\}/g, ticket.id?.toString() || "");
+                }
+
+                parameter.text = formattedText;
               }
             });
           }
