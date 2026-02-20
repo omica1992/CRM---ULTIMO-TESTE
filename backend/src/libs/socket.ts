@@ -248,34 +248,46 @@ export const initIO = (httpServer: Server): SocketIO => {
       receivedService.readMessage(data);
     });
 
-    // ✅ NOVO: Event handler para status updates de mensagens da Meta API
+    // ✅ CORRIGIDO: Event handler para status updates de mensagens da Meta API
     socket.on("messageStatusUpdateWhatsAppOficial", async (data: any) => {
       try {
-        console.log(`[SOCKET] ===== STATUS UPDATE RECEBIDO =====`);
-        console.log(`[SOCKET] MessageId: ${data?.messageId}, Status: ${data?.status}, CompanyId: ${data?.companyId}`);
+        console.log(`[SOCKET STATUS] ===== STATUS UPDATE RECEBIDO =====`);
+        console.log(`[SOCKET STATUS] MessageId: ${data?.messageId}, Status: ${data?.status}, CompanyId: ${data?.companyId}`);
+        console.log(`[SOCKET STATUS] Error data recebido: ${JSON.stringify(data?.error || null)}`);
 
         const { messageId, status, error, companyId } = data;
 
         if (!messageId || !companyId) {
-          logger.warn(`[SOCKET] Status update inválido - faltam dados obrigatórios`);
+          logger.warn(`[SOCKET STATUS] ⚠️ Status update inválido - faltam dados obrigatórios`);
           return;
         }
 
         // Buscar mensagem pelo wid
         const Message = (await import("../models/Message")).default;
+        const Ticket = (await import("../models/Ticket")).default;
         const message = await Message.findOne({
-          where: { wid: messageId, companyId }
+          where: { wid: messageId, companyId },
+          include: [{ model: Ticket, as: "ticket" }]
         });
 
         if (!message) {
-          logger.warn(`[SOCKET] Mensagem ${messageId} não encontrada para companyId ${companyId}`);
+          logger.warn(`[SOCKET STATUS] ⚠️ Mensagem ${messageId} não encontrada para companyId ${companyId}`);
           return;
         }
 
+        logger.info(`[SOCKET STATUS] ✅ Mensagem encontrada - ID: ${message.id}, WID: ${messageId}, TicketId: ${message.ticketId}`);
+
         // Se status é falha, atualizar com erro
         if (status === 'failed' || status === 'undelivered') {
-          const errorMessage = error?.error_data?.details || error?.message || error?.title || 'Falha na entrega';
+          // ✅ Extrair informação detalhada do erro da Meta
+          const errorMessage = error?.error_data?.details
+            || error?.message
+            || error?.title
+            || (typeof error === 'string' ? error : null)
+            || 'Falha na entrega';
           const errorCode = error?.code?.toString() || 'UNKNOWN';
+
+          logger.info(`[SOCKET STATUS] 🔴 Erro extraído: [${errorCode}] ${errorMessage}`);
 
           await message.update({
             deliveryError: errorMessage,
@@ -284,17 +296,21 @@ export const initIO = (httpServer: Server): SocketIO => {
             ack: -1 // Indicar falha
           });
 
-          logger.info(`[SOCKET] ✅ Mensagem ${messageId} atualizada com erro: [${errorCode}] ${errorMessage}`);
+          logger.info(`[SOCKET STATUS] ✅ Mensagem ${message.id} atualizada com erro de entrega no banco`);
 
-          // ✅ Recarregar mensagem para garantir que todos os campos estejam atualizados
-          await message.reload();
+          // Recarregar mensagem com associações para emitir dados completos ao frontend
+          await message.reload({
+            include: [{ model: Ticket, as: "ticket" }]
+          });
 
           // Emitir evento para atualizar UI
           const io = getIO();
           io.of(String(companyId)).emit(`company-${companyId}-appMessage`, {
             action: "update",
-            message: message.toJSON() // ✅ Serializar explicitamente para garantir que todos os campos sejam enviados
+            message: message.toJSON()
           });
+
+          logger.info(`[SOCKET STATUS] 📤 Evento emitido ao frontend - deliveryError: "${message.deliveryError}"`);
         }
         // Se status é sucesso, atualizar ack
         else if (status === 'sent') {

@@ -965,8 +965,34 @@ const MessagesList = ({
     return null;
   };
 
+  // ✅ Tradução de erros da Meta API para PT-BR
+  const translateMetaError = (error) => {
+    if (!error) return "Falha na entrega";
+    const translations = {
+      "message failed to send because more than 24 hours have passed since the customer last replied to this number.":
+        "Mensagem não enviada: janela de 24h expirada. O cliente não respondeu a tempo.",
+      "in order to maintain a healthy ecosystem engagement, the message failed to be delivered.":
+        "Mensagem não entregue para manter o engajamento saudável do ecossistema.",
+      "this message was not delivered to maintain healthy ecosystem engagement.":
+        "Mensagem não entregue para manter o engajamento saudável do ecossistema.",
+      "message undeliverable.":
+        "Mensagem não pôde ser entregue.",
+      "message undeliverable":
+        "Mensagem não pôde ser entregue.",
+      "failed to send message because this user's phone number is part of an experiment":
+        "Falha no envio: número do usuário faz parte de um experimento da Meta.",
+      "user's number is part of an experiment":
+        "Número do usuário faz parte de um experimento da Meta.",
+      "message failed to send because there were one or more errors related to your payment method.":
+        "Falha no envio: erro no método de pagamento da conta Meta.",
+      "re-engagement message":
+        "Mensagem de reengajamento não entregue.",
+    };
+    return translations[error.toLowerCase().trim()] || error;
+  };
+
   const renderMessageAck = (message) => {
-    // ✅ NOVO: Erro de entrega (ack: -1)
+    // ✅ Erro de entrega (ack: -1)
     if (message.ack === -1) {
       return (
         <span
@@ -983,7 +1009,7 @@ const MessagesList = ({
           }}
         >
           <ErrorOutline style={{ fontSize: 12, marginRight: 2 }} />
-          Meta: {message.deliveryError || "Falha"}
+          Meta: {translateMetaError(message.deliveryError)}
         </span>
       );
     }
