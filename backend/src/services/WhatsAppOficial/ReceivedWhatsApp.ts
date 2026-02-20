@@ -88,6 +88,22 @@ const mimeToExtension: { [key: string]: string } = {
     'audio/3gpp2': '3g2',
     'application/x-msdownload': 'exe',
     'application/x-executable': 'exe',
+    'audio/mpeg': 'mp3',
+    'video/mp4': 'mp4',
+    'audio/opus': 'ogg',
+    'audio/mp4': 'm4a',
+    'image/jpg': 'jpg',
+    'application/zip': 'zip',
+    'application/x-zip-compressed': 'zip',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+    'application/vnd.ms-excel': 'xls',
+    'image/heic': 'heic',
+    'image/heif': 'heif',
+    'application/x-7z-compressed': '7z',
+    'image/avif': 'avif',
+    'audio/wav': 'wav',
 };
 
 export interface IReceivedWhatsppOficial {
@@ -331,7 +347,7 @@ export class ReceibedWhatsAppService {
 
                     const buffer = Buffer.from(base64Data, 'base64');
 
-                    fileName = `${idFile}.${mimeToExtension[mimeType]}`;
+                    fileName = `${idFile}.${mimeToExtension[mimeType] || mimeType?.split('/')[1] || 'bin'}`;
 
                     logger.info(`[ReceivedWhatsApp] Nome do arquivo gerado: ${fileName}, Tamanho do buffer: ${buffer.length} bytes`);
 
