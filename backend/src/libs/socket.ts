@@ -238,8 +238,21 @@ export const initIO = (httpServer: Server): SocketIO => {
         const receivedService = new ReceibedWhatsAppService();
         await receivedService.getMessage(data);
       } catch (err) {
-        logger.error(`[SOCKET] ❌ Erro não tratado ao processar mensagem recebida: ${err.message}`);
-        logger.error(`[SOCKET] ❌ Stack: ${err.stack}`);
+        logger.error(`[SOCKET] ❌ Erro ao processar mensagem recebida: ${err.message}`);
+
+        // ✅ CORREÇÃO: Retry com delay para mensagens que falharam por lock contention
+        // Se duas mensagens do mesmo contato chegam quase juntas via socket fallback,
+        // a segunda pode falhar por não conseguir o lock — retry após 2s resolve isso
+        try {
+          logger.warn(`[SOCKET] 🔄 Retentando mensagem após 2s (from: ${data?.fromNumber})`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          const retryService = new ReceibedWhatsAppService();
+          await retryService.getMessage(data);
+          logger.info(`[SOCKET] ✅ Retry bem-sucedido para ${data?.fromNumber}`);
+        } catch (retryErr) {
+          logger.error(`[SOCKET] ❌ Retry também falhou - MENSAGEM PODE TER SIDO PERDIDA: ${retryErr.message}`);
+          logger.error(`[SOCKET] ❌ Dados: from=${data?.fromNumber}, type=${data?.message?.type}, text="${data?.message?.text?.substring(0, 100)}"`);
+        }
       }
     });
 

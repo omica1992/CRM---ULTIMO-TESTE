@@ -1,4 +1,4 @@
-import { Op } from "sequelize";
+import { Op, Sequelize } from "sequelize";
 import path from "path";
 import Whatsapp from "../../models/Whatsapp";
 import logger from "../../utils/logger";
@@ -393,7 +393,7 @@ export class ReceibedWhatsAppService {
                 whatsappId: whatsapp.id
             });
 
-            await ticket.update({ lastMessage: message.type === "contacts" ? "Contato" : !!message?.text ? message?.text : '', unreadMessages: ticket.unreadMessages + 1 })
+            await ticket.update({ lastMessage: message.type === "contacts" ? "Contato" : !!message?.text ? message?.text : '', unreadMessages: Sequelize.literal('"unreadMessages" + 1') as any })
 
             // ✅ CORREÇÃO CRÍTICA: Envolver verifyMessageOficial em try/catch para evitar perda silenciosa de mensagens
             // Se falhar, salvar mensagem via fallback e continuar fluxo normalmente
