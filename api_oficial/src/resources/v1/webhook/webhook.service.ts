@@ -210,7 +210,7 @@ export class WebhookService {
                     });
                   }
                 }
-              } else {
+              } else if (value?.messages && value.messages.length > 0) {
                 const contact = value.contacts?.[0];
                 const contactName = contact?.profile?.name || contact?.wa_id || 'Desconhecido';
                 this.logger.log(`[WEBHOOK MESSAGE] Processando ${value.messages.length} mensagens do contato ${contactName}`);

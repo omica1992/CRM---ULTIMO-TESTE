@@ -243,9 +243,13 @@ export const initIO = (httpServer: Server): SocketIO => {
       }
     });
 
-    socket.on("readMessageWhatsAppOficial", (data: any) => {
-      const receivedService = new ReceibedWhatsAppService();
-      receivedService.readMessage(data);
+    socket.on("readMessageWhatsAppOficial", async (data: any) => {
+      try {
+        const receivedService = new ReceibedWhatsAppService();
+        await receivedService.readMessage(data);
+      } catch (err) {
+        logger.error(`[SOCKET READ] ❌ Erro ao processar read message: ${err.message}`);
+      }
     });
 
     // ✅ CORRIGIDO: Event handler para status updates de mensagens da Meta API
