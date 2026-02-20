@@ -52,7 +52,8 @@ export class SocketService implements OnModuleDestroy {
         },
         reconnection: true,
         reconnectionDelay: 1000,
-        reconnectionAttempts: 5,
+        reconnectionDelayMax: 30000,
+        reconnectionAttempts: Infinity, // ✅ BUG 8 FIX: Reconexão infinita com backoff
       });
 
       this.setupSocketEvents(socket, companyId);

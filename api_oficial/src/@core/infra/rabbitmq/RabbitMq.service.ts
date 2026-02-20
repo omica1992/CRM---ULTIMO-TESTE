@@ -107,8 +107,8 @@ export class RabbitMQService {
         `Mensagem enviada para o RabbitMQ para a empresa ${whats.companyId}`,
         { body },
       );
-
-      this.close();
+      // ✅ BUG 4 FIX: Removido this.close() que destruía o canal compartilhado
+      // A conexão deve ser persistente para suportar múltiplas mensagens simultâneas
     } catch (error: any) {
       this.logger.error(
         `Erro ao enviar para o RabbitMQ para a empresa ${whats.companyId}`,

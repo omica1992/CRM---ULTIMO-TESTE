@@ -12,6 +12,7 @@ import {
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { convertMimeTypeToExtension } from 'src/@core/common/utils/convertMimeTypeToExtension';
 import axios from 'axios';
+import * as https from 'https';
 import { lookup } from 'mime-types';
 import { deleteFile } from 'src/@core/common/utils/files.utils';
 
@@ -21,6 +22,13 @@ export class MetaService {
 
   path = `./public`;
 
+  // ✅ BUG 1+6 FIX: Agent IPv4 compartilhado — força todas as requisições a usar IPv4
+  // Evita ECONNRESET causado por IPv6 instável na comunicação com a Meta
+  private readonly ipv4Agent = new https.Agent({
+    family: 4,
+    keepAlive: true,
+  });
+
   constructor() { }
 
   async send<T>(
@@ -28,23 +36,17 @@ export class MetaService {
     token: string,
     existFile: boolean = false,
   ): Promise<T | any> {
-    const headers = {
-      'Content-Type': !!existFile ? 'arraybuffer' : 'application/json',
-      Authorization: `Bearer ${token}`,
-      'User-Agent': 'curl/7.64.1',
-    };
-
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: headers,
+    const response = await axios.get(url, {
+      headers: {
+        'Content-Type': existFile ? 'arraybuffer' : 'application/json',
+        Authorization: `Bearer ${token}`,
+        'User-Agent': 'curl/7.64.1',
+      },
+      responseType: existFile ? 'json' : 'json',
+      httpsAgent: this.ipv4Agent,
     });
 
-    if (!!existFile) {
-      // return await res.arrayBuffer();
-      return await res.json();
-    } else {
-      return (await res.json()) as T;
-    }
+    return response.data as T;
   }
 
   async authFileMeta(
@@ -97,8 +99,9 @@ export class MetaService {
       const result = await axios.get(auth.url, {
         headers,
         responseType: 'arraybuffer',
-        maxContentLength: 100 * 1024 * 1024, // 100MB limit
+        maxContentLength: 100 * 1024 * 1024,
         maxBodyLength: 100 * 1024 * 1024,
+        httpsAgent: this.ipv4Agent,
       });
 
       this.logger.log(`[META DOWNLOAD] ✅ Download concluído - Status: ${result.status}, Size: ${result.data.length} bytes`);
@@ -141,7 +144,6 @@ export class MetaService {
   ): Promise<IReturnMessageFile | null> {
     try {
       const FormData = require('form-data');
-      const https = require('https');
       const { readFileSync, statSync } = require('fs');
 
       const formData = new FormData();
@@ -162,13 +164,6 @@ export class MetaService {
       });
       formData.append('messaging_product', 'whatsapp');
 
-      // Forçar IPv4 - Meta API rejeita uploads grandes via IPv6 com ECONNRESET
-      const agent = new https.Agent({
-        keepAlive: true,
-        rejectUnauthorized: false,
-        family: 4
-      });
-
       const formHeaders = formData.getHeaders();
       try {
         formHeaders['Content-Length'] = formData.getLengthSync();
@@ -184,7 +179,7 @@ export class MetaService {
             ...formHeaders,
             'Authorization': `Bearer ${token}`
           },
-          httpsAgent: agent,
+          httpsAgent: this.ipv4Agent,
           maxContentLength: Infinity,
           maxBodyLength: Infinity
         }
@@ -206,28 +201,23 @@ export class MetaService {
 
   async sendMessage(numberId: string, token: string, message: IMetaMessage) {
     try {
-      const headers = {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      };
+      const response = await axios.post(
+        `${this.urlMeta}/${numberId}/messages`,
+        message,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          httpsAgent: this.ipv4Agent,
+        }
+      );
 
-      const result = await fetch(`${this.urlMeta}/${numberId}/messages`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(message),
-      });
-
-      if (result.status != 200) {
-        const resultError = await result.json();
-        throw new Error(
-          resultError.error.message || 'Falha ao enviar mensagem para a meta',
-        );
-      }
-
-      return (await result.json()) as IReturnMessageMeta;
+      return response.data as IReturnMessageMeta;
     } catch (error: any) {
-      this.logger.error(`sendMessage - ${error.message}`);
-      throw Error('Erro ao enviar a mensagem');
+      const errMsg = error.response?.data?.error?.message || error.message;
+      this.logger.error(`sendMessage - ${errMsg}`);
+      throw Error(errMsg);
     }
   }
 
@@ -249,19 +239,12 @@ export class MetaService {
         pageCount++;
         this.logger.log(`[GET TEMPLATES] 📄 Buscando página ${pageCount}...`);
 
-        const result = await fetch(nextUrl, {
-          method: 'GET',
+        const result = await axios.get(nextUrl, {
           headers,
+          httpsAgent: this.ipv4Agent,
         });
 
-        if (result.status != 200) {
-          const resultError = await result.json();
-          throw new Error(
-            resultError.error.message || 'Falha ao buscar templates',
-          );
-        }
-
-        const pageData = (await result.json()) as IResultTemplates;
+        const pageData = result.data as IResultTemplates;
 
         // Adicionar templates da página atual
         if (pageData.data && pageData.data.length > 0) {
@@ -340,36 +323,19 @@ export class MetaService {
       this.logger.log(`[META] WABA ID: ${wabaId}`);
       this.logger.log(`[META] Payload completo: ${JSON.stringify(templateData, null, 2)}`);
 
-      const result = await fetch(`${this.urlMeta}/${wabaId}/message_templates`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(templateData),
-      });
+      const response = await axios.post(
+        `${this.urlMeta}/${wabaId}/message_templates`,
+        templateData,
+        { headers, httpsAgent: this.ipv4Agent }
+      );
 
-      if (result.status !== 200) {
-        const resultError = await result.json();
-        this.logger.error(`[META] Status HTTP: ${result.status}`);
-        this.logger.error(`[META] Erro completo da Meta: ${JSON.stringify(resultError, null, 2)}`);
-        this.logger.error(`[META] Payload enviado: ${JSON.stringify(templateData, null, 2)}`);
-
-        // ✅ Priorizar mensagem amigável da Meta (error_user_msg)
-        const errorMessage = resultError.error?.error_user_msg ||
-          resultError.error?.error_user_title ||
-          resultError.error?.message ||
-          resultError.error?.error_data?.details ||
-          'Falha ao criar template';
-
-        this.logger.error(`[META] Mensagem de erro extraída: ${errorMessage}`);
-        throw new Error(errorMessage);
-      }
-
-      const response = await result.json();
-      this.logger.log(`[META] Template criado com sucesso. ID: ${response.id}`);
-      return response;
+      this.logger.log(`[META] Template criado com sucesso. ID: ${response.data.id}`);
+      return response.data;
     } catch (error: any) {
-      this.logger.error(`createTemplate - ${error.message}`);
-      // ✅ Propagar mensagem original sem adicionar prefixo
-      throw error;
+      const errMsg = error.response?.data?.error?.error_user_msg ||
+        error.response?.data?.error?.message || error.message;
+      this.logger.error(`createTemplate - ${errMsg}`);
+      throw new Error(errMsg);
     }
   }
 
@@ -382,30 +348,18 @@ export class MetaService {
 
       this.logger.log(`[META] Atualizando template: ${templateId}`);
 
-      const result = await fetch(`${this.urlMeta}/${templateId}`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(updateData),
-      });
+      const response = await axios.post(
+        `${this.urlMeta}/${templateId}`,
+        updateData,
+        { headers, httpsAgent: this.ipv4Agent }
+      );
 
-      if (result.status !== 200) {
-        const resultError = await result.json();
-        this.logger.error(`[META] Erro ao atualizar template: ${JSON.stringify(resultError, null, 2)}`);
-
-        const errorMessage = resultError.error?.error_user_msg ||
-          resultError.error?.error_user_title ||
-          resultError.error?.message ||
-          'Falha ao atualizar template';
-
-        throw new Error(errorMessage);
-      }
-
-      const response = await result.json();
       this.logger.log(`[META] Template atualizado com sucesso`);
-      return response;
+      return response.data;
     } catch (error: any) {
-      this.logger.error(`updateTemplate - ${error.message}`);
-      throw error;
+      const errMsg = error.response?.data?.error?.message || error.message;
+      this.logger.error(`updateTemplate - ${errMsg}`);
+      throw new Error(errMsg);
     }
   }
 
@@ -418,32 +372,17 @@ export class MetaService {
 
       this.logger.log(`[META] Deletando template: ${templateName}`);
 
-      const result = await fetch(
+      const response = await axios.delete(
         `${this.urlMeta}/${wabaId}/message_templates?name=${templateName}`,
-        {
-          method: 'DELETE',
-          headers,
-        }
+        { headers, httpsAgent: this.ipv4Agent }
       );
 
-      if (result.status !== 200) {
-        const resultError = await result.json();
-        this.logger.error(`[META] Erro ao deletar template: ${JSON.stringify(resultError, null, 2)}`);
-
-        const errorMessage = resultError.error?.error_user_msg ||
-          resultError.error?.error_user_title ||
-          resultError.error?.message ||
-          'Falha ao deletar template';
-
-        throw new Error(errorMessage);
-      }
-
-      const response = await result.json();
       this.logger.log(`[META] Template deletado com sucesso`);
-      return response;
+      return response.data;
     } catch (error: any) {
-      this.logger.error(`deleteTemplate - ${error.message}`);
-      throw error;
+      const errMsg = error.response?.data?.error?.message || error.message;
+      this.logger.error(`deleteTemplate - ${errMsg}`);
+      throw new Error(errMsg);
     }
   }
 
@@ -454,26 +393,16 @@ export class MetaService {
         Authorization: `Bearer ${token}`,
       };
 
-      const result = await fetch(`${this.urlMeta}/${templateId}`, {
-        method: 'GET',
+      const response = await axios.get(`${this.urlMeta}/${templateId}`, {
         headers,
+        httpsAgent: this.ipv4Agent,
       });
 
-      if (result.status !== 200) {
-        const resultError = await result.json();
-
-        const errorMessage = resultError.error?.error_user_msg ||
-          resultError.error?.error_user_title ||
-          resultError.error?.message ||
-          'Falha ao buscar template';
-
-        throw new Error(errorMessage);
-      }
-
-      return await result.json();
+      return response.data;
     } catch (error: any) {
-      this.logger.error(`getTemplateById - ${error.message}`);
-      throw error;
+      const errMsg = error.response?.data?.error?.message || error.message;
+      this.logger.error(`getTemplateById - ${errMsg}`);
+      throw new Error(errMsg);
     }
   }
 
@@ -483,9 +412,7 @@ export class MetaService {
     data: IBodyReadMessage,
   ) {
     try {
-      // Usar axios com IPv4 forçado para evitar ECONNRESET da Meta via IPv6
-      const https = require('https');
-      const agent = new https.Agent({ family: 4, keepAlive: true });
+      // Usar agent IPv4 compartilhado para evitar ECONNRESET
 
       const response = await axios.post(
         `${this.urlMeta}/${numberId}/messages`,
@@ -495,7 +422,7 @@ export class MetaService {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          httpsAgent: agent,
+          httpsAgent: this.ipv4Agent,
         }
       );
 

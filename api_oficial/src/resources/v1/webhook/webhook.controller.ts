@@ -17,7 +17,7 @@ import { IWebhookWhatsApp } from './interfaces/IWebhookWhatsApp.inteface';
 @Controller('v1/webhook')
 @ApiTags('Webhook')
 export class WebhookController {
-  constructor(private readonly webhookService: WebhookService) {}
+  constructor(private readonly webhookService: WebhookService) { }
 
   @Public()
   @Post(':companyId/:conexaoId')
@@ -35,11 +35,19 @@ export class WebhookController {
     @Param('conexaoId') conexaoId: number,
     @Body() data: IWebhookWhatsApp,
   ) {
-    return await this.webhookService.webhookCompanyConexao(
-      companyId,
-      conexaoId,
-      data,
-    );
+    // ✅ BUG 7 FIX: SEMPRE retornar HTTP 200 para a Meta
+    // A Meta tem um sistema de "webhook health" que desativa webhooks
+    // automaticamente se o endpoint retorna muitos erros consecutivos.
+    try {
+      await this.webhookService.webhookCompanyConexao(
+        companyId,
+        conexaoId,
+        data,
+      );
+    } catch (error: any) {
+      console.error(`[WEBHOOK CONTROLLER] Erro interno (retornando 200 para Meta): ${error.message}`);
+    }
+    return { status: 'ok' };
   }
 
   @Public()
@@ -80,7 +88,7 @@ export class WebhookController {
   ) {
     // Se customMessage já tem a estrutura completa, usa ela; senão cria uma padrão
     const hasValidStructure = customMessage?.object === 'whatsapp_business_account' && customMessage?.entry;
-    
+
     const fakeWebhookData = hasValidStructure ? customMessage : {
       object: 'whatsapp_business_account',
       entry: [
@@ -121,7 +129,7 @@ export class WebhookController {
 
     console.log(`[WEBHOOK TEST] Simulando webhook para company ${companyId}, conexão ${conexaoId}`);
     console.log(`[WEBHOOK TEST] Estrutura do webhook:`, JSON.stringify(fakeWebhookData, null, 2));
-    
+
     return this.webhookService.webhookCompanyConexao(
       +companyId,
       +conexaoId,

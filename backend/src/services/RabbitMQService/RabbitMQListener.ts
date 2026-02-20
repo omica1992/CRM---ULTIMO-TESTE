@@ -67,14 +67,16 @@ class RabbitMQListener {
                     } catch (error) {
                         logger.error(`[RabbitMQ] ❌ Error processing message: ${error}`);
 
-                        // Check if it's a lock timeout error (retriable)
+                        // ✅ BUG 5 FIX: Retry com limite de 3 tentativas
+                        // Em vez de descartar a mensagem imediatamente, permitir requeue até 3 vezes
+                        const deliveryCount = (msg.properties?.headers?.['x-delivery-count'] || 0) as number;
                         const isLockError = String(error).includes("Failed to acquire lock");
 
-                        // If it's a lock timeout, requeue it. Otherwise, drop it to avoid poison message loops.
-                        if (isLockError) {
-                            logger.warn(`[RabbitMQ] 🔄 Requeueing message due to lock contention`);
+                        if (deliveryCount < 3 || isLockError) {
+                            logger.warn(`[RabbitMQ] 🔄 Requeueing message (attempt ${deliveryCount + 1}/3)`);
                             this.channel?.nack(msg, false, true);
                         } else {
+                            logger.error(`[RabbitMQ] ⚠️ Message dropped after ${deliveryCount} retries`);
                             this.channel?.nack(msg, false, false);
                         }
                     }

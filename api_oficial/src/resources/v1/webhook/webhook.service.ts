@@ -227,9 +227,9 @@ export class WebhookService {
 
                   const messageKey = `webhook:processed:${companyId}:${message.id}`;
 
-                  // Usar SETNX (Set if Not eXists) do Redis para criar um lock atômico de 24 horas
-                  // Isso previne race conditions onde duas requisições simultâneas passam pelo GET inicial
-                  const isFirstProcessing = await this.redis.setnx(messageKey, 86400, '1');
+                  // ✅ BUG 3 FIX: SETNX com TTL de 60s (tempo máximo para processar o webhook)
+                  // Se o processamento falhar, a chave expira rapidamente permitindo retry da Meta
+                  const isFirstProcessing = await this.redis.setnx(messageKey, 60, '1');
 
                   if (!isFirstProcessing) {
                     this.logger.warn(`[WEBHOOK DUPLICATE] Mensagem ${message.id} já foi processada ou está em processamento. Ignorando para evitar loop.`);
@@ -239,192 +239,207 @@ export class WebhookService {
                   if (this.messagesPermitidas.some((m) => m == message.type)) {
                     this.logger.log(`[WEBHOOK MESSAGE PROCESSING] Tipo de mensagem permitido: ${message.type}`);
 
-                    if (!!whats.use_rabbitmq) {
-                      const exchange = companyId;
-                      const queue = `${whats.phone_number}`.replace('+', '');
-                      const routingKey = whats.rabbitmq_routing_key;
+                    try {
+                      if (!!whats.use_rabbitmq) {
+                        const exchange = companyId;
+                        const queue = `${whats.phone_number}`.replace('+', '');
+                        const routingKey = whats.rabbitmq_routing_key;
 
-                      this.logger.log(`[WEBHOOK RABBITMQ] Enviando para RabbitMQ: exchange=${exchange}, queue=${queue}`);
-                      await this.rabbit.sendToRabbitMQ(whats, body);
+                        this.logger.log(`[WEBHOOK RABBITMQ] Enviando para RabbitMQ: exchange=${exchange}, queue=${queue}`);
+                        await this.rabbit.sendToRabbitMQ(whats, body);
+                        this.logger.log(
+                          `[WEBHOOK RABBITMQ SUCCESS] Enviado para o RabbitMQ. Fila '${queue}' vinculada à exchange '${exchange}' ${!!routingKey ? `com routing key '${routingKey}` : ''}`,
+                        );
+                      }
+
+                      this.logger.log(`[WEBHOOK REDIS] Salvando mensagem no Redis`);
+
+                      try {
+                        const messagesKey = `messages:${companyId}:${conexaoId}`;
+                        const serializedBody = JSON.stringify(body);
+
+                        if ((this.redis as any).client?.pipeline) {
+                          await (this.redis as any).client.pipeline()
+                            .rpush(messagesKey, serializedBody)
+                            .ltrim(messagesKey, -50, -1)
+                            .exec();
+                        } else {
+                          await (this.redis as any).client.rpush(messagesKey, serializedBody);
+                          await (this.redis as any).client.ltrim(messagesKey, -50, -1);
+                        }
+
+                        this.logger.log(`[WEBHOOK REDIS] Mensagem adicionada na lista de histórico do Redis (máx 50)`);
+                      } catch (redisError: any) {
+                        this.logger.error(`[WEBHOOK REDIS ERROR] Erro ao salvar histórico no Redis: ${redisError?.message || 'Unknown error'}`);
+                      }
+
                       this.logger.log(
-                        `[WEBHOOK RABBITMQ SUCCESS] Enviado para o RabbitMQ. Fila '${queue}' vinculada à exchange '${exchange}' ${!!routingKey ? `com routing key '${routingKey}` : ''}`,
+                        '[WEBHOOK SOCKET] Enviando mensagem para o servidor do websocket',
                       );
-                    }
 
-                    this.logger.log(`[WEBHOOK REDIS] Salvando mensagem no Redis`);
-
-                    try {
-                      // Usar métodos de lista do lado do servidor Redis (RPUSH, LTRIM) para evitar
-                      // race conditions pesadas de GET / Array.push / SET em alta concorrência
-                      const messagesKey = `messages:${companyId}:${conexaoId}`;
-
-                      const serializedBody = JSON.stringify(body);
-
-                      // Verifica se client e pipeline estão disponíveis (dependendo da versão do ioredis exportada pelo módulo)
-                      // Se não, faz as operações sequencialmente
-                      if ((this.redis as any).client?.pipeline) {
-                        await (this.redis as any).client.pipeline()
-                          .rpush(messagesKey, serializedBody)
-                          .ltrim(messagesKey, -50, -1)
-                          .exec();
-                      } else {
-                        // Fallback em caso de API diferente
-                        await (this.redis as any).client.rpush(messagesKey, serializedBody);
-                        await (this.redis as any).client.ltrim(messagesKey, -50, -1);
+                      // ✅ BUG 2 FIX: Downloads de arquivo envolvidos em try/catch
+                      // Se o download falhar, a mensagem AINDA é enviada ao RabbitMQ/Socket
+                      // sem o arquivo — o backend pode tentar baixar depois usando o idFile
+                      let file;
+                      let idFile;
+                      let bodyMessage;
+                      let quoteMessageId;
+                      switch (message.type) {
+                        case 'video':
+                          idFile = message.video.id;
+                          try {
+                            file = await this.meta.downloadFileMeta(
+                              idFile, change.value.metadata.phone_number_id,
+                              whats.send_token, company.id, whats.id,
+                            );
+                          } catch (dlErr: any) {
+                            this.logger.error(`[WEBHOOK DOWNLOAD ERROR] Falha ao baixar vídeo ${idFile}: ${dlErr.message}`);
+                            file = null;
+                          }
+                          break;
+                        case 'document':
+                          idFile = message.document.id;
+                          try {
+                            file = await this.meta.downloadFileMeta(
+                              idFile, change.value.metadata.phone_number_id,
+                              whats.send_token, company.id, whats.id,
+                            );
+                          } catch (dlErr: any) {
+                            this.logger.error(`[WEBHOOK DOWNLOAD ERROR] Falha ao baixar documento ${idFile}: ${dlErr.message}`);
+                            file = null;
+                          }
+                          break;
+                        case 'image':
+                          idFile = message.image.id;
+                          try {
+                            file = await this.meta.downloadFileMeta(
+                              idFile, change.value.metadata.phone_number_id,
+                              whats.send_token, company.id, whats.id,
+                            );
+                          } catch (dlErr: any) {
+                            this.logger.error(`[WEBHOOK DOWNLOAD ERROR] Falha ao baixar imagem ${idFile}: ${dlErr.message}`);
+                            file = null;
+                          }
+                          break;
+                        case 'audio':
+                          idFile = message.audio.id;
+                          try {
+                            file = await this.meta.downloadFileMeta(
+                              idFile, change.value.metadata.phone_number_id,
+                              whats.send_token, company.id, whats.id,
+                            );
+                          } catch (dlErr: any) {
+                            this.logger.error(`[WEBHOOK DOWNLOAD ERROR] Falha ao baixar áudio ${idFile}: ${dlErr.message}`);
+                            file = null;
+                          }
+                          break;
+                        case 'interactive':
+                          file = null;
+                          bodyMessage =
+                            message.interactive.button_reply?.id ||
+                            message.interactive.list_reply?.id;
+                          break;
+                        case 'location':
+                          bodyMessage = JSON.stringify(message.location);
+                          break;
+                        case 'contacts':
+                          bodyMessage = {
+                            contacts: message.contacts,
+                          };
+                          break;
+                        case 'sticker':
+                          idFile = message.sticker.id;
+                          try {
+                            file = await this.meta.downloadFileMeta(
+                              idFile, change.value.metadata.phone_number_id,
+                              whats.send_token, company.id, whats.id,
+                            );
+                          } catch (dlErr: any) {
+                            this.logger.error(`[WEBHOOK DOWNLOAD ERROR] Falha ao baixar sticker ${idFile}: ${dlErr.message}`);
+                            file = null;
+                          }
+                          break;
+                        case 'order':
+                          bodyMessage = JSON.stringify(message.order);
+                          break;
+                        case 'reaction':
+                          file = null;
+                          bodyMessage = message.reaction?.emoji || 'reagiu a uma mensagem';
+                          quoteMessageId = message.reaction?.message_id;
+                          break;
+                        case 'button':
+                          file = null;
+                          bodyMessage = message.button?.text;
+                          break;
+                        case 'system':
+                          file = null;
+                          bodyMessage = message.system?.body || 'Mensagem de sistema';
+                          break;
+                        case 'unsupported':
+                          file = null;
+                          bodyMessage = 'Mensagem não suportada pelo sistema. Verifique no aplicativo do WhatsApp.';
+                          break;
+                        default:
+                          file = null;
+                          bodyMessage = message.text?.body || '';
+                          quoteMessageId = message.context?.id;
+                          break;
                       }
 
-                      this.logger.log(`[WEBHOOK REDIS] Mensagem adicionada na lista de histórico do Redis (máx 50)`);
-                    } catch (redisError: any) {
-                      this.logger.error(`[WEBHOOK REDIS ERROR] Erro ao salvar histórico no Redis: ${redisError?.message || 'Unknown error'}`);
-                      // Não propagar erro - continuar processamento mesmo se histórico falhar
-                    }
+                      const msg: IMessageReceived = {
+                        timestamp: +message.timestamp,
+                        type: message.type,
+                        text: bodyMessage,
+                        file: !!file ? file.base64 : null,
+                        mimeType: !!file ? file.mimeType : null,
+                        idFile,
+                        idMessage: message.id,
+                        quoteMessageId,
+                      };
 
-                    this.logger.log(
-                      '[WEBHOOK SOCKET] Enviando mensagem para o servidor do websocket',
-                    );
+                      const data: IReceivedWhatsppOficial = {
+                        companyId: company.idEmpresaMult100,
+                        nameContact: contactName,
+                        message: msg,
+                        token: whats.token_mult100,
+                        fromNumber: message.from,
+                      };
 
-                    let file;
-                    let idFile;
-                    let bodyMessage;
-                    let quoteMessageId;
-                    switch (message.type) {
-                      case 'video':
-                        idFile = message.video.id;
-                        file = await this.meta.downloadFileMeta(
-                          idFile,
-                          change.value.metadata.phone_number_id,
-                          whats.send_token,
-                          company.id,
-                          whats.id,
-                        );
-                        break;
-                      case 'document':
-                        idFile = message.document.id;
-                        file = await this.meta.downloadFileMeta(
-                          idFile,
-                          change.value.metadata.phone_number_id,
-                          whats.send_token,
-                          company.id,
-                          whats.id,
-                        );
-                        break;
-                      case 'image':
-                        idFile = message.image.id;
-                        file = await this.meta.downloadFileMeta(
-                          idFile,
-                          change.value.metadata.phone_number_id,
-                          whats.send_token,
-                          company.id,
-                          whats.id,
-                        );
-                        break;
-                      case 'audio':
-                        idFile = message.audio.id;
-                        file = await this.meta.downloadFileMeta(
-                          idFile,
-                          change.value.metadata.phone_number_id,
-                          whats.send_token,
-                          company.id,
-                          whats.id,
-                        );
-                        break;
-                      case 'interactive':
-                        file = null;
-                        bodyMessage =
-                          message.interactive.button_reply?.id ||
-                          message.interactive.list_reply?.id;
-                        break;
-                      case 'location':
-                        bodyMessage = JSON.stringify(message.location);
-                        break;
-                      case 'contacts':
-                        bodyMessage = {
-                          contacts: message.contacts,
-                        };
-                        break;
-                      case 'sticker':
-                        idFile = message.sticker.id;
-                        file = await this.meta.downloadFileMeta(
-                          idFile,
-                          change.value.metadata.phone_number_id,
-                          whats.send_token,
-                          company.id,
-                          whats.id,
-                        );
-                        break;
-                      case 'order':
-                        bodyMessage = JSON.stringify(message.order);
-                        break;
-                      case 'reaction':
-                        file = null;
-                        bodyMessage = message.reaction?.emoji || 'reagiu a uma mensagem';
-                        quoteMessageId = message.reaction?.message_id;
-                        break;
-                      case 'button':
-                        file = null;
-                        bodyMessage = message.button?.text;
-                        break;
-                      case 'system':
-                        file = null;
-                        bodyMessage = message.system?.body || 'Mensagem de sistema';
-                        break;
-                      case 'unsupported':
-                        file = null;
-                        bodyMessage = 'Mensagem não suportada pelo sistema. Verifique no aplicativo do WhatsApp.';
-                        break;
-                      default:
-                        file = null;
-                        bodyMessage = message.text?.body || '';
-                        quoteMessageId = message.context?.id;
-                        break;
-                    }
-
-                    const msg: IMessageReceived = {
-                      timestamp: +message.timestamp,
-                      type: message.type,
-                      text: bodyMessage,
-                      file: !!file ? file.base64 : null,
-                      mimeType: !!file ? file.mimeType : null,
-                      idFile,
-                      idMessage: message.id,
-                      quoteMessageId,
-                    };
-
-                    const data: IReceivedWhatsppOficial = {
-                      companyId: company.idEmpresaMult100,
-                      nameContact: contactName,
-                      message: msg,
-                      token: whats.token_mult100,
-                      fromNumber: message.from,
-                    };
-
-                    // Enviar via fila global consolidada de RabbitMQ com fallback
-                    try {
-                      await this.rabbit.publish('whatsapp_oficial', JSON.stringify(data));
-                      this.logger.log(`[WEBHOOK RABBITMQ SUCCESS] Mensagem de ${data.fromNumber} enviada via fila global 'whatsapp_oficial'`);
-                    } catch (err: any) {
-                      this.logger.warn(`[WEBHOOK RABBITMQ ERROR] Falha na fila, fallback de mensagem para socket: ${err.message}`);
-                      this.socket.sendMessage(data);
-                    }
-
-                    // Encaminhar para webhooks externos apenas se não for um reprocessamento
-                    this.logger.log(`[WEBHOOK FORWARD] Iniciando encaminhamento para webhooks externos`);
-                    try {
-                      await this.forwardToWebhook(whats, body);
-                      this.logger.log('[WEBHOOK FORWARD SUCCESS] Enviado para webhooks externos com sucesso.');
-                    } catch (error: any) {
-                      this.logger.error(
-                        `[WEBHOOK FORWARD ERROR] Erro ao encaminhar webhook: ${error.message}`,
-                      );
-                      if (error.stack) {
-                        this.logger.error(`[WEBHOOK FORWARD ERROR STACK] ${error.stack}`);
+                      // Enviar via fila global consolidada de RabbitMQ com fallback
+                      try {
+                        await this.rabbit.publish('whatsapp_oficial', JSON.stringify(data));
+                        this.logger.log(`[WEBHOOK RABBITMQ SUCCESS] Mensagem de ${data.fromNumber} enviada via fila global 'whatsapp_oficial'`);
+                      } catch (err: any) {
+                        this.logger.warn(`[WEBHOOK RABBITMQ ERROR] Falha na fila, fallback de mensagem para socket: ${err.message}`);
+                        this.socket.sendMessage(data);
                       }
-                      // Não propagar erro para não bloquear processamento
-                    }
 
-                    // MARCAR COMO PROCESSADA APENAS APÓS SUCESSO DE TUDO
-                    this.logger.log(`[WEBHOOK MARK] Marcando mensagem ${message.id} como processada (Sucesso)`);
-                    await this.redis.setex(messageKey, 300, 'true');
+                      // Encaminhar para webhooks externos
+                      this.logger.log(`[WEBHOOK FORWARD] Iniciando encaminhamento para webhooks externos`);
+                      try {
+                        await this.forwardToWebhook(whats, body);
+                        this.logger.log('[WEBHOOK FORWARD SUCCESS] Enviado para webhooks externos com sucesso.');
+                      } catch (error: any) {
+                        this.logger.error(
+                          `[WEBHOOK FORWARD ERROR] Erro ao encaminhar webhook: ${error.message}`,
+                        );
+                      }
+
+                      // ✅ BUG 3 FIX: Marcar como processada com TTL de 300s APENAS após sucesso
+                      this.logger.log(`[WEBHOOK MARK] Marcando mensagem ${message.id} como processada (Sucesso)`);
+                      await this.redis.setex(messageKey, 300, 'true');
+
+                    } catch (processingError: any) {
+                      // ✅ BUG 3 FIX: Se o processamento falhar, DELETAR a chave do Redis
+                      // para permitir que a Meta reenvie o webhook
+                      this.logger.error(`[WEBHOOK PROCESSING ERROR] Erro ao processar mensagem ${message.id}: ${processingError.message}`);
+                      try {
+                        await this.redis.del(messageKey);
+                        this.logger.warn(`[WEBHOOK REDIS CLEANUP] Chave ${messageKey} removida para permitir retry`);
+                      } catch (delErr: any) {
+                        this.logger.error(`[WEBHOOK REDIS CLEANUP ERROR] Erro ao remover chave: ${delErr.message}`);
+                      }
+                    }
                   }
                 }
               }
