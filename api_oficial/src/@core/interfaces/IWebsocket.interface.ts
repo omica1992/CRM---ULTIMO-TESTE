@@ -24,7 +24,11 @@ export interface IMessageReceived {
   | 'order'
   | 'interactive'
   | 'referral'
-  | 'sticker';
+  | 'sticker'
+  | 'system'
+  | 'button'
+  | 'reaction'
+  | 'unsupported';
   timestamp: number;
   idMessage: string;
   text?: string;

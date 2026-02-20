@@ -47,17 +47,20 @@ export interface IWebhookWhatsAppEntryChangesValueMessages {
   id: string;
   timestamp: string;
   type:
-    | 'text'
-    | 'image'
-    | 'audio'
-    | 'document'
-    | 'video'
-    | 'location'
-    | 'contacts'
-    | 'order'
-    | 'interactive'
-    | 'referral'
-    | 'sticker';
+  | 'text'
+  | 'image'
+  | 'audio'
+  | 'document'
+  | 'video'
+  | 'location'
+  | 'contacts'
+  | 'order'
+  | 'interactive'
+  | 'sticker'
+  | 'system'
+  | 'button'
+  | 'reaction'
+  | 'unsupported';
   text?: IWebhookWhatsAppEntryChangesValueMessagesText;
   image?: IWebhookWhatsAppEntryChangesValueMessagesImage;
   audio?: IWebhookWhatsAppEntryChangesValueMessagesAudio;
@@ -70,6 +73,28 @@ export interface IWebhookWhatsAppEntryChangesValueMessages {
   order?: IWebhookWhatsAppEntryChangesValueMessagesOrder;
   interactive?: IWebhookWhatsAppEntryChangesValueMessagesInteractive;
   referral?: IWebhookWhatsAppEntryChangesValueMessagesReferral;
+  system?: IWebhookWhatsAppEntryChangesValueMessagesSystem;
+  button?: IWebhookWhatsAppEntryChangesValueMessagesButton;
+  reaction?: IWebhookWhatsAppEntryChangesValueMessagesReaction;
+}
+
+export interface IWebhookWhatsAppEntryChangesValueMessagesSystem {
+  body: string;
+  identity: string;
+  new_wa_id: string;
+  wa_id: string;
+  type: string;
+  customer: string;
+}
+
+export interface IWebhookWhatsAppEntryChangesValueMessagesButton {
+  payload: string;
+  text: string;
+}
+
+export interface IWebhookWhatsAppEntryChangesValueMessagesReaction {
+  message_id: string;
+  emoji: string;
 }
 
 export interface IWebhookWhatsAppEntryChangesValueMessagesReferral {

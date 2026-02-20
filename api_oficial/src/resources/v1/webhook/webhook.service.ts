@@ -30,6 +30,10 @@ export class WebhookService {
     'interactive',
     'referral',
     'sticker',
+    'system',
+    'button',
+    'reaction',
+    'unsupported',
   ];
 
   constructor(
@@ -160,36 +164,6 @@ export class WebhookService {
       this.logger.log(`[WEBHOOK] Body object: ${body.object}`);
 
       if (body.object == 'whatsapp_business_account' && body.entry) {
-        this.logger.log(`[WEBHOOK] Processando ${body.entry.length} entries`);
-
-        for (const entry of body.entry) {
-          for (const change of entry.changes) {
-            if (change.field == 'messages' && change.value?.messages) {
-              this.logger.log(`[WEBHOOK] Processando ${change.value.messages.length} mensagens`);
-
-              for (const message of change.value.messages) {
-                const messageKey = `webhook:processed:${companyId}:${message.id}`;
-                this.logger.log(`[WEBHOOK CHECK] Verificando duplicata para mensagem ${message.id}`);
-
-                const alreadyProcessed = await this.redis.get(messageKey);
-
-                if (alreadyProcessed) {
-                  this.logger.warn(
-                    `[WEBHOOK DUPLICATE] Mensagem ${message.id} já foi processada. Ignorando para evitar loop.`,
-                  );
-                  return true;
-                }
-
-                // Marcar como processada por 5 minutos
-                this.logger.log(`[WEBHOOK MARK] Marcando mensagem ${message.id} como processada`);
-                await this.redis.setex(messageKey, 300, 'true');
-              }
-            }
-          }
-        }
-      }
-
-      if (body.object == 'whatsapp_business_account' && body.entry) {
         const { entry } = body;
         this.logger.log(`[WEBHOOK] Processando mensagens e status para ${entry.length} entries`);
 
@@ -216,15 +190,23 @@ export class WebhookService {
                     this.logger.error(`[WEBHOOK STATUS] ❌ FAILED - Mensagem ${status.id} FALHOU: ${JSON.stringify((status as any).errors || {})}`);
                   }
 
-                  // ✅ NOVO: Enviar status update completo via socket para aplicação principal
-                  this.socket.sendStatusUpdate({
+                  const statusData = {
                     companyId: company.idEmpresaMult100,
                     messageId: status.id,
                     status: status.status,
                     timestamp: status.timestamp,
-                    error: (status as any).errors?.[0], // Incluir erro se houver
+                    error: (status as any).errors?.[0],
                     token: whats.token_mult100,
-                  });
+                  };
+
+                  // Tentar enviar via RabbitMQ primeiro, fallback para socket
+                  try {
+                    await this.rabbit.publish('whatsapp_oficial_status', JSON.stringify(statusData));
+                    this.logger.log(`[WEBHOOK RABBITMQ STATUS] Status enviando via fila para empresa ${statusData.companyId}`);
+                  } catch (err: any) {
+                    this.logger.warn(`[WEBHOOK RABBITMQ ERROR] Falha ao enviar para RabbitMQ, fazendo fallback para Socket: ${err.message}`);
+                    this.socket.sendStatusUpdate(statusData);
+                  }
 
                   // Manter compatibilidade: ainda enviar readMessage para status de leitura
                   if (status.status === 'read') {
@@ -242,6 +224,14 @@ export class WebhookService {
 
                 for (const message of value.messages) {
                   this.logger.log(`[WEBHOOK MESSAGE] Tipo: ${message.type}, ID: ${message.id}`);
+
+                  const messageKey = `webhook:processed:${companyId}:${message.id}`;
+                  const alreadyProcessed = await this.redis.get(messageKey);
+
+                  if (alreadyProcessed) {
+                    this.logger.warn(`[WEBHOOK DUPLICATE] Mensagem ${message.id} já foi processada. Ignorando para evitar loop.`);
+                    continue;
+                  }
 
                   if (this.messagesPermitidas.some((m) => m == message.type)) {
                     this.logger.log(`[WEBHOOK MESSAGE PROCESSING] Tipo de mensagem permitido: ${message.type}`);
@@ -406,9 +396,26 @@ export class WebhookService {
                       case 'order':
                         bodyMessage = JSON.stringify(message.order);
                         break;
+                      case 'reaction':
+                        file = null;
+                        bodyMessage = message.reaction?.emoji || 'reagiu a uma mensagem';
+                        quoteMessageId = message.reaction?.message_id;
+                        break;
+                      case 'button':
+                        file = null;
+                        bodyMessage = message.button?.text;
+                        break;
+                      case 'system':
+                        file = null;
+                        bodyMessage = message.system?.body || 'Mensagem de sistema';
+                        break;
+                      case 'unsupported':
+                        file = null;
+                        bodyMessage = 'Mensagem não suportada pelo sistema. Verifique no aplicativo do WhatsApp.';
+                        break;
                       default:
                         file = null;
-                        bodyMessage = message.text.body;
+                        bodyMessage = message.text?.body || '';
                         quoteMessageId = message.context?.id;
                         break;
                     }
@@ -432,9 +439,14 @@ export class WebhookService {
                       fromNumber: message.from,
                     };
 
-                    this.logger.log(`[WEBHOOK SOCKET] Enviando para socket - CompanyId: ${data.companyId}, From: ${data.fromNumber}`);
-                    this.socket.sendMessage(data);
-                    this.logger.log(`[WEBHOOK SOCKET SUCCESS] Mensagem enviada para socket`);
+                    // Enviar via fila global consolidada de RabbitMQ com fallback
+                    try {
+                      await this.rabbit.publish('whatsapp_oficial', JSON.stringify(data));
+                      this.logger.log(`[WEBHOOK RABBITMQ SUCCESS] Mensagem de ${data.fromNumber} enviada via fila global 'whatsapp_oficial'`);
+                    } catch (err: any) {
+                      this.logger.warn(`[WEBHOOK RABBITMQ ERROR] Falha na fila, fallback de mensagem para socket: ${err.message}`);
+                      this.socket.sendMessage(data);
+                    }
 
                     // Encaminhar para webhooks externos apenas se não for um reprocessamento
                     this.logger.log(`[WEBHOOK FORWARD] Iniciando encaminhamento para webhooks externos`);
@@ -450,6 +462,10 @@ export class WebhookService {
                       }
                       // Não propagar erro para não bloquear processamento
                     }
+
+                    // MARCAR COMO PROCESSADA APENAS APÓS SUCESSO DE TUDO
+                    this.logger.log(`[WEBHOOK MARK] Marcando mensagem ${message.id} como processada (Sucesso)`);
+                    await this.redis.setex(messageKey, 300, 'true');
                   }
                 }
               }

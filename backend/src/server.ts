@@ -9,9 +9,9 @@ import Company from "./models/Company";
 import BullQueue from './libs/queue';
 
 import { startQueueProcess } from "./queues";
-// Importar diretamente do arquivo, não do index de jobs
 import { startLidSyncJob } from "./jobs/LidSyncJob";
 import { ScheduledMessagesJob, ScheduleMessagesGenerateJob, ScheduleMessagesEnvioJob, ScheduleMessagesEnvioForaHorarioJob } from "./wbotScheduledMessages";
+import { rabbitMQListener } from "./services/RabbitMQService/RabbitMQListener";
 
 const server = app.listen(process.env.PORT, async () => {
   const companies = await Company.findAll({
@@ -35,7 +35,11 @@ const server = app.listen(process.env.PORT, async () => {
   }
 
   // Iniciar job de sincronização de LIDs
+  // Iniciar job de sincronização de LIDs
   startLidSyncJob();
+
+  // Iniciar listener do RabbitMQ para Webhooks da API Oficial
+  rabbitMQListener.connect();
 
   logger.info(`Server started on port: ${process.env.PORT}`);
 });
