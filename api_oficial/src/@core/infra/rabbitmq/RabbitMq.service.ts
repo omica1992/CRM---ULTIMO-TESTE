@@ -39,17 +39,17 @@ export class RabbitMQService {
 
   private async ensureConnection(): Promise<boolean> {
     if (!this.isEnabled) return false;
-    
+
     if (!this.connection || !this.channel) {
       await this.connect();
     }
-    
+
     return !!(this.connection && this.channel);
   }
 
   async publish(queue: string, message: string): Promise<void> {
     if (!(await this.ensureConnection())) return;
-    await this.channel!.assertQueue(queue, { durable: true });
+    await this.channel!.assertQueue(queue, { durable: true, arguments: { 'x-queue-type': 'quorum' } });
     this.channel!.sendToQueue(queue, Buffer.from(message), { persistent: true });
   }
 
@@ -122,13 +122,13 @@ export class RabbitMQService {
 
   async close(): Promise<void> {
     if (!this.isEnabled) return;
-    
+
     try {
       if (this.channel) {
         await this.channel.close();
         this.channel = null;
       }
-      
+
       if (this.connection) {
         await this.connection.close();
         this.connection = null;
