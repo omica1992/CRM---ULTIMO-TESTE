@@ -27,6 +27,7 @@ export class MetaService {
   private readonly ipv4Agent = new https.Agent({
     family: 4,
     keepAlive: true,
+    timeout: 30000, // 30s — evita bloqueio indefinido se Meta API travar
   });
 
   constructor() { }
@@ -44,6 +45,7 @@ export class MetaService {
       },
       responseType: existFile ? 'json' : 'json',
       httpsAgent: this.ipv4Agent,
+      timeout: 30000,
     });
 
     return response.data as T;
@@ -210,6 +212,7 @@ export class MetaService {
             Authorization: `Bearer ${token}`,
           },
           httpsAgent: this.ipv4Agent,
+          timeout: 30000,
         }
       );
 
