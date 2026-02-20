@@ -15,7 +15,8 @@ export const sendMessageWhatsAppOficial = async (
 ): Promise<IReturnMessageMeta> => {
 
     try {
-        checkAPIOficial();
+        // ✅ REMOVIDO: checkAPIOficial() fazia um GET health-check em CADA mensagem
+        // Desnecessário — se api_oficial estiver offline, o POST abaixo falhará com erro claro
         const formData = new FormData();
 
         if (filePath) {
@@ -41,6 +42,7 @@ export const sendMessageWhatsAppOficial = async (
             headers: {
                 ...formData.getHeaders(),
             },
+            timeout: 30000, // 30s — evita bloqueio indefinido se api_oficial travar
         });
 
         // Log da resposta

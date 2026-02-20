@@ -2118,10 +2118,11 @@ const constructJsonLine = (line: string, json: any) => {
   const chaves = line.split(".")
 
   if (chaves.length === 1) {
-    return valor[chaves[0]]
+    return valor?.[chaves[0]]
   }
 
   for (const chave of chaves) {
+    if (valor === null || valor === undefined) return undefined;
     valor = valor[chave]
   }
   return valor
