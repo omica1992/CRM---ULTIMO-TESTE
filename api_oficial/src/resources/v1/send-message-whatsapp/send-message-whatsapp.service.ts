@@ -100,7 +100,7 @@ export class SendMessageWhatsappService extends BaseService<SendMessageWhatsApp>
       const data: CreateSendMessageWhatsappDto = JSON.parse(dados_mensagem);
       console.log('🔍 [API_OFICIAL DEBUG] Parsed object:', JSON.stringify(data, null, 2));
 
-      const regex = /^\+55\d{2}\d{8,9}$/;
+      const regex = /^\+?\d{8,15}$/;
 
       if (!data.to)
         throw new Error('Necessário informar o número do destinatario');
