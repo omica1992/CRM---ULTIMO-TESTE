@@ -1554,7 +1554,7 @@ export const ActionsWebhookService = async (
               where: { companyId: companyId }
             });
 
-            const exitMessage = "Atendimento pelo chatbot finalizado. Em breve um atendente entrará em contato.";
+            const exitMessage = "Atendimento pelo chatbot finalizado.";
 
             if (whatsapp.channel === "whatsapp") {
               await SendWhatsAppMessage({
