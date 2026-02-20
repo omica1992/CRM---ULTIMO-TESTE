@@ -141,9 +141,11 @@ export class MetaService {
   ): Promise<IReturnMessageFile | null> {
     try {
       const FormData = require('form-data');
-      const formData = new FormData();
+      const https = require('https');
+      const { createReadStream } = require('fs');
 
-      const file = readFileSync(pathFile);
+      const formData = new FormData();
+      const fileStream = createReadStream(pathFile);
 
       const mimeType = lookup(pathFile);
       if (!mimeType) {
@@ -153,13 +155,15 @@ export class MetaService {
       const fileName = pathFile.split('/').pop() || pathFile.split('\\').pop() || 'file';
 
       formData.append('messaging_product', 'whatsapp');
-      // Adiciona o media type de forma limpa (tipo document/audio/video)
-      const baseType = mimeType.split('/')[0];
-      const tipoMeta = ['audio', 'video', 'image'].includes(baseType) ? mimeType : mimeType;
 
-      formData.append('file', file, {
+      formData.append('file', fileStream, {
         filename: fileName,
         contentType: mimeType
+      });
+
+      const agent = new https.Agent({
+        keepAlive: true,
+        rejectUnauthorized: false
       });
 
       const response = await axios.post(
@@ -169,17 +173,20 @@ export class MetaService {
           headers: {
             ...formData.getHeaders(),
             'Authorization': `Bearer ${token}`
-          }
+          },
+          httpsAgent: agent,
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity
         }
       );
 
       if (response.status != 200)
-        throw new Error('Falha em baixar o arquivo da meta');
+        throw new Error('Falha em enviar o arquivo para a meta');
 
       return response.data as IReturnMessageFile;
     } catch (error: any) {
       deleteFile(pathFile);
-      this.logger.error(`[MEDIA UPLOAD ERROR] sendMessage - ${error.message}`);
+      this.logger.error(`[MEDIA UPLOAD ERROR] sendFileToMeta - ${error.message}`);
       if (error.response) {
         this.logger.error(`[MEDIA UPLOAD ERROR] Response Data: ${JSON.stringify(error.response.data)}`);
       }
