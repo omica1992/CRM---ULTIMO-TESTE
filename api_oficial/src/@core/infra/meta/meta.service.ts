@@ -142,10 +142,11 @@ export class MetaService {
     try {
       const FormData = require('form-data');
       const https = require('https');
-      const { readFileSync } = require('fs');
+      const { readFileSync, statSync } = require('fs');
 
       const formData = new FormData();
       const fileBuffer = readFileSync(pathFile);
+      const fileSize = statSync(pathFile).size;
 
       const mimeType = lookup(pathFile);
       if (!mimeType) {
@@ -156,13 +157,16 @@ export class MetaService {
 
       formData.append('file', fileBuffer, {
         filename: fileName,
-        contentType: mimeType
+        contentType: mimeType,
+        knownLength: fileSize
       });
       formData.append('messaging_product', 'whatsapp');
 
+      // Forçar IPv4 - Meta API rejeita uploads grandes via IPv6 com ECONNRESET
       const agent = new https.Agent({
         keepAlive: true,
-        rejectUnauthorized: false
+        rejectUnauthorized: false,
+        family: 4
       });
 
       const formHeaders = formData.getHeaders();
@@ -479,27 +483,23 @@ export class MetaService {
     data: IBodyReadMessage,
   ) {
     try {
-      const headers = {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      };
+      // Usar axios com IPv4 forçado para evitar ECONNRESET da Meta via IPv6
+      const https = require('https');
+      const agent = new https.Agent({ family: 4, keepAlive: true });
 
-      console.log(data);
+      const response = await axios.post(
+        `${this.urlMeta}/${numberId}/messages`,
+        data,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          httpsAgent: agent,
+        }
+      );
 
-      const result = await fetch(`${this.urlMeta}/${numberId}/messages`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(data),
-      });
-
-      if (result.status != 200) {
-        const resultError = await result.json();
-        throw new Error(
-          resultError.error.message || 'Falha ao enviar mensagem para a meta',
-        );
-      }
-
-      return (await result.json()) as IResultTemplates;
+      return response.data as IResultTemplates;
     } catch (error: any) {
       this.logger.error(`sendReadMessage - ${error.message}`);
       throw Error('Erro ao marcar a mensagem como lida');
