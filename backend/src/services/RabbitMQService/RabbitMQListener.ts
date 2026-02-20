@@ -48,7 +48,7 @@ class RabbitMQListener {
         try {
             // Configure prefetch carefully to process 1 message at a time
             // This prevents race conditions and lock contention in the Node event loop (e.g. FindOrCreateTicketService)
-            await this.channel.prefetch(1);
+            await this.channel.prefetch(10);
 
             // 1. Queue for incoming messages
             const messageQueue = this.queues[0];

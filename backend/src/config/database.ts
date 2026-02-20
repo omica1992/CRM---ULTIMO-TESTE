@@ -23,7 +23,7 @@ module.exports = {
     max: 100
   },
   pool: {
-    max: parseInt(process.env.DB_POOL_MAX) || 10,      // ✅ Reduzido de 100 para 10
+    max: parseInt(process.env.DB_POOL_MAX) || 20,      // ✅ Aumentado para suportar prefetch(10)
     min: parseInt(process.env.DB_POOL_MIN) || 2,       // ✅ Reduzido de 15 para 2
     acquire: parseInt(process.env.DB_POOL_ACQUIRE) || 60000,  // ✅ Aumentado de 30s para 60s
     idle: parseInt(process.env.DB_POOL_IDLE) || 10000, // ✅ Reduzido de 10min para 10s
