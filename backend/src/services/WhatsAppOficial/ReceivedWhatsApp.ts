@@ -478,7 +478,22 @@ export class ReceibedWhatsAppService {
                 }
             }
 
-            // ✅ NOVO: Tratamento para avaliação NPS (API Oficial)
+            // ✅ PROTEÇÃO CONTRA MENSAGENS ATRASADAS (webhooks retentados pela Meta)
+            // Se a mensagem tem mais de 10 minutos, salvar no banco mas NÃO executar
+            // nenhuma lógica de bot/fila/NPS — evita resposta automática fora de contexto
+            const MESSAGE_MAX_AGE_SECONDS = 600; // 10 minutos
+            const messageTimestamp = message.timestamp || 0;
+            const now = Math.floor(Date.now() / 1000);
+            const messageAge = now - messageTimestamp;
+
+            if (messageTimestamp > 0 && messageAge > MESSAGE_MAX_AGE_SECONDS) {
+                logger.warn(`[WHATSAPP OFICIAL - STALE MSG] ⏰ Mensagem atrasada detectada para ticket ${ticket.id}`);
+                logger.warn(`[WHATSAPP OFICIAL - STALE MSG] ⏰ Idade: ${Math.floor(messageAge / 60)} minutos (timestamp: ${messageTimestamp}, agora: ${now})`);
+                logger.warn(`[WHATSAPP OFICIAL - STALE MSG] ⏰ Mensagem salva no banco, mas lógica de bot/fila/NPS IGNORADA`);
+                return; // Sair APÓS salvar a mensagem, ANTES de qualquer lógica de roteamento
+            }
+
+            // ✅ Tratamento para avaliação NPS (API Oficial)
             if (
                 ticket.status === "nps" &&
                 ticketTraking !== null &&
