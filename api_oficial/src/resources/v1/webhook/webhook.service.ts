@@ -426,7 +426,7 @@ export class WebhookService {
 
                     const data: IReceivedWhatsppOficial = {
                       companyId: company.idEmpresaMult100,
-                      nameContact: contact.profile.name,
+                      nameContact: contactName,
                       message: msg,
                       token: whats.token_mult100,
                       fromNumber: message.from,
