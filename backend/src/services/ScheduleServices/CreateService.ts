@@ -69,30 +69,13 @@ const CreateService = async ({
 
   try {
     await schema.validate({ body, sendAt });
-    
-    // ✅ Debug do templateName
-    console.log(`📋 [DEBUG-SCHEDULE] ================================================`);
-    console.log(`📋 [DEBUG-SCHEDULE] CRIANDO AGENDAMENTO COM TEMPLATE`);
-    console.log(`📋 [DEBUG-SCHEDULE] templateName: ${templateName || 'NULL'}`);
-    console.log(`📋 [DEBUG-SCHEDULE] templateMetaId: ${templateMetaId || 'NULL'}`);
-    console.log(`📋 [DEBUG-SCHEDULE] templateLanguage: ${templateLanguage || 'NULL'}`);
-    console.log(`📋 [DEBUG-SCHEDULE] isTemplate: ${isTemplate}`);
-    console.log(`📋 [DEBUG-SCHEDULE] tipos: templateName(${typeof templateName}), templateMetaId(${typeof templateMetaId})`);
-    
-    // Analisar objeto completo dos dados recebidos
+
+    // ✅ CORREÇÃO (Issue #10): console.log → logger
     if (isTemplate) {
-      console.log(`📋 [DEBUG-SCHEDULE] DADOS JSON COMPLETOS:`);
-      console.log(JSON.stringify({
-        templateMetaId,
-        templateName,
-        templateLanguage,
-        isTemplate,
-        templateComponents: templateComponents ? '[OBJETO COMPLEXO]' : 'NULL'
-      }, null, 2));
+      const logger = require("../../utils/logger").default;
+      logger.info(`[SCHEDULE-CREATE] Template: name=${templateName || 'NULL'}, metaId=${templateMetaId || 'NULL'}, lang=${templateLanguage || 'NULL'}`);
     }
-    
-    console.log(`📋 [DEBUG-SCHEDULE] ================================================`);
-    
+
   } catch (err: any) {
     throw new AppError(err.message);
   }
@@ -131,7 +114,7 @@ const CreateService = async ({
 
   // ✅ Criar relacionamentos com múltiplos usuários
   if (userIds && userIds.length > 0) {
-    const scheduleUserPromises = userIds.map(userId => 
+    const scheduleUserPromises = userIds.map(userId =>
       ScheduleUser.create({
         scheduleId: schedule.id,
         userId: userId
@@ -151,9 +134,8 @@ const CreateService = async ({
 
   // Log final após criação
   if (schedule.isTemplate) {
-    console.log(`💾 [CREATE-SCHEDULE] Agendamento ${schedule.id} criado com sucesso`);
-    console.log(`💾 [CREATE-SCHEDULE] templateName salvo: "${schedule.templateName}"`);
-    console.log(`💾 [CREATE-SCHEDULE] templateMetaId salvo: "${schedule.templateMetaId}"`);
+    const logger = require("../../utils/logger").default;
+    logger.info(`[SCHEDULE-CREATE] Agendamento ${schedule.id} criado: templateName="${schedule.templateName}", metaId="${schedule.templateMetaId}"`);
   }
 
   return schedule;

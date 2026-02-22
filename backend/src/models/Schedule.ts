@@ -26,17 +26,15 @@ import QuickMessage from "./QuickMessage";
     beforeCreate: (instance: any) => {
       // Log antes de criar
       if (instance.isTemplate) {
-        console.log(`💻 [MODEL-HOOK] Criando agendamento com template:`);
-        console.log(` - templateMetaId: "${instance.templateMetaId || ''}"`);
-        console.log(` - templateName: "${instance.templateName || ''}"`);
+        const logger = require("../utils/logger").default;
+        logger.info(`[SCHEDULE-MODEL] Criando agendamento: metaId=${instance.templateMetaId || ''}, name=${instance.templateName || ''}`);
       }
     },
     beforeUpdate: (instance: any) => {
       // Log antes de atualizar
       if (instance.isTemplate) {
-        console.log(`💻 [MODEL-HOOK] Atualizando agendamento com template:`);
-        console.log(` - templateMetaId: "${instance.templateMetaId || ''}"`);
-        console.log(` - templateName: "${instance.templateName || ''}"`);
+        const logger = require("../utils/logger").default;
+        logger.info(`[SCHEDULE-MODEL] Atualizando agendamento: metaId=${instance.templateMetaId || ''}, name=${instance.templateName || ''}`);
       }
     }
   }

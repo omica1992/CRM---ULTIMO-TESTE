@@ -120,6 +120,12 @@ export const messageQueue = new BullQueue("MessageQueue", connection, {
   }
 });
 
+// ✅ CORREÇÃO (Issue #12): Helper de dia útil movido para nível de módulo
+function isDiaUtil(date: any): boolean {
+  const dayOfWeek = typeof date.day === 'function' ? date.day() : new Date(date).getDay();
+  return dayOfWeek >= 1 && dayOfWeek <= 5;
+}
+
 let isProcessing = false;
 
 async function handleSendMessage(job) {
@@ -145,6 +151,7 @@ async function handleSendMessage(job) {
 // ✅ Nova função para verificar lembretes
 async function handleVerifyReminders(job) {
   try {
+    // ✅ CORREÇÃO (Issue #1): Janela ampliada de 30s para 65s para cobrir cron de 60s
     const { count, rows: schedules } = await Schedule.findAndCountAll({
       where: {
         status: "ENVIADA",
@@ -152,22 +159,20 @@ async function handleVerifyReminders(job) {
         reminderSentAt: null,
         reminderDate: {
           [Op.gte]: moment().format("YYYY-MM-DD HH:mm:ss"),
-          [Op.lte]: moment().add("30", "seconds").format("YYYY-MM-DD HH:mm:ss")
+          [Op.lte]: moment().add(65, "seconds").format("YYYY-MM-DD HH:mm:ss")
         }
       },
       include: [
         { model: Contact, as: "contact" },
         { model: User, as: "user", attributes: ["name"] }
-        // NOTA: Template (QuickMessage) removido do include para evitar erro VARCHAR = INTEGER.
-        // O template é carregado manualmente abaixo quando necessário.
       ],
       distinct: true,
       subQuery: false
     });
 
     if (count > 0) {
-      schedules.map(async schedule => {
-        // ✅ Carregar template manualmente se templateMetaId existir
+      // ✅ CORREÇÃO (Issue #2): Aguardar todas as Promises para evitar race conditions
+      await Promise.all(schedules.map(async schedule => {
         if (schedule.templateMetaId) {
           try {
             const templateId = parseInt(schedule.templateMetaId, 10);
@@ -193,44 +198,38 @@ async function handleVerifyReminders(job) {
           { delay: 40000 }
         );
         logger.info(`Lembrete agendado para: ${schedule.contact.name}`);
-      });
+      }));
     }
   } catch (e: any) {
     Sentry.captureException(e);
-    logger.error("SendReminder -> Verify: ERRO DETALHADO:");
-    logger.error(`Mensagem: ${e.message}`);
-    logger.error(`Nome: ${e.name}`);
+    logger.error(`SendReminder -> Verify: ${e.message}`);
     logger.error(`Stack: ${e.stack}`);
-    console.error("ERRO COMPLETO:", e);
-    // Não faz throw para não crashar o job scheduler
   }
 }
 
 async function handleVerifySchedules(job) {
   try {
-    // ✅ CORREÇÃO: Cast do templateMetaId para INTEGER ao fazer JOIN
+    // ✅ CORREÇÃO (Issue #1): Janela ampliada de 30s para 65s para cobrir cron de 60s
     const { count, rows: schedules } = await Schedule.findAndCountAll({
       where: {
         status: "PENDENTE",
         sentAt: null,
         sendAt: {
           [Op.gte]: moment().format("YYYY-MM-DD HH:mm:ss"),
-          [Op.lte]: moment().add("30", "seconds").format("YYYY-MM-DD HH:mm:ss")
+          [Op.lte]: moment().add(65, "seconds").format("YYYY-MM-DD HH:mm:ss")
         }
       },
       include: [
         { model: Contact, as: "contact" },
         { model: User, as: "user", attributes: ["name"] }
-        // NOTA: Template (QuickMessage) removido do include para evitar erro VARCHAR = INTEGER.
-        // O template é carregado manualmente abaixo quando necessário.
       ],
       distinct: true,
       subQuery: false
     });
 
     if (count > 0) {
-      schedules.map(async schedule => {
-        // ✅ Carregar template manualmente se templateMetaId existir
+      // ✅ CORREÇÃO (Issue #2): Aguardar todas as Promises
+      await Promise.all(schedules.map(async schedule => {
         if (schedule.templateMetaId) {
           try {
             const templateId = parseInt(schedule.templateMetaId, 10);
@@ -250,22 +249,26 @@ async function handleVerifySchedules(job) {
         await schedule.update({
           status: "AGENDADA"
         });
+        // ✅ CORREÇÃO (Issue #4): Adicionar retry ao job
         sendScheduledMessages.add(
           "SendMessage",
           { schedule },
-          { delay: 40000 }
+          {
+            delay: 40000,
+            attempts: 3,
+            backoff: {
+              type: "exponential",
+              delay: 30000
+            }
+          }
         );
         logger.info(`Disparo agendado para: ${schedule.contact.name}`);
-      });
+      }));
     }
   } catch (e: any) {
     Sentry.captureException(e);
-    logger.error("SendScheduledMessage -> Verify: ERRO DETALHADO:");
-    logger.error(`Mensagem: ${e.message}`);
-    logger.error(`Nome: ${e.name}`);
+    logger.error(`SendScheduledMessage -> Verify: ${e.message}`);
     logger.error(`Stack: ${e.stack}`);
-    console.error("ERRO COMPLETO:", e);
-    // Não faz throw para não crashar o job scheduler
   }
 }
 
@@ -337,7 +340,9 @@ async function handleSendScheduledMessage(job) {
           whatsappId: whatsapp.id,
           queueId: schedule.queueId,
           userId: schedule.ticketUserId,
-          status: schedule.statusTicket
+          status: schedule.statusTicket,
+          // ✅ CORREÇÃO (Issue #3): Adicionar channel da conexão WhatsApp
+          channel: whatsapp.channel || "whatsapp"
         });
 
       ticket = await ShowTicketService(ticket.id, schedule.companyId);
@@ -395,9 +400,7 @@ async function handleSendScheduledMessage(job) {
           return cleanComp;
         });
 
-        // ✅ CORREÇÃO PARA CAMPANHAS: Usar o metaID diretamente como nome do template 
-        // para templates da API Oficial, em vez de buscar na tabela QuickMessages
-        const isMetaApiId = schedule.templateMetaId && schedule.templateMetaId.length > 10;
+        // ✅ CORREÇÃO (Issue #9): Removida declaração duplicada de isMetaApiId
 
         // ✅ CORREÇÃO: Buscar nome do template apropriado para uso com a API Oficial
         let templateRecord = schedule.template;
@@ -587,9 +590,7 @@ async function handleSendScheduledMessage(job) {
           return cleanComp;
         });
 
-        // ✅ CORREÇÃO PARA CAMPANHAS: Usar o metaID diretamente como nome do template 
-        // para templates da API Oficial, em vez de buscar na tabela QuickMessages
-        const isMetaApiId = schedule.templateMetaId && schedule.templateMetaId.length > 10;
+        // ✅ CORREÇÃO (Issue #9): Removida declaração duplicada de isMetaApiId
 
         // Opcionalmente tentar buscar o template no banco (apenas para logs)
         // ✅ CORREÇÃO: Buscar nome do template apropriado para uso com a API Oficial
@@ -725,6 +726,7 @@ async function handleSendScheduledMessage(job) {
       (isNil(schedule.contadorEnvio) ||
         schedule.contadorEnvio < schedule.enviarQuantasVezes)
     ) {
+      // ✅ CORREÇÃO (Issue #6): Corrigido typo "minuts" → "minutes"
       let unidadeIntervalo;
       switch (schedule.intervalo) {
         case 1:
@@ -737,72 +739,44 @@ async function handleSendScheduledMessage(job) {
           unidadeIntervalo = "months";
           break;
         case 4:
-          unidadeIntervalo = "minuts";
+          unidadeIntervalo = "minutes";
           break;
         default:
           throw new Error("Intervalo inválido");
       }
 
-      function isDiaUtil(date) {
-        const dayOfWeek = date.day();
-        return dayOfWeek >= 1 && dayOfWeek <= 5; // 1 é segunda-feira, 5 é sexta-feira
+      // ✅ CORREÇÃO (Issues #7, #8, #12): Usar moment para cálculo de datas, fuso, e helpers fora da função
+      const baseMoment = moment(schedule.sendAt);
+
+      // Calcular próximo envio com moment (correto para meses diferentes)
+      const novaDataMoment = baseMoment.clone().add(schedule.valorIntervalo, unidadeIntervalo as moment.unitOfTime.DurationConstructor);
+
+      // Ajuste para dias úteis
+      if (schedule.tipoDias === 5 && !isDiaUtil(novaDataMoment)) {
+        // Dia útil anterior
+        while (!isDiaUtil(novaDataMoment)) {
+          novaDataMoment.subtract(1, "day");
+        }
+      } else if (schedule.tipoDias === 6 && !isDiaUtil(novaDataMoment)) {
+        // Próximo dia útil
+        while (!isDiaUtil(novaDataMoment)) {
+          novaDataMoment.add(1, "day");
+        }
       }
 
-      function proximoDiaUtil(date) {
-        let proximoDia = date.clone();
-        do {
-          proximoDia.add(1, "day");
-        } while (!isDiaUtil(proximoDia));
-        return proximoDia;
-      }
+      // Manter o horário original
+      novaDataMoment.set({
+        hour: baseMoment.hour(),
+        minute: baseMoment.minute(),
+        second: baseMoment.second()
+      });
 
-      // Função para encontrar o dia útil anterior
-      function diaUtilAnterior(date) {
-        let diaAnterior = date.clone();
-        do {
-          diaAnterior.subtract(1, "day");
-        } while (!isDiaUtil(diaAnterior));
-        return diaAnterior;
-      }
-
-      const dataExistente = new Date(schedule.sendAt);
-      const hora = dataExistente.getHours();
-      const fusoHorario = dataExistente.getTimezoneOffset();
-
-      // Realizar a soma da data com base no intervalo e valor do intervalo
-      let novaData = new Date(dataExistente); // Clone da data existente para não modificar a original
-
-      console.log(unidadeIntervalo);
-      if (unidadeIntervalo !== "minuts") {
-        novaData.setDate(
-          novaData.getDate() +
-          schedule.valorIntervalo *
-          (unidadeIntervalo === "days"
-            ? 1
-            : unidadeIntervalo === "weeks"
-              ? 7
-              : 30)
-        );
-      } else {
-        novaData.setMinutes(
-          novaData.getMinutes() + Number(schedule.valorIntervalo)
-        );
-        console.log(novaData);
-      }
-
-      if (schedule.tipoDias === 5 && !isDiaUtil(novaData)) {
-        novaData = diaUtilAnterior(novaData);
-      } else if (schedule.tipoDias === 6 && !isDiaUtil(novaData)) {
-        novaData = proximoDiaUtil(novaData);
-      }
-
-      novaData.setHours(hora);
-      novaData.setMinutes(novaData.getMinutes() - fusoHorario);
+      logger.info(`[SCHEDULE-RECURRENCE] Próximo envio: ${novaDataMoment.format("YYYY-MM-DD HH:mm:ss")} (intervalo: ${schedule.valorIntervalo} ${unidadeIntervalo})`);
 
       await scheduleRecord?.update({
         status: "PENDENTE",
         contadorEnvio: schedule.contadorEnvio + 1,
-        sendAt: new Date(novaData.toISOString().slice(0, 19).replace("T", " ")) // Mantendo o formato de hora
+        sendAt: novaDataMoment.toDate()
       });
     } else {
       await scheduleRecord?.update({
