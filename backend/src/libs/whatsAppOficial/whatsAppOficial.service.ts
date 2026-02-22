@@ -4,6 +4,7 @@ import fs from 'fs';
 import mime from "mime-types";
 import FormData from "form-data";
 import campaignLogger from "../../utils/campaignLogger";
+import logger from "../../utils/logger";
 
 const useOficial = process.env.USE_WHATSAPP_OFICIAL;
 const urlApi = process.env.URL_API_OFICIAL;
@@ -64,8 +65,18 @@ export const sendMessageWhatsAppOficial = async (
             response: error.response?.data
         });
 
-        console.log(error.message);
-        throw new Error('Mensagem não enviada para a meta');
+        // ✅ CORREÇÃO: Preservar erro original da API Meta para diagnóstico
+        const metaErrorDetail = error.response?.data?.error?.message
+            || error.response?.data?.message
+            || error.response?.data?.detail
+            || null;
+
+        const originalMessage = metaErrorDetail
+            ? `Meta API: ${metaErrorDetail}`
+            : `Mensagem não enviada para a meta: ${error.message}`;
+
+        logger.error(`[WHATSAPP-OFICIAL] ${originalMessage}`);
+        throw new Error(originalMessage);
     }
 
 }

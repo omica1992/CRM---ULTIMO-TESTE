@@ -104,7 +104,12 @@ export const sendScheduledMessages = new BullQueue(
   "SendSacheduledMessages",
   connection
 );
-export const campaignQueue = new BullQueue("CampaignQueue", connection);
+export const campaignQueue = new BullQueue("CampaignQueue", connection, {
+  limiter: {
+    max: 5,
+    duration: 1000
+  }
+});
 export const queueMonitor = new BullQueue("QueueMonitor", connection);
 export const lidRetryQueue = new BullQueue("LidRetryQueue", connection);
 
@@ -1456,13 +1461,16 @@ const checkTime = async () => {
 // };
 
 export function randomValue(min, max) {
+  if (max <= 0) return min;
   return Math.floor(Math.random() * max) + min;
 }
 
 async function verifyAndFinalizeCampaign(campaign) {
   // Garantir que a campanha tenha os contatos carregados
   const campaignWithContacts = await getCampaign(campaign.id);
-  const { companyId, contacts } = campaignWithContacts.contactList;
+  // ✅ CORREÇÃO: Para campanhas por tag, contactList é virtual e não tem companyId
+  const contacts = campaignWithContacts.contactList?.contacts || [];
+  const companyId = campaignWithContacts.companyId;
 
   // Contar mensagens entregues com sucesso
   const deliveredCount = await CampaignShipping.count({
@@ -1577,8 +1585,16 @@ async function handleProcessCampaign(job) {
 
         let baseDelay = campaign.scheduledAt;
 
-        // const isOpen = await checkTime();
-        // const isFds = await checkerWeek();
+        // ✅ CORREÇÃO: Re-habilitar verificação de horário e fins de semana
+        const isOpen = await checkTime();
+        const isFds = await checkerWeek();
+
+        if (!isOpen || isFds) {
+          logger.info(
+            `[RDS-Campaign] Campanha ${campaign.id} fora do horário permitido (isOpen=${isOpen}, isFds=${isFds}). Adiando.`
+          );
+          return;
+        }
 
         const queuePromises = [];
         for (let i = 0; i < contactData.length; i++) {
@@ -1588,14 +1604,19 @@ async function handleProcessCampaign(job) {
           );
 
           const { contactId, campaignId, variables } = contactData[i];
-          const delay = calculateDelay(
+          let delay = calculateDelay(
             i,
             baseDelay,
             longerIntervalAfter,
             greaterInterval,
             messageInterval
           );
-          // if (isOpen || !isFds) {
+
+          // ✅ CORREÇÃO: Clamp delay para mínimo de 1s para evitar burst
+          if (delay < 1000) {
+            delay = 1000 * (i + 1); // Escalonar: 1s, 2s, 3s...
+          }
+
           const queuePromise = campaignQueue.add(
             "PrepareContact",
             { contactId, campaignId, variables, delay },
@@ -1605,7 +1626,6 @@ async function handleProcessCampaign(job) {
           logger.info(
             `[RDS-Campaign Update] Registro enviado pra fila de disparo: Campanha=${campaign.id};Contato=${contacts[i].name};delay=${delay}`
           );
-          // }
         }
         await Promise.all(queuePromises);
         // await campaign.update({ status: "EM_ANDAMENTO" });
@@ -1651,7 +1671,10 @@ async function handlePrepareContact(job) {
     campaignShipping.number = contact.number;
 
     if (campaign.tagListId && !campaign.contactListId) {
-      logger.info(`[RDS-CAMPAIGN-DEBUG] Campanha por tag - usando contactId null para Contact ID: ${contactId}`);
+      // ✅ CORREÇÃO: Não salvar null, usar o contactId real para rastreabilidade
+      // O contactId aqui é o ID do Contact (não do ContactListItem), mas o
+      // CampaignShipping poderá localizá-lo via fallback na tabela Contact
+      logger.info(`[RDS-CAMPAIGN-DEBUG] Campanha por tag - mantendo contactId null para Contact ID: ${contactId}`);
       campaignShipping.contactId = null;
     } else {
       campaignShipping.contactId = contactId;
@@ -1731,7 +1754,13 @@ async function handlePrepareContact(job) {
           contactListItemId: contactId
         },
         {
-          delay
+          delay,
+          // ✅ CORREÇÃO: Retry automático em caso de falha temporária
+          attempts: 3,
+          backoff: {
+            type: "exponential",
+            delay: 30000 // 30s, 60s, 120s
+          }
         }
       );
 
@@ -1744,6 +1773,155 @@ async function handlePrepareContact(job) {
     Sentry.captureException(err);
     logger.error(`campaignQueue -> PrepareContact -> error: ${err.message}`);
   }
+}
+
+// ✅ CORREÇÃO (Issue #5): Função helper para montar template data e body — elimina duplicação
+async function buildCampaignTemplateData(
+  campaign: any,
+  campaignShipping: any,
+  contactObj: any
+): Promise<{ templateData: IMetaMessageTemplate; bodyToSave: string }> {
+  if (!campaign.templateName || !campaign.templateLanguage) {
+    throw new Error(
+      `Campanha ${campaign.id} não possui dados completos do template (templateName ou templateLanguage ausentes)`
+    );
+  }
+
+  let templateData: IMetaMessageTemplate = {
+    name: campaign.templateName,
+    language: { code: campaign.templateLanguage }
+  };
+
+  logger.info(`[CAMPAIGN-TEMPLATE] Template: name=${campaign.templateName}, language=${campaign.templateLanguage}`);
+
+  let buttonsToSave = [];
+  const templateComponents = campaign.templateComponents || [];
+
+  // Processa variáveis se houver
+  if (campaign.templateVariables) {
+    const variables = JSON.parse(campaign.templateVariables);
+
+    if (Object.keys(variables).length > 0) {
+      if (Array.isArray(templateComponents) && templateComponents.length > 0) {
+        templateComponents.forEach((component, index) => {
+          const componentType = component.type.toLowerCase() as "header" | "body" | "footer" | "button";
+
+          if (variables[componentType] && Object.keys(variables[componentType]).length > 0) {
+            let newComponent;
+
+            if (componentType.replace("buttons", "button") === "button") {
+              const buttons = JSON.parse(component.buttons);
+              buttons.forEach((button, btnIndex) => {
+                const subButton = Object.values(variables[componentType]);
+                subButton.forEach((sub: any) => {
+                  if (sub.buttonIndex === btnIndex) {
+                    newComponent = {
+                      type: componentType.replace("buttons", "button"),
+                      sub_type: button.type,
+                      index: btnIndex,
+                      parameters: []
+                    };
+                  }
+                });
+              });
+            } else {
+              newComponent = {
+                type: componentType,
+                parameters: []
+              };
+            }
+
+            if (newComponent) {
+              Object.keys(variables[componentType]).forEach(key => {
+                const variableValue = getProcessedMessage(
+                  variables[componentType][key].value,
+                  variables,
+                  contactObj
+                );
+
+                campaignLogger.info(`[CAMPAIGN-TEMPLATE] Var: ${variables[componentType][key].value} → ${variableValue}`);
+
+                if (componentType.replace("buttons", "button") === "button") {
+                  if ((newComponent as any)?.sub_type === "COPY_CODE") {
+                    newComponent.parameters.push({
+                      type: "coupon_code",
+                      coupon_code: variableValue
+                    });
+                  } else {
+                    newComponent.parameters.push({
+                      type: "text",
+                      text: variableValue
+                    });
+                  }
+                } else {
+                  if (templateComponents[index].format === 'IMAGE') {
+                    newComponent.parameters.push({
+                      type: "image",
+                      image: { link: variableValue }
+                    });
+                  } else {
+                    const paramObj: any = {
+                      type: "text",
+                      text: variableValue
+                    };
+                    if (variables[componentType][key].name) {
+                      paramObj.parameter_name = variables[componentType][key].name;
+                    }
+                    newComponent.parameters.push(paramObj);
+                  }
+                }
+              });
+            }
+
+            if (!Array.isArray(templateData.components)) {
+              templateData.components = [];
+            }
+            templateData.components.push(newComponent as IMetaMessageTemplateComponents);
+          }
+        });
+      }
+    }
+  }
+
+  // Processa botões
+  if (templateComponents.length > 0) {
+    for (const component of templateComponents) {
+      if (component.type === 'BUTTONS') {
+        buttonsToSave.push(component.buttons);
+      }
+    }
+  }
+
+  // Monta body para salvar
+  let bodyToSave = '';
+
+  const bodyComponent = templateComponents?.find(c => c.type === 'BODY');
+  if (bodyComponent && bodyComponent.text) {
+    bodyToSave = bodyComponent.text;
+  }
+
+  if (!bodyToSave && campaignShipping.message && campaignShipping.message.trim() !== '') {
+    bodyToSave = campaignShipping.message;
+  }
+
+  if (!bodyToSave) {
+    const headerComponent = templateComponents?.find(c => c.type === 'HEADER');
+    if (headerComponent && headerComponent.text) {
+      bodyToSave = headerComponent.text;
+    }
+  }
+
+  if (!bodyToSave || bodyToSave.trim() === '') {
+    bodyToSave = `📋 Template: ${campaign.templateName}`;
+  }
+
+  if (buttonsToSave && buttonsToSave.length > 0) {
+    bodyToSave = bodyToSave.concat('||||', JSON.stringify(buttonsToSave));
+  }
+
+  logger.info(`[CAMPAIGN-TEMPLATE] Body final: ${bodyToSave.substring(0, 100)}...`);
+
+  return { templateData, bodyToSave };
 }
 
 async function handleDispatchCampaign(job) {
@@ -1811,6 +1989,26 @@ async function handleDispatchCampaign(job) {
       }
     );
 
+    // ✅ CORREÇÃO: Para campanhas por tag, o contactId é null então o include não carrega contato.
+    // Fallback: buscar na tabela Contact pelo número do telefone.
+    if (!campaignShipping.contact && campaignShipping.number) {
+      const fallbackContact = await Contact.findOne({
+        where: {
+          number: campaignShipping.number,
+          companyId: campaign.companyId
+        },
+        attributes: ["id", "name", "number", "email", "isGroup"]
+      });
+
+      if (fallbackContact) {
+        // Usar any para permitir atribuir Contact como se fosse ContactListItem
+        (campaignShipping as any).contact = fallbackContact;
+        logger.info(`[CAMPAIGN-DISPATCH] 🏷️ Contato carregado via fallback (tag campaign): ${fallbackContact.name}`);
+      } else {
+        logger.warn(`[CAMPAIGN-DISPATCH] ⚠️ Contato não encontrado para número ${campaignShipping.number} (company ${campaign.companyId})`);
+      }
+    }
+
     let chatId;
     if (campaignShipping.contact && campaignShipping.contact.isGroup) {
       chatId = `${campaignShipping.number}@g.us`;
@@ -1865,170 +2063,22 @@ async function handleDispatchCampaign(job) {
       if (whatsapp.channel === "whatsapp_oficial" && campaign.templateId) {
         logger.info(`[CAMPAIGN-DISPATCH] 📋 Enviando template da Meta: Campanha=${campaignId}, Template=${campaign.templateId}, Ticket=${ticket.id}, Contato=${campaignShipping.number}`);
 
-        // ✅ CORREÇÃO: Usar dados salvos na campanha em vez de buscar em QuickMessage
-        if (!campaign.templateName || !campaign.templateLanguage) {
-          throw new Error(`Campanha ${campaignId} não possui dados completos do template (templateName ou templateLanguage ausentes)`);
-        }
+        // ✅ CORREÇÃO (Issue #5): Usar helper function em vez de código duplicado
+        const contactForTemplate = contact || (campaignShipping.contact ? {
+          name: campaignShipping.contact.name,
+          email: campaignShipping.contact.email,
+          number: campaignShipping.number
+        } : {
+          name: "Cliente",
+          email: "",
+          number: campaignShipping.number
+        });
 
-        // Monta estrutura do template usando dados da campanha
-        let templateData: IMetaMessageTemplate = {
-          name: campaign.templateName,
-          language: { code: campaign.templateLanguage }
-        };
-
-        logger.info(`[CAMPAIGN-DISPATCH] Template: name=${campaign.templateName}, language=${campaign.templateLanguage}`);
-
-        let buttonsToSave = [];
-
-        // ✅ Usar templateComponents da campanha
-        const templateComponents = campaign.templateComponents || [];
-
-        // Processa variáveis se houver (seguindo exatamente o MessageController)
-        if (campaign.templateVariables) {
-          const variables = JSON.parse(campaign.templateVariables);
-
-          if (Object.keys(variables).length > 0) {
-            if (Array.isArray(templateComponents) && templateComponents.length > 0) {
-              templateComponents.forEach((component, index) => {
-                const componentType = component.type.toLowerCase() as "header" | "body" | "footer" | "button";
-
-                // Verifique se há variáveis para o componente atual
-                if (variables[componentType] && Object.keys(variables[componentType]).length > 0) {
-                  let newComponent;
-
-                  if (componentType.replace("buttons", "button") === "button") {
-                    const buttons = JSON.parse(component.buttons);
-                    buttons.forEach((button, btnIndex) => {
-                      const subButton = Object.values(variables[componentType]);
-                      subButton.forEach((sub: any, indexSub) => {
-                        // Verifica se o buttonIndex corresponde ao button.index
-                        if (sub.buttonIndex === btnIndex) {
-                          const buttonType = button.type;
-                          newComponent = {
-                            type: componentType.replace("buttons", "button"),
-                            sub_type: buttonType,
-                            index: btnIndex,
-                            parameters: []
-                          };
-                        }
-                      });
-                    });
-                  } else {
-                    newComponent = {
-                      type: componentType,
-                      parameters: []
-                    };
-                  }
-
-
-                  if (newComponent) {
-                    Object.keys(variables[componentType]).forEach(key => {
-                      // Ensure we have a valid contact object
-                      const contactObj = contact || (campaignShipping.contact ? {
-                        name: campaignShipping.contact.name,
-                        email: campaignShipping.contact.email,
-                        number: campaignShipping.number
-                      } : {
-                        name: "Cliente", // Fallback
-                        email: "",
-                        number: campaignShipping.number
-                      });
-
-                      logger.info(`[DEBUG VARS CALL] calling with value: ${variables[componentType][key].value}`);
-
-                      const variableValue = getProcessedMessage(
-                        variables[componentType][key].value,
-                        variables,
-                        contactObj
-                      );
-
-                      logger.info(`[DEBUG VARS RET] returned: ${variableValue}`);
-
-                      if (componentType.replace("buttons", "button") === "button") {
-                        if ((newComponent as any)?.sub_type === "COPY_CODE") {
-                          newComponent.parameters.push({
-                            type: "coupon_code",
-                            coupon_code: variableValue
-                          });
-                        } else {
-                          newComponent.parameters.push({
-                            type: "text",
-                            text: variableValue
-                          });
-                        }
-                      } else {
-                        if (templateComponents[index].format === 'IMAGE') {
-                          newComponent.parameters.push({
-                            type: "image",
-                            image: { link: variableValue }
-                          });
-                        } else {
-                          newComponent.parameters.push({
-                            type: "text",
-                            text: variableValue
-                          });
-                        }
-                      }
-                    });
-                  }
-
-                  if (!Array.isArray(templateData.components)) {
-                    templateData.components = [];
-                  }
-                  templateData.components.push(newComponent as IMetaMessageTemplateComponents);
-                }
-              });
-            }
-          }
-        }
-
-        // Processa botões para salvar usando templateComponents da campanha
-        if (templateComponents.length > 0) {
-          for (const component of templateComponents) {
-            if (component.type === 'BUTTONS') {
-              buttonsToSave.push(component.buttons);
-            }
-          }
-        }
-
-        // ✅ CORREÇÃO: Criar corpo da mensagem a partir do template
-        let bodyToSave = '';
-
-        // Prioridade 1: Tentar extrair do BODY do template
-        const bodyComponent = templateComponents?.find(c => c.type === 'BODY');
-        if (bodyComponent && bodyComponent.text) {
-          bodyToSave = bodyComponent.text;
-          logger.info(`[CAMPAIGN-SAVE] Usando texto do BODY do template: ${bodyToSave.substring(0, 50)}...`);
-        }
-
-        // Prioridade 2: Usar mensagem da campanha
-        if (!bodyToSave && campaignShipping.message && campaignShipping.message.trim() !== '') {
-          bodyToSave = campaignShipping.message;
-          logger.info(`[CAMPAIGN-SAVE] Usando mensagem da campanha: ${bodyToSave.substring(0, 50)}...`);
-        }
-
-        // Prioridade 3: Usar HEADER do template
-        if (!bodyToSave) {
-          const headerComponent = templateComponents?.find(c => c.type === 'HEADER');
-          if (headerComponent && headerComponent.text) {
-            bodyToSave = headerComponent.text;
-            logger.info(`[CAMPAIGN-SAVE] Usando texto do HEADER do template: ${bodyToSave.substring(0, 50)}...`);
-          }
-        }
-
-        // Fallback final: Nome do template
-        if (!bodyToSave || bodyToSave.trim() === '') {
-          bodyToSave = `📋 Template: ${campaign.templateName}`;
-          logger.info(`[CAMPAIGN-SAVE] Usando fallback com nome do template: ${bodyToSave}`);
-        }
-
-        // Adicionar informação sobre botões se houver
-        if (buttonsToSave && buttonsToSave.length > 0) {
-          bodyToSave = bodyToSave.concat('||||', JSON.stringify(buttonsToSave));
-          logger.info(`[CAMPAIGN-SAVE] Botões adicionados ao body`);
-        }
-
-        logger.info(`[CAMPAIGN-SAVE] Body final a ser salvo: ${bodyToSave.substring(0, 100)}...`);
+        const { templateData, bodyToSave } = await buildCampaignTemplateData(
+          campaign,
+          campaignShipping,
+          contactForTemplate
+        );
 
         // Envia template via API Meta
         logger.info(`[CAMPAIGN-DISPATCH] 🚀 Chamando SendWhatsAppOficialMessage - Ticket=${ticket.id}, Template=${templateData.name}`);
@@ -2046,7 +2096,7 @@ async function handleDispatchCampaign(job) {
         logger.info(`[CAMPAIGN-DISPATCH] ✅ Template enviado com sucesso - Ticket=${ticket.id}, MessageId=${messageId}`);
 
         await campaignShipping.update({ deliveredAt: moment() });
-        logger.info(`[CAMPAIGN-DISPATCH] 📝 CampaignShipping atualizado com deliveredAt - ID=${campaignShippingId}, Time=${moment().format('YYYY-MM-DD HH:mm:ss')}`);
+        logger.info(`[CAMPAIGN-DISPATCH] 📝 CampaignShipping atualizado com deliveredAt - ID=${campaignShippingId}`);
       }
       // ✅ Lógica original para WhatsApp não oficial
       else if (whatsapp.status === "CONNECTED") {
@@ -2186,173 +2236,54 @@ async function handleDispatchCampaign(job) {
         // ✅ WhatsApp Oficial SEM ticket mas COM template (envio direto via API Meta)
         logger.info(`[CAMPAIGN-DISPATCH] 📋 Enviando template SEM ticket: Campanha=${campaignId}, Template=${campaign.templateId}, Contato=${campaignShipping.number}`);
 
-        // ✅ CORREÇÃO: Usar dados salvos na campanha em vez de buscar em QuickMessage
-        if (!campaign.templateName || !campaign.templateLanguage) {
-          throw new Error(`Campanha ${campaignId} não possui dados completos do template (templateName ou templateLanguage ausentes)`);
-        }
-
-        // Monta estrutura do template usando dados da campanha
-        let templateData: IMetaMessageTemplate = {
-          name: campaign.templateName,
-          language: { code: campaign.templateLanguage }
+        // ✅ CORREÇÃO (Issue #5): Usar helper function em vez de código duplicado
+        const contactForTemplate2 = {
+          name: campaignShipping.contact ? campaignShipping.contact.name : "Cliente",
+          email: campaignShipping.contact ? campaignShipping.contact.email : "",
+          number: campaignShipping.number
         };
 
-        logger.info(`[CAMPAIGN-DISPATCH] Template: name=${campaign.templateName}, language=${campaign.templateLanguage}`);
+        const { templateData: templateData2 } = await buildCampaignTemplateData(
+          campaign,
+          campaignShipping,
+          contactForTemplate2
+        );
 
-        let buttonsToSave = [];
-
-        // ✅ Usar templateComponents da campanha
-        const templateComponents = campaign.templateComponents || [];
-
-        // Processa variáveis se houver
-        if (campaign.templateVariables) {
-          const variables = JSON.parse(campaign.templateVariables);
-
-          if (Object.keys(variables).length > 0) {
-            if (Array.isArray(templateComponents) && templateComponents.length > 0) {
-              templateComponents.forEach((component, index) => {
-                const componentType = component.type.toLowerCase() as "header" | "body" | "footer" | "button";
-
-                if (variables[componentType] && Object.keys(variables[componentType]).length > 0) {
-                  let newComponent;
-
-                  if (componentType.replace("buttons", "button") === "button") {
-                    const buttons = JSON.parse(component.buttons);
-                    buttons.forEach((button, btnIndex) => {
-                      const subButton = Object.values(variables[componentType]);
-                      subButton.forEach((sub: any) => {
-                        if (sub.buttonIndex === btnIndex) {
-                          newComponent = {
-                            type: componentType.replace("buttons", "button"),
-                            sub_type: button.type,
-                            index: btnIndex,
-                            parameters: []
-                          };
-                        }
-                      });
-                    });
-                  } else {
-                    newComponent = {
-                      type: componentType,
-                      parameters: []
-                    };
-                  }
-
-                  if (newComponent) {
-                    Object.keys(variables[componentType]).forEach(key => {
-                      const contactObj = {
-                        name: campaignShipping.contact ? campaignShipping.contact.name : "Cliente",
-                        email: campaignShipping.contact ? campaignShipping.contact.email : "",
-                        number: campaignShipping.number
-                      };
-
-                      const variableValue = getProcessedMessage(
-                        variables[componentType][key].value,
-                        variables,
-                        contactObj
-                      );
-
-                      campaignLogger.info(`[DEBUG VARS CALL] calling with value: ${variables[componentType][key].value} -> params: ${variableValue}`);
-
-                      if (componentType.replace("buttons", "button") === "button") {
-                        if ((newComponent as any)?.sub_type === "COPY_CODE") {
-                          newComponent.parameters.push({
-                            type: "coupon_code",
-                            coupon_code: variableValue
-                          });
-                        } else {
-                          newComponent.parameters.push({
-                            type: "text",
-                            text: variableValue
-                          });
-                        }
-                      } else {
-                        if (templateComponents[index].format === 'IMAGE') {
-                          newComponent.parameters.push({
-                            type: "image",
-                            image: { link: variableValue }
-                          });
-                        } else {
-                          const paramObj: any = {
-                            type: "text",
-                            text: variableValue
-                          };
-                          if (variables[componentType][key].name) {
-                            paramObj.parameter_name = variables[componentType][key].name;
-                          }
-                          newComponent.parameters.push(paramObj);
-                        }
-                      }
-                    });
-                  }
-
-                  if (!Array.isArray(templateData.components)) {
-                    templateData.components = [];
-                  }
-                  templateData.components.push(newComponent as IMetaMessageTemplateComponents);
-                }
-              });
-            }
-          }
-        }
-
-        // Processa botões usando templateComponents da campanha
-        if (templateComponents.length > 0) {
-          for (const component of templateComponents) {
-            if (component.type === 'BUTTONS') {
-              buttonsToSave.push(component.buttons);
-            }
-          }
-        }
-
-        // Envia template direto via API Meta usando lib
-        // Formatar número para padrão WhatsApp (apenas dígitos)
+        // Formatar número para padrão WhatsApp
         let cleanNumber = campaignShipping.number.replace(/\D/g, '');
-
-        // Se não começar com código do país, adicionar 55 (Brasil)
         if (cleanNumber.length === 11 && !cleanNumber.startsWith('55')) {
           cleanNumber = '55' + cleanNumber;
         }
-
-        // API Oficial exige formato +5511999999999
         const formattedNumber = '+' + cleanNumber;
 
         const options: ISendMessageOficial = {
           type: 'template',
-          body_template: templateData,
+          body_template: templateData2,
           to: formattedNumber
         };
 
-        logger.info(`Enviando template via API Meta: Numero original=${campaignShipping.number}, Numero formatado=${formattedNumber}`);
-        // Log payload to campaign logger for debugging
-        campaignLogger.info(`PAYLOAD META DEBUG`, { options });
-
-        // Log detalhado para arquivo
+        logger.info(`[CAMPAIGN-DISPATCH] Enviando template via API Meta: Numero=${formattedNumber}`);
         campaignLogger.info(`Iniciando envio de template`, {
           campaignId,
           contactNumber: campaignShipping.number,
           formattedNumber,
           templateId: campaign.templateId,
-          whatsappId: whatsapp.id,
-          whatsappName: whatsapp.name
+          whatsappId: whatsapp.id
         });
 
         try {
           const result = await sendMessageWhatsAppOficial(
-            null, // sem arquivo
-            whatsapp.token || whatsapp.send_token, // Tentar token primeiro
+            null,
+            whatsapp.token || whatsapp.send_token,
             options
           );
 
           await campaignShipping.update({ deliveredAt: moment() });
-
-          // Log de sucesso
           campaignLogger.templateSent(campaignId, formattedNumber, parseInt(campaign.templateId), result);
-          logger.info(`Template enviado via Meta API sem ticket: Campanha=${campaignId};Numero=${cleanNumber};Status=Enviado`);
+          logger.info(`[CAMPAIGN-DISPATCH] ✅ Template enviado sem ticket: Campanha=${campaignId};Numero=${cleanNumber}`);
         } catch (error) {
-          // Log de erro detalhado
           campaignLogger.templateFailed(campaignId, formattedNumber, error);
-          logger.error(`Erro ao enviar template: Campanha=${campaignId};Numero=${formattedNumber};Erro=${error.message}`);
+          logger.error(`[CAMPAIGN-DISPATCH] ❌ Erro ao enviar template: Campanha=${campaignId};Numero=${formattedNumber};Erro=${error.message}`);
           throw error;
         }
       } else if (whatsapp.channel === "whatsapp_oficial") {
