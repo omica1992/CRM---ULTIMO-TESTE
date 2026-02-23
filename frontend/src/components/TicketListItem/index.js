@@ -265,6 +265,8 @@ const TicketListItem = ({ ticket }) => {
     const isMounted = useRef(true);
     const { user } = useContext(AuthContext);
     const { setCurrentTicket, setTabOpen } = useContext(TicketsContext);
+    const ticketTimestamp = ticket.lastMessageAt || ticket.updatedAt;
+    const ticketPreviewText = ticket.lastMessagePreview || ticket.lastMessage;
     const [imageModalOpen, setImageModalOpen] = useState(false); // Estado para o modal da imagem
 
     useEffect(() => {
@@ -470,19 +472,19 @@ const TicketListItem = ({ ticket }) => {
                                 color="textSecondary"
                             >
                                 {isSameDay(
-                                    parseISO(ticket.updatedAt),
+                                    parseISO(ticketTimestamp),
                                     new Date()
                                 ) ? (
                                     <>
                                         {format(
-                                            parseISO(ticket.updatedAt),
+                                            parseISO(ticketTimestamp),
                                             "HH:mm"
                                         )}
                                     </>
                                 ) : (
                                     <>
                                         {format(
-                                            parseISO(ticket.updatedAt),
+                                            parseISO(ticketTimestamp),
                                             "dd/MM/yyyy"
                                         )}
                                     </>
@@ -515,9 +517,9 @@ const TicketListItem = ({ ticket }) => {
                                 variant="body2"
                                 color="textSecondary"
                             >
-                                {ticket.lastMessage ? (
+                                {ticketPreviewText ? (
                                     <MarkdownWrapper>
-                                        {ticket.lastMessage}
+                                        {ticketPreviewText}
                                     </MarkdownWrapper>
                                 ) : (
                                     <br />

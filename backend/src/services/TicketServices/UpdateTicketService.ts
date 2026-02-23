@@ -103,6 +103,12 @@ const UpdateTicketService = async ({
 
     let ticket = await ShowTicketService(ticketId, companyId);
 
+    // Regra de segurança: em transferência em massa para atendente,
+    // o ticket deve sempre ficar aberto, independente de checkbox.
+    if (isBulkTransfer && !isNil(userId)) {
+      status = "open";
+    }
+
     if (ticket.channel === "whatsapp" && ticket.whatsappId) {
       SetTicketMessagesAsRead(ticket);
     }

@@ -4491,6 +4491,14 @@ const handleMessage = async (
       });
     }
 
+    // Reinicia o contador de inatividade para qualquer mensagem recebida do cliente,
+    // incluindo tickets sem fila.
+    if (!msg.key.fromMe && ticket.sendInactiveMessage) {
+      await ticket.update({
+        sendInactiveMessage: false
+      });
+    }
+
     if (
       !campaignExecuted && // ✅ NOVA CONDIÇÃO
       !msg.key.fromMe &&

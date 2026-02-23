@@ -41,6 +41,7 @@ import {
 } from "./services/WbotServices/wbotMessageListener";
 import FindOrCreateTicketService from "./services/TicketServices/FindOrCreateTicketService";
 import CreateLogTicketService from "./services/TicketServices/CreateLogTicketService";
+import FindOrCreateATicketTrakingService from "./services/TicketServices/FindOrCreateATicketTrakingService";
 import formatBody from "./helpers/Mustache";
 import TicketTag from "./models/TicketTag";
 import Tag from "./models/Tag";
@@ -96,6 +97,66 @@ interface LidRetryData {
   number: string;
   retryCount: number;
   maxRetries?: number;
+}
+
+async function triggerBotOnRedirect(
+  ticket: Ticket,
+  companyId: number,
+  whatsappId: number,
+  queueId: number
+): Promise<void> {
+  try {
+    // Disparo automático no redirect é suportado apenas para sessão Baileys.
+    if (ticket.channel && ticket.channel !== "whatsapp") {
+      return;
+    }
+
+    // Só dispara bot para ticket realmente sem atendente e em fila pendente.
+    if (
+      ticket.userId !== null ||
+      ticket.status !== "pending" ||
+      ticket.queueId !== queueId ||
+      !ticket.contact ||
+      !ticket.contact.number ||
+      ticket.contact.disableBot
+    ) {
+      return;
+    }
+
+    const wbot = getWbot(whatsappId);
+    const ticketTraking = await FindOrCreateATicketTrakingService({
+      ticketId: ticket.id,
+      companyId,
+      whatsappId,
+      userId: ticket.userId
+    });
+
+    const simulatedMsg: any = {
+      key: {
+        fromMe: false,
+        id: `redirect-${ticket.id}-${Date.now()}`
+      },
+      message: {
+        conversation: ""
+      }
+    };
+
+    const { sayChatbot } = await import("./services/WbotServices/ChatBotListener");
+    await sayChatbot(
+      queueId,
+      wbot,
+      ticket,
+      ticket.contact,
+      simulatedMsg,
+      ticketTraking
+    );
+
+    logger.info(`[QUEUE REDIRECT] Chatbot disparado para ticket ${ticket.id}`);
+  } catch (error: any) {
+    logger.warn(
+      `[QUEUE REDIRECT] Falha ao disparar chatbot no redirect para ticket ${ticket?.id}: ${error?.message || error}`
+    );
+  }
 }
 
 export const userMonitor = new BullQueue("UserMonitor", connection);
@@ -2376,6 +2437,7 @@ async function handleResumeTicketsOutOfHour(job) {
                 where: {
                   status: "pending",
                   queueId: null,
+                  userId: null,
                   companyId: companyId,
                   whatsappId: w.id,
                   updatedAt: {
@@ -2424,10 +2486,21 @@ async function handleResumeTicketsOutOfHour(job) {
               if (count > 0) {
                 tickets.map(async ticket => {
                   await ticket.update({
-                    queueId: idQueue
+                    // Ao redirecionar ticket perdido para fila de bot, limpar estados
+                    // que bloqueiam a retomada do fluxo automatizado.
+                    queueId: idQueue,
+                    isBot: true,
+                    useIntegration: false,
+                    integrationId: null,
+                    flowWebhook: false,
+                    flowStopped: null,
+                    lastFlowId: null,
+                    hashFlowId: null
                   });
 
                   await ticket.reload();
+
+                  await triggerBotOnRedirect(ticket, companyId, w.id, idQueue);
 
                   const io = getIO();
                   io.of(String(companyId))
@@ -2508,6 +2581,7 @@ async function handleVerifyQueue(job) {
                 where: {
                   status: "pending",
                   queueId: null,
+                  userId: null,
                   companyId: companyId,
                   whatsappId: w.id,
                   updatedAt: {
@@ -2556,7 +2630,16 @@ async function handleVerifyQueue(job) {
               if (count > 0) {
                 tickets.map(async ticket => {
                   await ticket.update({
-                    queueId: idQueue
+                    // Ao redirecionar ticket perdido para fila de bot, limpar estados
+                    // que bloqueiam a retomada do fluxo automatizado.
+                    queueId: idQueue,
+                    isBot: true,
+                    useIntegration: false,
+                    integrationId: null,
+                    flowWebhook: false,
+                    flowStopped: null,
+                    lastFlowId: null,
+                    hashFlowId: null
                   });
 
                   await CreateLogTicketService({
@@ -2567,6 +2650,8 @@ async function handleVerifyQueue(job) {
                   });
 
                   await ticket.reload();
+
+                  await triggerBotOnRedirect(ticket, companyId, w.id, idQueue);
 
                   const io = getIO();
                   io.of(String(companyId))

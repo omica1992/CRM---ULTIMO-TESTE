@@ -1,4 +1,4 @@
-import { Op, fn, where, col, Filterable, Includeable } from "sequelize";
+import { Op, fn, where, col, Filterable, Includeable, literal } from "sequelize";
 import { startOfDay, endOfDay, parseISO } from "date-fns";
 
 import Ticket from "../../models/Ticket";
@@ -53,6 +53,9 @@ const ListTicketsServiceKanban = async ({
   withUnreadMessages,
   companyId
 }: Request): Promise<Response> => {
+  const lastMessageAtOrderLiteral = literal(
+    'COALESCE((SELECT MAX(m."createdAt") FROM "Messages" AS m WHERE m."ticketId" = "Ticket"."id" AND m."companyId" = "Ticket"."companyId"), "Ticket"."updatedAt")'
+  );
   // Verificar se o usuário é admin
   const user = await ShowUserService(userId, companyId);
   const isAdmin = user.profile === 'admin';
@@ -251,10 +254,26 @@ const ListTicketsServiceKanban = async ({
   const { count, rows: tickets } = await Ticket.findAndCountAll({
     where: whereCondition,
     include: includeCondition,
+    attributes: {
+      include: [
+        [
+          literal(
+            '(SELECT MAX(m."createdAt") FROM "Messages" AS m WHERE m."ticketId" = "Ticket"."id" AND m."companyId" = "Ticket"."companyId")'
+          ),
+          "lastMessageAt"
+        ],
+        [
+          literal(
+            `COALESCE((SELECT NULLIF(TRIM(m."body"), '') FROM "Messages" AS m WHERE m."ticketId" = "Ticket"."id" AND m."companyId" = "Ticket"."companyId" ORDER BY m."createdAt" DESC, m."id" DESC LIMIT 1), "Ticket"."lastMessage")`
+          ),
+          "lastMessagePreview"
+        ]
+      ]
+    },
     distinct: true,
     limit,
     offset,
-    order: [["updatedAt", "DESC"]],
+    order: [[lastMessageAtOrderLiteral, "DESC"], ["updatedAt", "DESC"]],
     subQuery: false
   });
   const hasMore = count > offset + tickets.length;
@@ -267,3 +286,4 @@ const ListTicketsServiceKanban = async ({
 };
 
 export default ListTicketsServiceKanban;
+

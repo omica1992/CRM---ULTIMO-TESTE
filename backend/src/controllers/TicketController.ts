@@ -669,6 +669,8 @@ export const triggerFlow = async (
 export const bulkTransfer = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
   const { ticketIds, userId, queueId, transferMessage, openPendingTickets } = req.body;
+  const normalizedUserId = userId ? Number(userId) : undefined;
+  const normalizedQueueId = queueId ? Number(queueId) : undefined;
 
   // Validações básicas
   if (!ticketIds || !Array.isArray(ticketIds) || ticketIds.length === 0) {
@@ -677,7 +679,7 @@ export const bulkTransfer = async (req: Request, res: Response): Promise<Respons
     });
   }
 
-  if (!userId && !queueId) {
+  if (!normalizedUserId && !normalizedQueueId) {
     return res.status(400).json({
       error: "É necessário especificar pelo menos um usuário ou fila de destino"
     });
@@ -689,8 +691,8 @@ export const bulkTransfer = async (req: Request, res: Response): Promise<Respons
 
     const result = await BulkTransferTicketsService({
       ticketIds,
-      userId,
-      queueId,
+      userId: normalizedUserId,
+      queueId: normalizedQueueId,
       transferMessage,
       companyId,
       userRequestId: parseInt(req.user.id),

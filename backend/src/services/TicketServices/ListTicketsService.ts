@@ -79,7 +79,11 @@ const ListTicketsService = async ({
   const showGroups = user.allowGroup === true;
   const showPendingNotification = await FindCompanySettingOneService({ companyId, column: "showNotificationPending" });
   const showNotificationPendingValue = showPendingNotification[0].showNotificationPending;
-    let whereCondition: Filterable["where"];
+  const sortDirection = sortTickets === "ASC" ? "ASC" : "DESC";
+  const lastMessageAtOrderLiteral = literal(
+    'COALESCE((SELECT MAX(m."createdAt") FROM "Messages" AS m WHERE m."ticketId" = "Ticket"."id" AND m."companyId" = "Ticket"."companyId"), "Ticket"."updatedAt")'
+  );
+  let whereCondition: Filterable["where"];
 
   whereCondition = {
     [Op.or]: [{ userId }, { status: "pending" }],
@@ -483,11 +487,36 @@ const ListTicketsService = async ({
   const { count, rows: tickets } = await Ticket.findAndCountAll({
     where: whereCondition,
     include: includeCondition,
-    attributes: ["id", "uuid", "userId", "queueId", "isGroup", "channel", "status", "contactId", "useIntegration", "lastMessage", "updatedAt", "unreadMessages"],
+    attributes: [
+      "id",
+      "uuid",
+      "userId",
+      "queueId",
+      "isGroup",
+      "channel",
+      "status",
+      "contactId",
+      "useIntegration",
+      "lastMessage",
+      "updatedAt",
+      "unreadMessages",
+      [
+        literal(
+          '(SELECT MAX(m."createdAt") FROM "Messages" AS m WHERE m."ticketId" = "Ticket"."id" AND m."companyId" = "Ticket"."companyId")'
+        ),
+        "lastMessageAt"
+      ],
+      [
+        literal(
+          `COALESCE((SELECT NULLIF(TRIM(m."body"), '') FROM "Messages" AS m WHERE m."ticketId" = "Ticket"."id" AND m."companyId" = "Ticket"."companyId" ORDER BY m."createdAt" DESC, m."id" DESC LIMIT 1), "Ticket"."lastMessage")`
+        ),
+        "lastMessagePreview"
+      ]
+    ],
     distinct: true,
     limit,
     offset,
-    order: [["updatedAt", sortTickets]],
+    order: [[lastMessageAtOrderLiteral, sortDirection], ["updatedAt", sortDirection]],
     subQuery: false
   });
 

@@ -138,6 +138,8 @@ const useStyles = makeStyles(theme => ({
 const KanbanCard = ({ ticket, index, updateTicket }) => {
   const classes = useStyles();
   const history = useHistory();
+  const ticketTimestamp = ticket.lastMessageAt || ticket.updatedAt;
+  const ticketPreviewText = ticket.lastMessagePreview || ticket.lastMessage;
 
   const [open, setOpen] = useState(false);
   const [newValue, setNewValue] = useState('');
@@ -256,15 +258,15 @@ const KanbanCard = ({ ticket, index, updateTicket }) => {
             </div>
           </div>
           <div className={classes.descriptionRow}>
-            <Tooltip title={ticket.lastMessage || ' '}>
+            <Tooltip title={ticketPreviewText || ' '}>
               <Typography className={classes.cardDescription}>
-                {ticket.lastMessage?.substring(0, 20) || ' '}
+                {ticketPreviewText?.substring(0, 20) || ' '}
               </Typography>
             </Tooltip>
             <Typography className={lastMessageTimeClass}>
-              {isSameDay(parseISO(ticket.updatedAt), new Date())
-                ? format(parseISO(ticket.updatedAt), 'HH:mm')
-                : format(parseISO(ticket.updatedAt), 'dd/MM/yyyy')}
+              {isSameDay(parseISO(ticketTimestamp), new Date())
+                ? format(parseISO(ticketTimestamp), 'HH:mm')
+                : format(parseISO(ticketTimestamp), 'dd/MM/yyyy')}
             </Typography>
           </div>
           <div className={classes.footer}>

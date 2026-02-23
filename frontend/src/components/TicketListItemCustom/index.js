@@ -260,6 +260,8 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
   const { setCurrentTicket } = useContext(TicketsContext);
   const { user } = useContext(AuthContext);
   const { isSelectionMode, isTicketSelected, toggleTicketSelection } = useSelectedTickets();
+  const ticketTimestamp = ticket.lastMessageAt || ticket.updatedAt;
+  const ticketPreviewText = ticket.lastMessagePreview || ticket.lastMessage;
 
   const { get: getSetting } = useCompanySettings();
 
@@ -526,21 +528,21 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
       );
     }
 
-    if (!ticket.lastMessage) {
+    if (!ticketPreviewText) {
       return <br />;
     }
 
-    if (ticket.lastMessage.includes("data:image/png;base64")) {
+    if (ticketPreviewText.includes("data:image/png;base64")) {
       return <MarkdownWrapper>Localização</MarkdownWrapper>;
     }
 
-    if (ticket.lastMessage.includes("BEGIN:VCARD")) {
+    if (ticketPreviewText.includes("BEGIN:VCARD")) {
       return <MarkdownWrapper>Contato</MarkdownWrapper>;
     }
 
     return (
       <MarkdownWrapper>
-        {truncate(ticket.lastMessage, 40)}
+        {truncate(ticketPreviewText, 40)}
       </MarkdownWrapper>
     );
   };
@@ -743,7 +745,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
           }
         />
         <ListItemSecondaryAction>
-          {ticket.lastMessage && (
+          {ticketPreviewText && (
             <>
               <Typography
                 className={
@@ -754,10 +756,10 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                 component="span"
                 variant="body2"
               >
-                {isSameDay(parseISO(ticket.updatedAt), new Date()) ? (
-                  <>{format(parseISO(ticket.updatedAt), "HH:mm")}</>
+                {isSameDay(parseISO(ticketTimestamp), new Date()) ? (
+                  <>{format(parseISO(ticketTimestamp), "HH:mm")}</>
                 ) : (
-                  <>{format(parseISO(ticket.updatedAt), "dd/MM/yyyy")}</>
+                  <>{format(parseISO(ticketTimestamp), "dd/MM/yyyy")}</>
                 )}
               </Typography>
 
@@ -1090,3 +1092,4 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
 };
 
 export default TicketListItemCustom;
+

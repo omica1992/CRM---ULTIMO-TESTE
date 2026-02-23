@@ -89,6 +89,8 @@ const TicketListForwardMessageItem = ({ ticket, selectedTicket, sendData }) => {
     const classes = useStyles();
     const { ticketId } = useParams();
     const isMounted = useRef(true);
+    const ticketTimestamp = ticket.lastMessageAt || ticket.updatedAt;
+    const ticketPreviewText = ticket.lastMessagePreview || ticket.lastMessage;
 
     useEffect(() => {
         return () => {
@@ -139,17 +141,17 @@ const TicketListForwardMessageItem = ({ ticket, selectedTicket, sendData }) => {
                                     color="primary"
                                 />
                             )}
-                            {ticket.lastMessage && (
+                            {ticketPreviewText && (
                                 <Typography
                                     className={clsx(classes.lastMessageTime, { [classes.selectedTicketText]: ticket === selectedTicket })}
                                     component="span"
                                     variant="body2"
                                     color="textSecondary"
                                 >
-                                    {isSameDay(parseISO(ticket.updatedAt), new Date()) ? (
-                                        <>{format(parseISO(ticket.updatedAt), "HH:mm")}</>
+                                    {isSameDay(parseISO(ticketTimestamp), new Date()) ? (
+                                        <>{format(parseISO(ticketTimestamp), "HH:mm")}</>
                                     ) : (
-                                        <>{format(parseISO(ticket.updatedAt), "dd/MM/yyyy")}</>
+                                        <>{format(parseISO(ticketTimestamp), "dd/MM/yyyy")}</>
                                     )}
                                 </Typography>
                             )}
@@ -164,8 +166,8 @@ const TicketListForwardMessageItem = ({ ticket, selectedTicket, sendData }) => {
                                 variant="body2"
                                 color="textSecondary"
                             >
-                                {ticket.lastMessage ? (
-                                    <MarkdownWrapper>{ticket.lastMessage}</MarkdownWrapper>
+                                {ticketPreviewText ? (
+                                    <MarkdownWrapper>{ticketPreviewText}</MarkdownWrapper>
                                 ) : (
                                     <br />
                                 )}

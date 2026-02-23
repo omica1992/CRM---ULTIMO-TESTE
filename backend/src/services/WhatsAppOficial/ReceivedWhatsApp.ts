@@ -966,6 +966,14 @@ export class ReceibedWhatsAppService {
                 });
             }
 
+            // Reinicia o contador de inatividade para qualquer atividade recebida,
+            // incluindo tickets sem fila.
+            if (ticket.sendInactiveMessage) {
+                await ticket.update({
+                    sendInactiveMessage: false
+                });
+            }
+
             // ✅ VERIFICAÇÃO DE CAMPANHAS E FLUXOS (mesma lógica do wbotMessageListener)
             // ✅ CORREÇÃO: Adicionar verificação de status "pending" (igual ao Baileys)
             if (
