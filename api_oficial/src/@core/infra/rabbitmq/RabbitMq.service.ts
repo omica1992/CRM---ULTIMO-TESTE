@@ -74,7 +74,9 @@ export class RabbitMQService {
   }
 
   async publish(queue: string, message: string): Promise<void> {
-    if (!(await this.ensureConnection())) return;
+    if (!(await this.ensureConnection())) {
+      throw new Error('RabbitMQ connection unavailable');
+    }
     await this.channel!.assertQueue(queue, { durable: true, arguments: { 'x-queue-type': 'quorum' } });
     this.channel!.sendToQueue(queue, Buffer.from(message), { persistent: true });
   }
@@ -95,7 +97,9 @@ export class RabbitMQService {
 
   async sendToRabbitMQ(whats: WhatsAppOficial, body: any) {
     try {
-      if (!(await this.ensureConnection())) return;
+      if (!(await this.ensureConnection())) {
+        throw new Error('RabbitMQ connection unavailable');
+      }
 
       if (!whats) throw new Error('Nenhum valor informado');
 

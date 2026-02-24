@@ -118,6 +118,38 @@ export class WebhookService {
     }
   }
 
+  private async persistFailedPayload(
+    companyId: number,
+    conexaoId: number,
+    messageId: string,
+    payload: any,
+    errorMessage: string,
+  ): Promise<void> {
+    try {
+      const failedKey = `failed:webhook:${companyId}:${conexaoId}`;
+      const record = JSON.stringify({
+        messageId,
+        createdAt: new Date().toISOString(),
+        errorMessage,
+        payload,
+      });
+
+      if ((this.redis as any).client?.pipeline) {
+        await (this.redis as any).client.pipeline()
+          .rpush(failedKey, record)
+          .ltrim(failedKey, -500, -1)
+          .exec();
+      } else {
+        await (this.redis as any).client.rpush(failedKey, record);
+        await (this.redis as any).client.ltrim(failedKey, -500, -1);
+      }
+
+      this.logger.warn(`[WEBHOOK DEAD-LETTER] Payload salvo em ${failedKey} para analise/reprocessamento`);
+    } catch (persistErr: any) {
+      this.logger.error(`[WEBHOOK DEAD-LETTER ERROR] Falha ao persistir payload com erro: ${persistErr?.message}`);
+    }
+  }
+
   async webhookCompanyConexao(companyId: number, conexaoId: number, data: any) {
     const startTime = Date.now();
     this.logger.log(`[WEBHOOK START] CompanyId: ${companyId}, ConexaoId: ${conexaoId}`);
@@ -198,16 +230,22 @@ export class WebhookService {
                     this.logger.log(`[WEBHOOK RABBITMQ STATUS] Status enviando via fila para empresa ${statusData.companyId}`);
                   } catch (err: any) {
                     this.logger.warn(`[WEBHOOK RABBITMQ ERROR] Falha ao enviar para RabbitMQ, fazendo fallback para Socket: ${err.message}`);
-                    this.socket.sendStatusUpdate(statusData);
+                    const socketSent = await this.socket.sendStatusUpdate(statusData);
+                    if (!socketSent) {
+                      this.logger.error(`[WEBHOOK STATUS DROP RISK] Falha no fallback de socket para status ${status.id}`);
+                    }
                   }
 
                   // Manter compatibilidade: ainda enviar readMessage para status de leitura
                   if (status.status === 'read') {
-                    this.socket.readMessage({
+                    const readSent = await this.socket.readMessage({
                       companyId: company.idEmpresaMult100,
                       messageId: status.id,
                       token: whats.token_mult100,
                     });
+                    if (!readSent) {
+                      this.logger.warn(`[WEBHOOK STATUS READ FALLBACK] Falha ao enviar readMessage via socket para ${status.id}`);
+                    }
                   }
                 }
               } else if (value?.messages && value.messages.length > 0) {
@@ -404,7 +442,10 @@ export class WebhookService {
                         this.logger.log(`[WEBHOOK RABBITMQ SUCCESS] Mensagem de ${data.fromNumber} enviada via fila global 'whatsapp_oficial'`);
                       } catch (err: any) {
                         this.logger.warn(`[WEBHOOK RABBITMQ ERROR] Falha na fila, fallback de mensagem para socket: ${err.message}`);
-                        this.socket.sendMessage(data);
+                        const socketSent = await this.socket.sendMessage(data);
+                        if (!socketSent) {
+                          throw new Error('Fallback de socket indisponivel');
+                        }
                       }
 
                       // Encaminhar para webhooks externos
@@ -426,6 +467,13 @@ export class WebhookService {
                       // ✅ BUG 3 FIX: Se o processamento falhar, DELETAR a chave do Redis
                       // para permitir que a Meta reenvie o webhook
                       this.logger.error(`[WEBHOOK PROCESSING ERROR] Erro ao processar mensagem ${message.id}: ${processingError.message}`);
+                      await this.persistFailedPayload(
+                        companyId,
+                        conexaoId,
+                        message.id,
+                        body,
+                        processingError.message,
+                      );
                       try {
                         await this.redis.del(messageKey);
                         this.logger.warn(`[WEBHOOK REDIS CLEANUP] Chave ${messageKey} removida para permitir retry`);
@@ -454,7 +502,10 @@ export class WebhookService {
 
               this.logger.log(`[WEBHOOK TEMPLATE] 🚀 Enviando update via socket para Backend: ${JSON.stringify(updateData)}`);
 
-              this.socket.sendTemplateStatusUpdate(updateData);
+              const templateSent = await this.socket.sendTemplateStatusUpdate(updateData);
+              if (!templateSent) {
+                this.logger.error(`[WEBHOOK TEMPLATE DROP RISK] Falha ao enviar template status update para company ${updateData.companyId}`);
+              }
             }
           }
         }

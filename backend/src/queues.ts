@@ -385,6 +385,7 @@ async function handleSendScheduledMessage(job) {
     }
 
     if (schedule.openTicket === "enabled") {
+      let sentViaApiOficialWithTicket = false;
       let ticket = await Ticket.findOne({
         where: {
           contactId: schedule.contact.id,
@@ -423,7 +424,7 @@ async function handleSendScheduledMessage(job) {
         logger.info(`📋 [SCHEDULE-QUEUE] - Ticket ID: ${ticket.id}`);
 
         const cleanNumber = schedule.contact.number.replace(/[^\d]/g, "");
-        const formattedNumber = `+${cleanNumber}`; // ✅ Adicionar + para API Oficial
+        const formattedNumber = cleanNumber;
         logger.info(`📋 [SCHEDULE-QUEUE] - Número original: ${schedule.contact.number}`);
         logger.info(`📋 [SCHEDULE-QUEUE] - Número limpo: ${cleanNumber}`);
         logger.info(`📋 [SCHEDULE-QUEUE] - Número formatado: ${formattedNumber}`);
@@ -557,19 +558,54 @@ async function handleSendScheduledMessage(job) {
           bodyMessage = schedule.body.trim();
         }
 
-        sentMessage = await SendMessage(
-          whatsapp,
-          {
-            number: schedule.contact.number,
+        if (isOficial) {
+          let officialType: 'text' | 'audio' | 'document' | 'image' | 'video' = 'text';
+          let mediaFile: Express.Multer.File = null;
+
+          if (filePath) {
+            const mediaName = (schedule.mediaName || path.basename(filePath)).toLowerCase();
+            if (/\.(jpg|jpeg|png|gif|webp)$/.test(mediaName)) {
+              officialType = 'image';
+            } else if (/\.(mp4|mov|avi|mkv|webm)$/.test(mediaName)) {
+              officialType = 'video';
+            } else if (/\.(mp3|ogg|wav|m4a|aac)$/.test(mediaName)) {
+              officialType = 'audio';
+            } else {
+              officialType = 'document';
+            }
+
+            mediaFile = {
+              path: filePath,
+              originalname: schedule.mediaName || path.basename(filePath),
+              filename: path.basename(filePath),
+              mimetype: "application/octet-stream"
+            } as Express.Multer.File;
+          }
+
+          await SendWhatsAppOficialMessage({
             body: `\u200e ${formatBody(bodyMessage, ticket)}`,
-            mediaPath: filePath,
-            companyId: schedule.companyId
-          },
-          schedule.contact.isGroup
-        );
+            ticket,
+            type: officialType,
+            media: mediaFile,
+            quotedMsg: null
+          });
+
+          sentViaApiOficialWithTicket = true;
+        } else {
+          sentMessage = await SendMessage(
+            whatsapp,
+            {
+              number: schedule.contact.number,
+              body: `\u200e ${formatBody(bodyMessage, ticket)}`,
+              mediaPath: filePath,
+              companyId: schedule.companyId
+            },
+            schedule.contact.isGroup
+          );
+        }
       }
 
-      if (schedule.mediaPath && !schedule.isTemplate) {
+      if (!sentViaApiOficialWithTicket && schedule.mediaPath && !schedule.isTemplate) {
         await verifyMediaMessage(
           sentMessage,
           ticket,
@@ -579,7 +615,7 @@ async function handleSendScheduledMessage(job) {
           false,
           whatsapp
         );
-      } else if (!schedule.isTemplate) {
+      } else if (!sentViaApiOficialWithTicket && !schedule.isTemplate) {
         await verifyMessage(
           sentMessage,
           ticket,
@@ -617,7 +653,7 @@ async function handleSendScheduledMessage(job) {
         logger.info(`📋 [SCHEDULE-QUEUE] - To: ${schedule.contact.number}`);
 
         const cleanNumber = schedule.contact.number.replace(/[^\d]/g, "");
-        const formattedNumber = `+${cleanNumber}`; // ✅ Adicionar + para API Oficial
+        const formattedNumber = cleanNumber;
 
         // ✅ Usar mesma estrutura da campanha
         // ⚠️ Limpar components - remover campos extras (id, createdAt, etc)
@@ -741,16 +777,49 @@ async function handleSendScheduledMessage(job) {
         logger.info(`💬 [SCHEDULE-QUEUE] - To: ${schedule.contact.number}`);
 
         const cleanNumber = schedule.contact.number.replace(/[^\d]/g, "");
-        const formattedNumber = `+${cleanNumber}`; // ✅ Adicionar + para API Oficial
+        const formattedNumber = cleanNumber;
 
-        const payload = {
-          messaging_product: "whatsapp",
-          to: formattedNumber,
-          type: "text" as const,
-          text: {
-            body: schedule.body
+        let payload: ISendMessageOficial;
+
+        if (filePath) {
+          const mediaName = (schedule.mediaName || path.basename(filePath)).toLowerCase();
+          if (/\.(jpg|jpeg|png|gif|webp)$/.test(mediaName)) {
+            payload = {
+              to: formattedNumber,
+              type: "image",
+              fileName: schedule.mediaName || path.basename(filePath),
+              body_image: { caption: schedule.body }
+            };
+          } else if (/\.(mp4|mov|avi|mkv|webm)$/.test(mediaName)) {
+            payload = {
+              to: formattedNumber,
+              type: "video",
+              fileName: schedule.mediaName || path.basename(filePath),
+              body_video: { caption: schedule.body }
+            };
+          } else if (/\.(mp3|ogg|wav|m4a|aac)$/.test(mediaName)) {
+            payload = {
+              to: formattedNumber,
+              type: "audio",
+              fileName: schedule.mediaName || path.basename(filePath)
+            };
+          } else {
+            payload = {
+              to: formattedNumber,
+              type: "document",
+              fileName: schedule.mediaName || path.basename(filePath),
+              body_document: { caption: schedule.body }
+            };
           }
-        };
+        } else {
+          payload = {
+            to: formattedNumber,
+            type: "text",
+            body_text: {
+              body: schedule.body
+            }
+          };
+        }
 
         logger.info(`💬 [SCHEDULE-QUEUE] Payload preparado:`, JSON.stringify(payload, null, 2));
 
@@ -1816,18 +1885,21 @@ async function buildCampaignTemplateData(
   campaignShipping: any,
   contactObj: any
 ): Promise<{ templateData: IMetaMessageTemplate; bodyToSave: string }> {
-  if (!campaign.templateName || !campaign.templateLanguage) {
+  const resolvedTemplateName = campaign.templateName || campaign.templateId;
+  const resolvedTemplateLanguage = campaign.templateLanguage || "pt_BR";
+
+  if (!resolvedTemplateName) {
     throw new Error(
-      `Campanha ${campaign.id} não possui dados completos do template (templateName ou templateLanguage ausentes)`
+      `Campanha ${campaign.id} não possui dados completos do template (templateName/templateId ausentes)`
     );
   }
 
   let templateData: IMetaMessageTemplate = {
-    name: campaign.templateName,
-    language: { code: campaign.templateLanguage }
+    name: resolvedTemplateName,
+    language: { code: resolvedTemplateLanguage }
   };
 
-  logger.info(`[CAMPAIGN-TEMPLATE] Template: name=${campaign.templateName}, language=${campaign.templateLanguage}`);
+  logger.info(`[CAMPAIGN-TEMPLATE] Template: name=${resolvedTemplateName}, language=${resolvedTemplateLanguage}`);
 
   let buttonsToSave = [];
   const templateComponents = campaign.templateComponents || [];
@@ -1947,7 +2019,7 @@ async function buildCampaignTemplateData(
   }
 
   if (!bodyToSave || bodyToSave.trim() === '') {
-    bodyToSave = `📋 Template: ${campaign.templateName}`;
+    bodyToSave = `📋 Template: ${resolvedTemplateName}`;
   }
 
   if (buttonsToSave && buttonsToSave.length > 0) {
@@ -2095,7 +2167,7 @@ async function handleDispatchCampaign(job) {
       ticket = await ShowTicketService(ticket.id, campaign.companyId);
 
       // ✅ Verifica se é WhatsApp Oficial e tem template configurado
-      if (whatsapp.channel === "whatsapp_oficial" && campaign.templateId) {
+      if (whatsapp.channel === "whatsapp_oficial" && (campaign.templateId || campaign.templateName)) {
         logger.info(`[CAMPAIGN-DISPATCH] 📋 Enviando template da Meta: Campanha=${campaignId}, Template=${campaign.templateId}, Ticket=${ticket.id}, Contato=${campaignShipping.number}`);
 
         // ✅ CORREÇÃO (Issue #5): Usar helper function em vez de código duplicado
@@ -2267,7 +2339,7 @@ async function handleDispatchCampaign(job) {
         }
 
         await campaignShipping.update({ deliveredAt: moment() });
-      } else if (whatsapp.channel === "whatsapp_oficial" && campaign.templateId) {
+      } else if (whatsapp.channel === "whatsapp_oficial" && (campaign.templateId || campaign.templateName)) {
         // ✅ WhatsApp Oficial SEM ticket mas COM template (envio direto via API Meta)
         logger.info(`[CAMPAIGN-DISPATCH] 📋 Enviando template SEM ticket: Campanha=${campaignId}, Template=${campaign.templateId}, Contato=${campaignShipping.number}`);
 

@@ -1,6 +1,5 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
-import { Socket } from 'socket.io-client';
-import { io } from 'socket.io-client';
+﻿import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Socket, io } from 'socket.io-client';
 import {
   IReceivedWhatsppOficial,
   IReceivedWhatsppOficialRead,
@@ -9,132 +8,173 @@ import {
 @Injectable()
 export class SocketService implements OnModuleDestroy {
   private sockets: Map<number, Socket> = new Map();
+  private connectErrorThrottle: Map<number, number> = new Map();
   private url: string;
-
   private logger: Logger = new Logger(`${SocketService.name}`);
 
   constructor() {
     this.url = process.env.URL_BACKEND_MULT100;
     if (!this.url) {
-      this.logger.error('URL_BACKEND_MULT100 não configurada no .env');
+      this.logger.error('URL_BACKEND_MULT100 nao configurada no .env');
     }
   }
 
   onModuleDestroy() {
-    // Fechar todas as conexões ao desligar o módulo
     this.sockets.forEach((socket, companyId) => {
-      this.logger.log(`Fechando conexão com empresa ${companyId}`);
+      this.logger.log(`Fechando conexao com empresa ${companyId}`);
       socket.close();
     });
     this.sockets.clear();
   }
 
   private getOrCreateSocket(companyId: number): Socket {
-    // Verificar se já existe conexão ativa
-    let socket = this.sockets.get(companyId);
+    const cachedSocket = this.sockets.get(companyId);
 
-    if (socket && socket.connected) {
-      this.logger.log(`[SOCKET] Reutilizando conexão existente para empresa ${companyId}`);
-      return socket;
+    if (cachedSocket && (cachedSocket.connected || cachedSocket.active)) {
+      return cachedSocket;
     }
 
-    // Criar nova conexão
-    this.logger.log(`[SOCKET] Criando nova conexão para empresa ${companyId}`);
+    if (cachedSocket) {
+      try {
+        cachedSocket.removeAllListeners();
+        cachedSocket.close();
+      } catch (error: any) {
+        this.logger.warn(`[SOCKET] Falha ao fechar socket antigo da empresa ${companyId}: ${error?.message}`);
+      }
+      this.sockets.delete(companyId);
+    }
 
+    this.logger.log(`[SOCKET] Criando nova conexao para empresa ${companyId}`);
+
+    if (!this.url) {
+      throw new Error('URL_BACKEND_MULT100 nao configurada');
+    }
+
+    const socket = io(`${this.url}/${companyId}`, {
+      query: {
+        token: `Bearer ${process.env.TOKEN_ADMIN || ''}`,
+      },
+      transports: ['websocket'],
+      timeout: 10000,
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 30000,
+      reconnectionAttempts: Infinity,
+    });
+
+    this.setupSocketEvents(socket, companyId);
+    this.sockets.set(companyId, socket);
+
+    return socket;
+  }
+
+  private async waitForConnection(socket: Socket, companyId: number, timeoutMs = 10000): Promise<boolean> {
+    if (socket.connected) {
+      return true;
+    }
+
+    if (!socket.active) {
+      socket.connect();
+    }
+
+    return new Promise((resolve) => {
+      let settled = false;
+
+      const cleanup = (result: boolean) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        socket.off('connect', onConnect);
+        socket.off('connect_error', onConnectError);
+        resolve(result);
+      };
+
+      const onConnect = () => cleanup(true);
+      const onConnectError = (err: any) => {
+        this.logger.warn(`[SOCKET WAIT] connect_error empresa ${companyId}: ${err?.message || err}`);
+        cleanup(false);
+      };
+
+      const timer = setTimeout(() => {
+        this.logger.warn(`[SOCKET WAIT] Timeout aguardando conexao da empresa ${companyId}`);
+        cleanup(false);
+      }, timeoutMs);
+
+      socket.once('connect', onConnect);
+      socket.once('connect_error', onConnectError);
+    });
+  }
+
+  private async emitWithAck(
+    companyId: number,
+    eventName: string,
+    payload: any,
+    timeoutMs = 10000,
+  ): Promise<boolean> {
     try {
-      if (!this.url) {
-        throw new Error('URL_BACKEND_MULT100 não configurada');
+      const socket = this.getOrCreateSocket(companyId);
+      const isConnected = socket.connected || (await this.waitForConnection(socket, companyId, timeoutMs));
+
+      if (!isConnected) {
+        this.logger.warn(`[SOCKET EMIT] Sem conexao para empresa ${companyId} no evento ${eventName}`);
+        return false;
       }
 
-      socket = io(`${this.url}/${companyId}`, {
-        query: {
-          token: `Bearer ${process.env.TOKEN_ADMIN || ''}`,
-        },
-        reconnection: true,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 30000,
-        reconnectionAttempts: Infinity, // ✅ BUG 8 FIX: Reconexão infinita com backoff
+      return await new Promise<boolean>((resolve) => {
+        socket.timeout(timeoutMs).emit(eventName, payload, (err: any, response?: { ok?: boolean; error?: string }) => {
+          if (err) {
+            this.logger.warn(`[SOCKET ACK] Timeout/falha no ACK do evento ${eventName} empresa ${companyId}: ${err?.message || err}`);
+            return resolve(false);
+          }
+
+          if (response && response.ok === false) {
+            this.logger.warn(`[SOCKET ACK] Backend rejeitou evento ${eventName} empresa ${companyId}: ${response.error || 'unknown error'}`);
+            return resolve(false);
+          }
+
+          return resolve(true);
+        });
       });
-
-      this.setupSocketEvents(socket, companyId);
-      this.sockets.set(companyId, socket);
-
-      return socket;
     } catch (error: any) {
-      this.logger.error(
-        `[SOCKET ERROR] Erro ao conectar empresa ${companyId}: ${error.message}`,
-      );
-      throw error;
+      this.logger.error(`[SOCKET EMIT ERROR] Evento ${eventName} empresa ${companyId}: ${error?.message}`);
+      return false;
     }
   }
 
-  sendMessage(data: IReceivedWhatsppOficial) {
-    try {
-      this.logger.log(
-        `[SOCKET SEND] Enviando mensagem para empresa ${data.companyId}`,
-      );
-
-      const socket = this.getOrCreateSocket(data.companyId);
-      socket.emit('receivedMessageWhatsAppOficial', data);
-
-      this.logger.log(
-        `[SOCKET SEND SUCCESS] Mensagem enviada para empresa ${data.companyId}`,
-      );
-    } catch (error: any) {
-      this.logger.error(
-        `[SOCKET SEND ERROR] Erro ao enviar mensagem para empresa ${data.companyId}: ${error?.message}`,
-      );
-    }
+  async sendMessage(data: IReceivedWhatsppOficial): Promise<boolean> {
+    this.logger.log(`[SOCKET SEND] Enviando mensagem para empresa ${data.companyId}`);
+    const sent = await this.emitWithAck(data.companyId, 'receivedMessageWhatsAppOficial', data, 12000);
+    if (sent) this.logger.log(`[SOCKET SEND SUCCESS] Mensagem enviada para empresa ${data.companyId}`);
+    else this.logger.warn(`[SOCKET SEND FAIL] Nao foi possivel enviar mensagem para empresa ${data.companyId}`);
+    return sent;
   }
 
-  readMessage(data: IReceivedWhatsppOficialRead) {
-    try {
-      this.logger.log(
-        `[SOCKET READ] Enviando status de leitura para empresa ${data.companyId}`,
-      );
-
-      const socket = this.getOrCreateSocket(data.companyId);
-      socket.emit('readMessageWhatsAppOficial', data);
-
-      this.logger.log(
-        `[SOCKET READ SUCCESS] Status de leitura enviado para empresa ${data.companyId}`,
-      );
-    } catch (error: any) {
-      this.logger.error(
-        `[SOCKET READ ERROR] Erro ao enviar status de leitura para empresa ${data.companyId}: ${error?.message}`,
-      );
-    }
+  async readMessage(data: IReceivedWhatsppOficialRead): Promise<boolean> {
+    this.logger.log(`[SOCKET READ] Enviando status de leitura para empresa ${data.companyId}`);
+    const sent = await this.emitWithAck(data.companyId, 'readMessageWhatsAppOficial', data);
+    if (sent) this.logger.log(`[SOCKET READ SUCCESS] Status de leitura enviado para empresa ${data.companyId}`);
+    else this.logger.warn(`[SOCKET READ FAIL] Nao foi possivel enviar read para empresa ${data.companyId}`);
+    return sent;
   }
 
-  // ✅ NOVO: Enviar status update de mensagem (sent, delivered, read, failed)
-  sendStatusUpdate(data: {
+  async sendStatusUpdate(data: {
     companyId: number;
     messageId: string;
     status: string;
     timestamp: string;
     error?: any;
     token: string;
-  }) {
-    try {
-      this.logger.log(
-        `[SOCKET STATUS UPDATE] Enviando status update para empresa ${data.companyId} - MessageId: ${data.messageId}, Status: ${data.status}`,
-      );
-
-      const socket = this.getOrCreateSocket(data.companyId);
-      socket.emit('messageStatusUpdateWhatsAppOficial', data);
-
-      this.logger.log(
-        `[SOCKET STATUS UPDATE SUCCESS] Status update enviado para empresa ${data.companyId}`,
-      );
-    } catch (error: any) {
-      this.logger.error(
-        `[SOCKET STATUS UPDATE ERROR] Erro ao enviar status update para empresa ${data.companyId}: ${error?.message}`,
-      );
-    }
+  }): Promise<boolean> {
+    this.logger.log(
+      `[SOCKET STATUS UPDATE] Enviando status update para empresa ${data.companyId} - MessageId: ${data.messageId}, Status: ${data.status}`,
+    );
+    const sent = await this.emitWithAck(data.companyId, 'messageStatusUpdateWhatsAppOficial', data);
+    if (sent) this.logger.log(`[SOCKET STATUS UPDATE SUCCESS] Status update enviado para empresa ${data.companyId}`);
+    else this.logger.warn(`[SOCKET STATUS UPDATE FAIL] Falha ao enviar status update para empresa ${data.companyId}`);
+    return sent;
   }
 
-  // ✅ NOVO: Enviar status update de template (APPROVED, REJECTED, PAUSED)
-  sendTemplateStatusUpdate(data: {
+  async sendTemplateStatusUpdate(data: {
     companyId: number;
     templateId: string;
     previousCategory?: string;
@@ -142,23 +182,14 @@ export class SocketService implements OnModuleDestroy {
     status: string;
     reason?: string;
     token: string;
-  }) {
-    try {
-      this.logger.log(
-        `[SOCKET TEMPLATE UPDATE] Enviando template status para empresa ${data.companyId} - TemplateId: ${data.templateId}, Status: ${data.status}`,
-      );
-
-      const socket = this.getOrCreateSocket(data.companyId);
-      socket.emit('templateStatusUpdateWhatsAppOficial', data);
-
-      this.logger.log(
-        `[SOCKET TEMPLATE UPDATE SUCCESS] Template status enviado para empresa ${data.companyId}`,
-      );
-    } catch (error: any) {
-      this.logger.error(
-        `[SOCKET TEMPLATE UPDATE ERROR] Erro ao enviar template status para empresa ${data.companyId}: ${error?.message}`,
-      );
-    }
+  }): Promise<boolean> {
+    this.logger.log(
+      `[SOCKET TEMPLATE UPDATE] Enviando template status para empresa ${data.companyId} - TemplateId: ${data.templateId}, Status: ${data.status}`,
+    );
+    const sent = await this.emitWithAck(data.companyId, 'templateStatusUpdateWhatsAppOficial', data);
+    if (sent) this.logger.log(`[SOCKET TEMPLATE UPDATE SUCCESS] Template status enviado para empresa ${data.companyId}`);
+    else this.logger.warn(`[SOCKET TEMPLATE UPDATE FAIL] Falha ao enviar template status para empresa ${data.companyId}`);
+    return sent;
   }
 
   private setupSocketEvents(socket: Socket, companyId: number): void {
@@ -166,23 +197,28 @@ export class SocketService implements OnModuleDestroy {
       this.logger.log(
         `[SOCKET CONNECTED] Empresa ${companyId} conectada ao servidor ${this.url}/${companyId}`,
       );
+      this.connectErrorThrottle.delete(companyId);
     });
 
     socket.on('connect_error', (error) => {
-      this.logger.error(
-        `[SOCKET ERROR] Erro de conexão empresa ${companyId}: ${error}`,
-      );
+      const now = Date.now();
+      const last = this.connectErrorThrottle.get(companyId) || 0;
+      if (now - last >= 10000) {
+        this.logger.error(
+          `[SOCKET ERROR] Erro de conexao empresa ${companyId}: ${error}`,
+        );
+        this.connectErrorThrottle.set(companyId, now);
+      }
     });
 
     socket.on('disconnect', (reason) => {
       this.logger.warn(
-        `[SOCKET DISCONNECTED] Empresa ${companyId} desconectada. Razão: ${reason}`,
+        `[SOCKET DISCONNECTED] Empresa ${companyId} desconectada. Razao: ${reason}`,
       );
 
-      // Remover do cache se desconexão não foi intencional
       if (reason !== 'io client disconnect') {
         this.logger.log(
-          `[SOCKET] Removendo conexão da empresa ${companyId} do cache`,
+          `[SOCKET] Removendo conexao da empresa ${companyId} do cache`,
         );
         this.sockets.delete(companyId);
       }
@@ -190,7 +226,7 @@ export class SocketService implements OnModuleDestroy {
 
     socket.on('reconnect', (attemptNumber) => {
       this.logger.log(
-        `[SOCKET RECONNECTED] Empresa ${companyId} reconectada após ${attemptNumber} tentativas`,
+        `[SOCKET RECONNECTED] Empresa ${companyId} reconectada apos ${attemptNumber} tentativas`,
       );
     });
 

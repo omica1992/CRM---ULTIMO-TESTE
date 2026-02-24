@@ -10,6 +10,7 @@ import FindOrCreateTicketService from "../services/TicketServices/FindOrCreateTi
 import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
 import SendWhatsAppMedia from "../services/WbotServices/SendWhatsAppMedia";
 import { sendMessageWhatsAppOficial } from "../libs/whatsAppOficial/whatsAppOficial.service";
+import { ISendMessageOficial } from "../libs/whatsAppOficial/IWhatsAppOficial.interfaces";
 import path from "path";
 import fs from "fs";
 import logger from "../utils/logger";
@@ -77,19 +78,20 @@ const SendScheduledMessage = async ({
     if (isOficial) {
       // Envio via API Oficial
       logger.info(`📱 [SCHEDULE] Enviando via API Oficial (Provider: ${whatsapp.provider}, Channel: ${whatsapp.channel})`);
-      
-      let payload: any;
+
+      const normalizedNumber = contact.number.replace(/[^\d]/g, "");
+      let payload: ISendMessageOficial;
 
       // ✅ Verificar se é um template
       if (schedule.isTemplate && schedule.templateMetaId) {
         logger.info(`📋 [SCHEDULE] Enviando via TEMPLATE - MetaID: ${schedule.templateMetaId}`);
-        
+
+        const templateName = schedule.templateName || schedule.templateMetaId;
         payload = {
-          messaging_product: "whatsapp",
-          to: contact.number.replace(/[^\d]/g, ""),
-          type: "template" as const,
-          template: {
-            name: schedule.templateMetaId,
+          to: normalizedNumber,
+          type: "template",
+          body_template: {
+            name: templateName,
             language: {
               code: schedule.templateLanguage || "pt_BR"
             },
@@ -101,10 +103,9 @@ const SendScheduledMessage = async ({
       } else {
         // Envio de texto livre
         payload = {
-          messaging_product: "whatsapp",
-          to: contact.number.replace(/[^\d]/g, ""),
-          type: "text" as const,
-          text: {
+          to: normalizedNumber,
+          type: "text",
+          body_text: {
             body: messageBody
           }
         };
@@ -118,8 +119,36 @@ const SendScheduledMessage = async ({
         if (fs.existsSync(fullMediaPath)) {
           logger.info(`📎 [SCHEDULE] Enviando mídia: ${schedule.mediaName}`);
           mediaPath = fullMediaPath;
-          // Ajustar payload para incluir mídia
-          // A função sendMessageWhatsAppOficial vai lidar com o upload
+
+          const mediaName = schedule.mediaName.toLowerCase();
+          if (/\.(jpg|jpeg|png|gif|webp)$/.test(mediaName)) {
+            payload = {
+              to: normalizedNumber,
+              type: "image",
+              fileName: schedule.mediaName,
+              body_image: { caption: messageBody }
+            };
+          } else if (/\.(mp4|mov|avi|mkv|webm)$/.test(mediaName)) {
+            payload = {
+              to: normalizedNumber,
+              type: "video",
+              fileName: schedule.mediaName,
+              body_video: { caption: messageBody }
+            };
+          } else if (/\.(mp3|ogg|wav|m4a|aac)$/.test(mediaName)) {
+            payload = {
+              to: normalizedNumber,
+              type: "audio",
+              fileName: schedule.mediaName
+            };
+          } else {
+            payload = {
+              to: normalizedNumber,
+              type: "document",
+              fileName: schedule.mediaName,
+              body_document: { caption: messageBody }
+            };
+          }
         }
       }
 

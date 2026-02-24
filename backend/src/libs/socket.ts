@@ -229,7 +229,7 @@ export const initIO = (httpServer: Server): SocketIO => {
       socket.leave(ticketId);
     });
 
-    socket.on("receivedMessageWhatsAppOficial", async (data: any) => {
+    socket.on("receivedMessageWhatsAppOficial", async (data: any, callback?: (response: { ok: boolean; error?: string }) => void) => {
       console.log(`[SOCKET] ===== MENSAGEM RECEBIDA VIA SOCKET =====`);
       console.log(`[SOCKET] CompanyId: ${data?.companyId}, From: ${data?.fromNumber}, Type: ${data?.message?.type}`);
       console.log(`[SOCKET] HasFile: ${!!data?.message?.file}, FileSize: ${data?.message?.file?.length || 0}`);
@@ -237,36 +237,38 @@ export const initIO = (httpServer: Server): SocketIO => {
       try {
         const receivedService = new ReceibedWhatsAppService();
         await receivedService.getMessage(data);
+        callback?.({ ok: true });
       } catch (err) {
-        logger.error(`[SOCKET] ❌ Erro ao processar mensagem recebida: ${err.message}`);
+        logger.error(`[SOCKET] Erro ao processar mensagem recebida: ${err.message}`);
 
-        // ✅ CORREÇÃO: Retry com delay para mensagens que falharam por lock contention
-        // Se duas mensagens do mesmo contato chegam quase juntas via socket fallback,
-        // a segunda pode falhar por não conseguir o lock — retry após 2s resolve isso
         try {
-          logger.warn(`[SOCKET] 🔄 Retentando mensagem após 2s (from: ${data?.fromNumber})`);
+          logger.warn(`[SOCKET] Retentando mensagem apos 2s (from: ${data?.fromNumber})`);
           await new Promise(resolve => setTimeout(resolve, 2000));
           const retryService = new ReceibedWhatsAppService();
           await retryService.getMessage(data);
-          logger.info(`[SOCKET] ✅ Retry bem-sucedido para ${data?.fromNumber}`);
+          logger.info(`[SOCKET] Retry bem-sucedido para ${data?.fromNumber}`);
+          callback?.({ ok: true });
         } catch (retryErr) {
-          logger.error(`[SOCKET] ❌ Retry também falhou - MENSAGEM PODE TER SIDO PERDIDA: ${retryErr.message}`);
-          logger.error(`[SOCKET] ❌ Dados: from=${data?.fromNumber}, type=${data?.message?.type}, text="${data?.message?.text?.substring(0, 100)}"`);
+          logger.error(`[SOCKET] Retry tambem falhou - MENSAGEM PODE TER SIDO PERDIDA: ${retryErr.message}`);
+          logger.error(`[SOCKET] Dados: from=${data?.fromNumber}, type=${data?.message?.type}, text="${data?.message?.text?.substring(0, 100)}"`);
+          callback?.({ ok: false, error: retryErr?.message || "retry failed" });
         }
       }
     });
 
-    socket.on("readMessageWhatsAppOficial", async (data: any) => {
+    socket.on("readMessageWhatsAppOficial", async (data: any, callback?: (response: { ok: boolean; error?: string }) => void) => {
       try {
         const receivedService = new ReceibedWhatsAppService();
         await receivedService.readMessage(data);
+        callback?.({ ok: true });
       } catch (err) {
-        logger.error(`[SOCKET READ] ❌ Erro ao processar read message: ${err.message}`);
+        logger.error(`[SOCKET READ] Erro ao processar read message: ${err.message}`);
+        callback?.({ ok: false, error: err?.message || "read error" });
       }
     });
 
     // ✅ CORRIGIDO: Event handler para status updates de mensagens da Meta API
-    socket.on("messageStatusUpdateWhatsAppOficial", async (data: any) => {
+    socket.on("messageStatusUpdateWhatsAppOficial", async (data: any, callback?: (response: { ok: boolean; error?: string }) => void) => {
       try {
         console.log(`[SOCKET STATUS] ===== STATUS UPDATE RECEBIDO =====`);
         console.log(`[SOCKET STATUS] MessageId: ${data?.messageId}, Status: ${data?.status}, CompanyId: ${data?.companyId}`);
@@ -275,11 +277,11 @@ export const initIO = (httpServer: Server): SocketIO => {
         const { messageId, status, error, companyId } = data;
 
         if (!messageId || !companyId) {
-          logger.warn(`[SOCKET STATUS] ⚠️ Status update inválido - faltam dados obrigatórios`);
+          logger.warn(`[SOCKET STATUS] Status update invalido - faltam dados obrigatorios`);
+          callback?.({ ok: false, error: "missing required fields" });
           return;
         }
 
-        // Buscar mensagem pelo wid
         const Message = (await import("../models/Message")).default;
         const Ticket = (await import("../models/Ticket")).default;
         const message = await Message.findOne({
@@ -287,7 +289,9 @@ export const initIO = (httpServer: Server): SocketIO => {
           include: [{ model: Ticket, as: "ticket" }]
         });
 
+
         if (!message) {
+          callback?.({ ok: false, error: "message not found" });
           logger.warn(`[SOCKET STATUS] ⚠️ Mensagem ${messageId} não encontrada para companyId ${companyId}`);
           return;
         }
@@ -340,32 +344,36 @@ export const initIO = (httpServer: Server): SocketIO => {
           await message.update({ ack: 3, read: true });
           logger.info(`[SOCKET] ✅ Mensagem ${messageId} marcada como lida (ack: 3)`);
         }
+        callback?.({ ok: true });
       } catch (error) {
         logger.error(`[SOCKET] Erro ao processar status update:`, error);
+        callback?.({ ok: false, error: error?.message || "status update error" });
       }
     });
 
 
     // ✅ NOVO: Event handler para status updates de TEMPLATES da Meta API
-    socket.on("templateStatusUpdateWhatsAppOficial", async (data: any) => {
+    socket.on("templateStatusUpdateWhatsAppOficial", async (data: any, callback?: (response: { ok: boolean; error?: string }) => void) => {
       try {
         console.log(`[SOCKET] ===== TEMPLATE STATUS UPDATE RECEBIDO =====`);
         const { templateId, status, reason, companyId } = data;
         console.log(`[SOCKET] TemplateId: ${templateId}, Status: ${status}, CompanyId: ${companyId}`);
 
         if (!templateId || !companyId) {
-          logger.warn(`[SOCKET] Template status update inválido - faltam dados obrigatórios`);
+          logger.warn(`[SOCKET] Template status update invalido - faltam dados obrigatorios`);
+          callback?.({ ok: false, error: "missing required fields" });
           return;
         }
 
         const QuickMessage = (await import("../models/QuickMessage")).default;
 
-        // Buscar template pelo metaID
         const template = await QuickMessage.findOne({
           where: { metaID: templateId, companyId }
         });
 
+
         if (!template) {
+          callback?.({ ok: false, error: "template not found" });
           logger.warn(`[SOCKET] Template ${templateId} não encontrado para companyId ${companyId}`);
           return;
         }
@@ -389,9 +397,10 @@ export const initIO = (httpServer: Server): SocketIO => {
             action: "update",
             record: template
           });
-
+        callback?.({ ok: true });
       } catch (error) {
         logger.error(`[SOCKET] Erro ao processar template status update:`, error);
+        callback?.({ ok: false, error: error?.message || "template status error" });
       }
     });
 
@@ -480,3 +489,6 @@ export const emitBirthdayEvents = async (companyId: number) => {
     }
   }
 };
+
+
+
