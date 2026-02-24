@@ -20,6 +20,7 @@ interface QueueData {
   integrationId?: number;
   fileListId?: number;
   closeTicket?: boolean;
+  isBotQueue?: boolean;
   typeRandomMode?: string;
 }
 

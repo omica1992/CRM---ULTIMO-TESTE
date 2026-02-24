@@ -39,6 +39,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     integrationId,
     fileListId,
     closeTicket,
+    isBotQueue,
     typeRandomMode
   } = req.body;
   const { companyId } = req.user;
@@ -57,6 +58,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     integrationId: integrationId === "" ? null : integrationId,
     fileListId: fileListId === "" ? null : fileListId,
     closeTicket,
+    isBotQueue,
     typeRandomMode
   });
 
@@ -99,6 +101,7 @@ export const update = async (
     integrationId,
     fileListId,
     closeTicket,
+    isBotQueue,
     typeRandomMode
   } = req.body;
 
@@ -115,6 +118,7 @@ export const update = async (
     integrationId: integrationId === "" ? null : integrationId,
     fileListId: fileListId === "" ? null : fileListId,
     closeTicket,
+    isBotQueue,
     typeRandomMode
   },
     companyId);
