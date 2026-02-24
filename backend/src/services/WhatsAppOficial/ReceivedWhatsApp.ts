@@ -922,6 +922,58 @@ export class ReceibedWhatsAppService {
                 !ticket.useIntegration &&
                 !ticket.integrationId
             ) {
+                // Quando ticket já foi redirecionado para uma fila com bot,
+                // valida expediente da fila antes de disparar chatbot.
+                if (
+                    settings?.scheduleType === "queue" &&
+                    ticket.userId === null &&
+                    (!ticket.isGroup || whatsapp.groupAsTicket === "enabled")
+                ) {
+                    const queueSchedule = await VerifyCurrentSchedule(companyId, ticket.queueId, 0);
+
+                    if (!queueSchedule || queueSchedule.inActivity === false) {
+                        const queueData = ticket.queue || await Queue.findByPk(ticket.queueId);
+                        const queueOutOfHoursMessage = queueData?.outOfHoursMessage || whatsapp.outOfHoursMessage || "";
+
+                        logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS QUEUE] Ticket ${ticket.id} fora de expediente da fila ${ticket.queueId}`);
+
+                        if (queueOutOfHoursMessage !== "" && !ticket.imported && ticket.amountUsedBotQueues === 0) {
+                            const body = formatBody(`${queueOutOfHoursMessage}`, ticket);
+                            await SendWhatsAppOficialMessage({
+                                body,
+                                ticket,
+                                quotedMsg: null,
+                                type: 'text',
+                                media: null,
+                                vCard: null
+                            });
+                        }
+
+                        const ticketUpdate: any = {
+                            isOutOfHour: true,
+                            amountUsedBotQueues: ticket.amountUsedBotQueues + 1
+                        };
+
+                        if (settings?.closeTicketOutOfHours) {
+                            ticketUpdate.status = "closed";
+                            logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS QUEUE] Encerrando ticket ${ticket.id} fora de expediente (configuração habilitada)`);
+                        }
+
+                        await ticket.update(ticketUpdate);
+                        await ticketTraking.update({ chatbotAt: moment().toDate() });
+
+                        if (ticketUpdate.status === "closed") {
+                            const io = getIO();
+                            io.of(String(companyId)).emit(`company-${companyId}-ticket`, {
+                                action: "delete",
+                                ticketId: ticket.id
+                            });
+                        }
+
+                        return;
+                    }
+                }
+
                 logger.info(`[WHATSAPP OFICIAL - CHATBOT CHECK] Ticket ${ticket.id} - userId: ${ticket.userId}, hasUser: ${!!ticket.user}, chatbots: ${ticket.queue?.chatbots?.length || 0}`);
 
                 // ✅ CORREÇÃO: Trocar OR (||) por AND (&&) para garantir que chatbot só execute sem atendente
