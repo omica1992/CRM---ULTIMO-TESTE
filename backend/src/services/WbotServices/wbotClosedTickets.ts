@@ -1,7 +1,8 @@
-import { Filterable, Op } from "sequelize";
+import { col, Filterable, fn, Op } from "sequelize";
 import Ticket from "../../models/Ticket"
 import Whatsapp from "../../models/Whatsapp"
 import Queue from "../../models/Queue"
+import Message from "../../models/Message";
 import { getIO } from "../../libs/socket"
 import formatBody from "../../helpers/Mustache";
 import SendWhatsAppMessage from "./SendWhatsAppMessage";
@@ -22,7 +23,7 @@ import Contact from "../../models/Contact";
 import ShowTicketUUIDService from "../TicketServices/ShowTicketFromUUIDService";
 
 /**
- * Função auxiliar para enviar mensagens de inatividade
+ * Funo auxiliar para enviar mensagens de inatividade
  * Suporta tanto Baileys quanto API Oficial
  */
 const sendInactivityMessage = async (body: string, ticket: any): Promise<void> => {
@@ -30,7 +31,7 @@ const sendInactivityMessage = async (body: string, ticket: any): Promise<void> =
     logger.info(`[AUTO-CLOSE] Enviando mensagem de inatividade - Canal: ${ticket.channel}, Ticket: ${ticket.id}`);
 
     if (ticket.channel === "whatsapp") {
-      // Baileys (WhatsApp não oficial)
+      // Baileys (WhatsApp no oficial)
       const sentMessage = await SendWhatsAppMessage({ body, ticket });
       await verifyMessage(sentMessage, ticket, ticket.contact);
       logger.info(`[AUTO-CLOSE] Mensagem enviada via Baileys - Ticket: ${ticket.id}`);
@@ -69,66 +70,80 @@ const closeTicket = async (ticket: any, body: string) => {
   });
 };
 
-const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
-  const currentTime = new Date();
-  const brazilTimeZoneOffset = -3 * 60; // Fuso horário do Brasil é UTC-3
-  const currentTimeBrazil = new Date(currentTime.getTime() + brazilTimeZoneOffset * 60000); // Adiciona o offset ao tempo atual
+const filterTicketsByLastMessageTimeout = async <T extends { id: number }>(
+  tickets: T[],
+  minutes: number
+): Promise<T[]> => {
+  if (!tickets.length) return tickets;
 
+  const cutoffDate = sub(new Date(), { minutes: Number(minutes) });
+  const lastMessages = await Message.findAll({
+    attributes: ["ticketId", [fn("MAX", col("createdAt")), "lastMessageAt"]],
+    where: { ticketId: { [Op.in]: tickets.map(ticket => ticket.id) } },
+    group: ["ticketId"],
+    raw: true
+  });
+
+  const lastMessageByTicket = new Map<number, Date>();
+  for (const row of lastMessages as any[]) {
+    if (row.ticketId && row.lastMessageAt) {
+      lastMessageByTicket.set(Number(row.ticketId), new Date(row.lastMessageAt));
+    }
+  }
+
+  return tickets.filter(ticket => {
+    const lastMessageAt = lastMessageByTicket.get(ticket.id);
+    return !!lastMessageAt && lastMessageAt < cutoffDate;
+  });
+};
+
+const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
   let timeInactiveMessage = Number(whatsapp.timeInactiveMessage || 0);
   let expiresTime = Number(whatsapp.expiresTicket || 0);
   let flowInactiveTime = Number(whatsapp.flowInactiveTime || 0);
 
-  // ✅ Buscar filas marcadas como bot para INCLUIR tickets dessas filas no auto-close
   const botQueues = await Queue.findAll({
     where: { companyId, isBotQueue: true },
-    attributes: ['id']
+    attributes: ["id"]
   });
   const botQueueIds = botQueues.map(q => q.id);
-
-  // Condição de fila: sem fila OU em fila de bot
   const queueCondition = botQueueIds.length > 0
     ? { [Op.or]: [{ [Op.eq]: null as any }, { [Op.in]: botQueueIds }] }
     : { [Op.eq]: null as any };
+  const useLastAttendantMessage = Number(whatsapp.whenExpiresTicket) === 1;
 
-  logger.info(`[AUTO-CLOSE] Verificando tickets inativos - Empresa: ${companyId}, Conexão: ${whatsapp.name} (ID: ${whatsapp.id}), Canal: ${whatsapp.channel}`);
-  logger.info(`[AUTO-CLOSE] Configurações - timeInactiveMessage: ${timeInactiveMessage}min, expiresTime: ${expiresTime}min, whenExpiresTicket: ${whatsapp.whenExpiresTicket}`);
-  if (botQueueIds.length > 0) logger.info(`[AUTO-CLOSE] Filas de bot incluídas: ${botQueueIds.join(', ')}`);
+  logger.info(`[AUTO-CLOSE] Verificando tickets inativos - Empresa: ${companyId}, Conex?o: ${whatsapp.name} (ID: ${whatsapp.id}), Canal: ${whatsapp.channel}`);
+  logger.info(`[AUTO-CLOSE] Configura??es - timeInactiveMessage: ${timeInactiveMessage}min, expiresTime: ${expiresTime}min, whenExpiresTicket: ${whatsapp.whenExpiresTicket}`);
+  if (botQueueIds.length > 0) logger.info(`[AUTO-CLOSE] Filas de bot inclu?das: ${botQueueIds.join(", ")}`);
 
   if (!isNil(expiresTime) && expiresTime > 0) {
-
     if (!isNil(timeInactiveMessage) && timeInactiveMessage > 0) {
-      let whereCondition1: Filterable["where"];
-
-      whereCondition1 = {
-        status: {
-          [Op.or]: ["open", "pending"]
-        },
+      let whereCondition1: Filterable["where"] = {
+        status: { [Op.or]: ["open", "pending"] },
         companyId,
         whatsappId: whatsapp.id,
-        updatedAt: {
-          [Op.lt]: +sub(new Date(), {
-            minutes: Number(timeInactiveMessage)
-          })
-        },
         imported: null,
         sendInactiveMessage: false,
-        userId: null, // Excluir tickets atribuídos a atendentes
-        queueId: queueCondition // Sem fila OU em fila de bot
+        userId: null,
+        queueId: queueCondition
       };
 
-      if (Number(whatsapp.whenExpiresTicket) === 1) {
+      if (useLastAttendantMessage) {
+        whereCondition1 = { ...whereCondition1, fromMe: true };
+      } else {
         whereCondition1 = {
           ...whereCondition1,
-          fromMe: true
+          updatedAt: { [Op.lt]: +sub(new Date(), { minutes: Number(timeInactiveMessage) }) }
         };
       }
 
-      const ticketsForInactiveMessage = await Ticket.findAll({
-        where: whereCondition1
-      });
+      const ticketsForInactiveMessageBase = await Ticket.findAll({ where: whereCondition1 });
+      const ticketsForInactiveMessage = useLastAttendantMessage
+        ? await filterTicketsByLastMessageTimeout(ticketsForInactiveMessageBase, timeInactiveMessage)
+        : ticketsForInactiveMessageBase;
 
-      if (ticketsForInactiveMessage && ticketsForInactiveMessage.length > 0) {
-        logger.info(`Encontrou ${ticketsForInactiveMessage.length} atendimentos para enviar mensagem de inatividade na empresa ${companyId}- na conexão ${whatsapp.name}!`)
+      if (ticketsForInactiveMessage.length > 0) {
+        logger.info(`Encontrou ${ticketsForInactiveMessage.length} atendimentos para enviar mensagem de inatividade na empresa ${companyId}- na conex?o ${whatsapp.name}!`);
         await Promise.all(ticketsForInactiveMessage.map(async ticket => {
           await ticket.reload();
           if (!ticket.sendInactiveMessage) {
@@ -139,48 +154,38 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
         }));
       }
 
-      expiresTime += timeInactiveMessage; // Adicionando o tempo de inatividade ao tempo de expiração
+      expiresTime += timeInactiveMessage;
     }
 
-    let whereCondition: Filterable["where"];
-
-    whereCondition = {
-      status: {
-        [Op.or]: ["open", "pending"]
-      },
+    let whereCondition: Filterable["where"] = {
+      status: { [Op.or]: ["open", "pending"] },
       companyId,
       whatsappId: whatsapp.id,
-      updatedAt: {
-        [Op.lt]: +sub(new Date(), {
-          minutes: Number(expiresTime)
-        })
-      },
       imported: null,
-      userId: null, // Excluir tickets atribuídos a atendentes
-      queueId: queueCondition // Sem fila OU em fila de bot
-    }
+      userId: null,
+      queueId: queueCondition
+    };
 
     if (timeInactiveMessage > 0) {
+      whereCondition = { ...whereCondition, sendInactiveMessage: true };
+    }
+
+    if (useLastAttendantMessage) {
+      whereCondition = { ...whereCondition, fromMe: true };
+    } else {
       whereCondition = {
         ...whereCondition,
-        sendInactiveMessage: true,
+        updatedAt: { [Op.lt]: +sub(new Date(), { minutes: Number(expiresTime) }) }
       };
     }
 
-    if (Number(whatsapp.whenExpiresTicket) === 1) {
-      whereCondition = {
-        ...whereCondition,
-        fromMe: true
-      };
-    }
+    const ticketsToCloseBase = await Ticket.findAll({ where: whereCondition });
+    const ticketsToClose = useLastAttendantMessage
+      ? await filterTicketsByLastMessageTimeout(ticketsToCloseBase, expiresTime)
+      : ticketsToCloseBase;
 
-    const ticketsToClose = await Ticket.findAll({
-      where: whereCondition
-    });
-
-
-    if (ticketsToClose && ticketsToClose.length > 0) {
-      logger.info(`Encontrou ${ticketsToClose.length} atendimentos para encerrar na empresa ${companyId} - na conexão ${whatsapp.name}!`);
+    if (ticketsToClose.length > 0) {
+      logger.info(`Encontrou ${ticketsToClose.length} atendimentos para encerrar na empresa ${companyId} - na conex?o ${whatsapp.name}!`);
 
       for (const ticket of ticketsToClose) {
         await ticket.reload();
@@ -195,7 +200,6 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
           await sendInactivityMessage(bodyExpiresMessageInactive, ticket);
         }
 
-        // Como o campo sendInactiveMessage foi atualizado, podemos garantir que a mensagem foi enviada
         await closeTicket(ticket, bodyExpiresMessageInactive);
 
         await ticketTraking.update({
@@ -204,7 +208,6 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
           whatsappId: ticket.whatsappId,
           userId: ticket.userId,
         });
-        // console.log("emitiu socket 144", ticket.id)
 
         const io = getIO();
         io.of(companyId.toString()).emit(`company-${companyId}-ticket`, {
@@ -216,30 +219,25 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
   }
 
   if (!isNil(flowInactiveTime) && flowInactiveTime > 0) {
-    let whereCondition1: Filterable["where"];
-
-    whereCondition1 = {
+    let whereCondition1: Filterable["where"] = {
       status: "open",
       companyId,
       whatsappId: whatsapp.id,
-      updatedAt: {
-        [Op.lt]: +sub(new Date(), {
-          minutes: Number(flowInactiveTime)
-        })
-      },
       imported: null,
       sendInactiveMessage: false,
-      userId: null // Excluir tickets atribuídos a atendentes
+      userId: null
     };
 
-    if (Number(whatsapp.whenExpiresTicket) === 1) {
+    if (useLastAttendantMessage) {
+      whereCondition1 = { ...whereCondition1, fromMe: true };
+    } else {
       whereCondition1 = {
         ...whereCondition1,
-        fromMe: true
+        updatedAt: { [Op.lt]: +sub(new Date(), { minutes: Number(flowInactiveTime) }) }
       };
     }
 
-    const ticketsForInactiveMessage = await Ticket.findAll({
+    const ticketsForInactiveMessageBase = await Ticket.findAll({
       where: whereCondition1,
       include: [
         {
@@ -248,13 +246,15 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
         }
       ]
     });
+    const ticketsForInactiveMessage = useLastAttendantMessage
+      ? await filterTicketsByLastMessageTimeout(ticketsForInactiveMessageBase, flowInactiveTime)
+      : ticketsForInactiveMessageBase;
 
-    if (ticketsForInactiveMessage && ticketsForInactiveMessage.length > 0) {
-      logger.info(`Encontrou ${ticketsForInactiveMessage.length} atendimentos para acionar o fluxo de inatividade na empresa ${companyId}- na conexão ${whatsapp.name}!`)
+    if (ticketsForInactiveMessage.length > 0) {
+      logger.info(`Encontrou ${ticketsForInactiveMessage.length} atendimentos para acionar o fluxo de inatividade na empresa ${companyId}- na conex?o ${whatsapp.name}!`)
       await Promise.all(ticketsForInactiveMessage.map(async ticket => {
         await ticket.reload();
         if (!ticket.sendInactiveMessage) {
-
           if (ticket.maxUseInactiveTime < whatsapp.maxUseInactiveTime) {
             const flow = await FlowBuilderModel.findOne({
               where: {
@@ -263,7 +263,6 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
             });
 
             if (flow) {
-
               const contact = ticket.contact;
 
               const nodes: INodes[] = flow.flow["nodes"];
@@ -293,17 +292,14 @@ const handleOpenTickets = async (companyId: number, whatsapp: Whatsapp) => {
               await ticket.update({
                 maxUseInactiveTime: ticket.maxUseInactiveTime ? ticket.maxUseInactiveTime + 1 : 1
               });
-
             }
           }
-
         }
       }));
     }
 
-    expiresTime += timeInactiveMessage; // Adicionando o tempo de inatividade ao tempo de expiração
-  };
-
+    expiresTime += timeInactiveMessage;
+  }
 };
 
 const handleNPSTickets = async (companyId: number, whatsapp: any) => {
@@ -321,7 +317,7 @@ const handleNPSTickets = async (companyId: number, whatsapp: any) => {
   });
 
   if (ticketsToClose && ticketsToClose.length > 0) {
-    logger.info(`Encontrou ${ticketsToClose.length} atendimentos para encerrar NPS na empresa ${companyId} - na conexão ${whatsapp.name}!`);
+    logger.info(`Encontrou ${ticketsToClose.length} atendimentos para encerrar NPS na empresa ${companyId} - na conex?o ${whatsapp.name}!`);
     await Promise.all(ticketsToClose.map(async ticket => {
       await ticket.reload();
       const ticketTraking = await TicketTraking.findOne({
@@ -353,65 +349,64 @@ const handleNPSTickets = async (companyId: number, whatsapp: any) => {
 };
 
 const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) => {
-  const currentTime = new Date();
-  const brazilTimeZoneOffset = -3 * 60; // Fuso horário do Brasil é UTC-3
-  const currentTimeBrazil = new Date(currentTime.getTime() + brazilTimeZoneOffset * 60000); // Adiciona o offset ao tempo atual
-
   let timeInactiveMessage = Number(whatsapp.timeInactiveMessage || 0);
   let expiresTime = Number(whatsapp.expiresTicket || 0);
   let flowInactiveTime = Number(whatsapp.flowInactiveTime || 0);
 
-  // ✅ Buscar filas marcadas como bot para INCLUIR tickets dessas filas no auto-close
   const botQueues = await Queue.findAll({
     where: { companyId, isBotQueue: true },
-    attributes: ['id']
+    attributes: ["id"]
   });
   const botQueueIds = botQueues.map(q => q.id);
 
-  // Condição de fila: sem fila OU em fila de bot
   const queueCondition = botQueueIds.length > 0
     ? { [Op.or]: [{ [Op.eq]: null as any }, { [Op.in]: botQueueIds }] }
     : { [Op.eq]: null as any };
+  const useLastAttendantMessage = Number(whatsapp.whenExpiresTicket) === 1;
 
-  logger.info(`[AUTO-CLOSE] Verificando tickets pendentes inativos - Empresa: ${companyId}, Conexão: ${whatsapp.name} (ID: ${whatsapp.id}), Canal: ${whatsapp.channel}`);
-  logger.info(`[AUTO-CLOSE] Configurações - timeInactiveMessage: ${timeInactiveMessage}min, expiresTime: ${expiresTime}min, whenExpiresTicket: ${whatsapp.whenExpiresTicket}`);
-  if (botQueueIds.length > 0) logger.info(`[AUTO-CLOSE] Filas de bot incluídas (pending): ${botQueueIds.join(', ')}`);
+  logger.info(`[AUTO-CLOSE] Verificando tickets pendentes inativos - Empresa: ${companyId}, Conex?o: ${whatsapp.name} (ID: ${whatsapp.id}), Canal: ${whatsapp.channel}`);
+  logger.info(`[AUTO-CLOSE] Configura??es - timeInactiveMessage: ${timeInactiveMessage}min, expiresTime: ${expiresTime}min, whenExpiresTicket: ${whatsapp.whenExpiresTicket}`);
+  if (botQueueIds.length > 0) logger.info(`[AUTO-CLOSE] Filas de bot inclu?das (pending): ${botQueueIds.join(', ')}`);
 
   if (!isNil(expiresTime) && expiresTime > 0) {
-
     if (!isNil(timeInactiveMessage) && timeInactiveMessage > 0) {
-      let whereCondition1: Filterable["where"];
-
-      whereCondition1 = {
+      let whereCondition1: Filterable["where"] = {
         status: {
           [Op.or]: ["open", "pending"]
         },
         companyId,
         whatsappId: whatsapp.id,
-        updatedAt: {
-          [Op.lt]: +sub(new Date(), {
-            minutes: Number(timeInactiveMessage)
-          })
-        },
         imported: null,
         sendInactiveMessage: false,
-        userId: null, // Excluir tickets atribuídos a atendentes
-        queueId: queueCondition // Sem fila OU em fila de bot
+        userId: null,
+        queueId: queueCondition
       };
 
-      if (Number(whatsapp.whenExpiresTicket) === 1) {
+      if (useLastAttendantMessage) {
         whereCondition1 = {
           ...whereCondition1,
           fromMe: true
         };
+      } else {
+        whereCondition1 = {
+          ...whereCondition1,
+          updatedAt: {
+            [Op.lt]: +sub(new Date(), {
+              minutes: Number(timeInactiveMessage)
+            })
+          }
+        };
       }
 
-      const ticketsForInactiveMessage = await Ticket.findAll({
+      const ticketsForInactiveMessageBase = await Ticket.findAll({
         where: whereCondition1
       });
+      const ticketsForInactiveMessage = useLastAttendantMessage
+        ? await filterTicketsByLastMessageTimeout(ticketsForInactiveMessageBase, timeInactiveMessage)
+        : ticketsForInactiveMessageBase;
 
-      if (ticketsForInactiveMessage && ticketsForInactiveMessage.length > 0) {
-        logger.info(`Encontrou ${ticketsForInactiveMessage.length} atendimentos para enviar mensagem de inatividade na empresa ${companyId}- na conexão ${whatsapp.name}!`)
+      if (ticketsForInactiveMessage.length > 0) {
+        logger.info(`Encontrou ${ticketsForInactiveMessage.length} atendimentos para enviar mensagem de inatividade na empresa ${companyId}- na conex?o ${whatsapp.name}!`)
         await Promise.all(ticketsForInactiveMessage.map(async ticket => {
           await ticket.reload();
           if (!ticket.sendInactiveMessage) {
@@ -422,25 +417,18 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
         }));
       }
 
-      expiresTime += timeInactiveMessage; // Adicionando o tempo de inatividade ao tempo de expiração
+      expiresTime += timeInactiveMessage;
     }
 
-    let whereCondition: Filterable["where"];
-
-    whereCondition = {
+    let whereCondition: Filterable["where"] = {
       status: {
         [Op.or]: ["open", "pending"]
       },
       companyId,
       whatsappId: whatsapp.id,
-      updatedAt: {
-        [Op.lt]: +sub(new Date(), {
-          minutes: Number(expiresTime)
-        })
-      },
       imported: null,
-      userId: null, // Excluir tickets atribuídos a atendentes
-      queueId: queueCondition // Sem fila OU em fila de bot
+      userId: null,
+      queueId: queueCondition
     }
 
     if (timeInactiveMessage > 0) {
@@ -450,20 +438,31 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
       };
     }
 
-    if (Number(whatsapp.whenExpiresTicket) === 1) {
+    if (useLastAttendantMessage) {
       whereCondition = {
         ...whereCondition,
         fromMe: true
       };
+    } else {
+      whereCondition = {
+        ...whereCondition,
+        updatedAt: {
+          [Op.lt]: +sub(new Date(), {
+            minutes: Number(expiresTime)
+          })
+        }
+      };
     }
 
-    const ticketsToClose = await Ticket.findAll({
+    const ticketsToCloseBase = await Ticket.findAll({
       where: whereCondition
     });
+    const ticketsToClose = useLastAttendantMessage
+      ? await filterTicketsByLastMessageTimeout(ticketsToCloseBase, expiresTime)
+      : ticketsToCloseBase;
 
-
-    if (ticketsToClose && ticketsToClose.length > 0) {
-      logger.info(`Encontrou ${ticketsToClose.length} atendimentos para encerrar na empresa ${companyId} - na conexão ${whatsapp.name}!`);
+    if (ticketsToClose.length > 0) {
+      logger.info(`Encontrou ${ticketsToClose.length} atendimentos para encerrar na empresa ${companyId} - na conex?o ${whatsapp.name}!`);
 
       for (const ticket of ticketsToClose) {
         await ticket.reload();
@@ -478,7 +477,6 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
           await sendInactivityMessage(bodyExpiresMessageInactive, ticket);
         }
 
-        // Como o campo sendInactiveMessage foi atualizado, podemos garantir que a mensagem foi enviada
         await closeTicket(ticket, bodyExpiresMessageInactive);
 
         await ticketTraking.update({
@@ -487,7 +485,6 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
           whatsappId: ticket.whatsappId,
           userId: ticket.userId,
         });
-        // console.log("emitiu socket 144", ticket.id)
 
         const io = getIO();
         io.of(companyId.toString()).emit(`company-${companyId}-ticket`, {
@@ -499,32 +496,34 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
   }
 
   if (!isNil(flowInactiveTime) && flowInactiveTime > 0) {
-    let whereCondition1: Filterable["where"];
-
-    whereCondition1 = {
+    let whereCondition1: Filterable["where"] = {
       status: {
         [Op.or]: ["open", "pending"]
       },
       companyId,
       whatsappId: whatsapp.id,
-      updatedAt: {
-        [Op.lt]: +sub(new Date(), {
-          minutes: Number(flowInactiveTime)
-        })
-      },
       imported: null,
       sendInactiveMessage: false,
-      userId: null // Excluir tickets atribuídos a atendentes
+      userId: null
     };
 
-    if (Number(whatsapp.whenExpiresTicket) === 1) {
+    if (useLastAttendantMessage) {
       whereCondition1 = {
         ...whereCondition1,
         fromMe: true
       };
+    } else {
+      whereCondition1 = {
+        ...whereCondition1,
+        updatedAt: {
+          [Op.lt]: +sub(new Date(), {
+            minutes: Number(flowInactiveTime)
+          })
+        }
+      };
     }
 
-    const ticketsForInactiveMessage = await Ticket.findAll({
+    const ticketsForInactiveMessageBase = await Ticket.findAll({
       where: whereCondition1,
       include: [
         {
@@ -533,13 +532,15 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
         }
       ]
     });
+    const ticketsForInactiveMessage = useLastAttendantMessage
+      ? await filterTicketsByLastMessageTimeout(ticketsForInactiveMessageBase, flowInactiveTime)
+      : ticketsForInactiveMessageBase;
 
-    if (ticketsForInactiveMessage && ticketsForInactiveMessage.length > 0) {
-      logger.info(`Encontrou ${ticketsForInactiveMessage.length} atendimentos para acionar o fluxo de inatividade na empresa ${companyId}- na conexão ${whatsapp.name}!`)
+    if (ticketsForInactiveMessage.length > 0) {
+      logger.info(`Encontrou ${ticketsForInactiveMessage.length} atendimentos para acionar o fluxo de inatividade na empresa ${companyId}- na conex?o ${whatsapp.name}!`)
       await Promise.all(ticketsForInactiveMessage.map(async ticket => {
         await ticket.reload();
         if (!ticket.sendInactiveMessage) {
-
           if (ticket.maxUseInactiveTime < whatsapp.maxUseInactiveTime) {
             const flow = await FlowBuilderModel.findOne({
               where: {
@@ -548,7 +549,6 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
             });
 
             if (flow) {
-
               const contact = ticket.contact;
 
               const nodes: INodes[] = flow.flow["nodes"];
@@ -578,19 +578,15 @@ const handleOpenPendingTickets = async (companyId: number, whatsapp: Whatsapp) =
               await ticket.update({
                 maxUseInactiveTime: ticket.maxUseInactiveTime ? ticket.maxUseInactiveTime + 1 : 1
               });
-
             }
           }
-
         }
       }));
     }
 
-    expiresTime += timeInactiveMessage; // Adicionando o tempo de inatividade ao tempo de expiração
-  };
-
+    expiresTime += timeInactiveMessage;
+  }
 };
-
 const handleReturnQueue = async (companyId: number, whatsapp: Whatsapp) => {
   const timeToReturnQueue = Number(whatsapp.timeToReturnQueue || 0);
   const currentTime = new Date();
@@ -613,7 +609,7 @@ const handleReturnQueue = async (companyId: number, whatsapp: Whatsapp) => {
   });
 
   if (ticketsToReturnQueue && ticketsToReturnQueue.length > 0) {
-    logger.info(`Encontrou ${ticketsToReturnQueue.length} atendimentos para retornar a fila na empresa ${companyId} - na conexão ${whatsapp.name}!`);
+    logger.info(`Encontrou ${ticketsToReturnQueue.length} atendimentos para retornar a fila na empresa ${companyId} - na conexo ${whatsapp.name}!`);
     await Promise.all(ticketsToReturnQueue.map(async ticket => {
       await ticket.update({
         status: "pending",
@@ -672,7 +668,7 @@ const handleReturnQueue = async (companyId: number, whatsapp: Whatsapp) => {
 //   });
 
 //   if (ticketsToAwaitActiveFlow && ticketsToAwaitActiveFlow.length > 0) {
-//     logger.info(`Encontrou ${ticketsToAwaitActiveFlow.length} atendimentos para aguardar ativação do fluxo na empresa ${companyId} - na conexão ${whatsapp.name}!`);
+//     logger.info(`Encontrou ${ticketsToAwaitActiveFlow.length} atendimentos para aguardar ativao do fluxo na empresa ${companyId} - na conexo ${whatsapp.name}!`);
 
 //     await Promise.all(ticketsToAwaitActiveFlow.map(async ticket => {
 //       const flow = await FlowBuilderModel.findOne({
@@ -742,12 +738,12 @@ export const ClosedAllOpenTickets = async (companyId: number): Promise<void> => 
           { timeToReturnQueue: { [Op.gt]: '0' } },
           { timeAwaitActiveFlow: { [Op.gt]: '0' } }
         ],
-        companyId: companyId, // Filtrar pelo companyId fornecido como parâmetro
+        companyId: companyId, // Filtrar pelo companyId fornecido como parmetro
         status: "CONNECTED"
       }
     });
 
-    // Agora você pode iterar sobre as instâncias de Whatsapp diretamente
+    // Agora voc pode iterar sobre as instncias de Whatsapp diretamente
     if (whatsapps.length > 0) {
       for (const whatsapp of whatsapps) {
         if (whatsapp.expiresTicket) {
@@ -772,3 +768,5 @@ export const ClosedAllOpenTickets = async (companyId: number): Promise<void> => 
     console.error('Erro:', error);
   }
 };
+
+
