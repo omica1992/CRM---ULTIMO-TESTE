@@ -188,6 +188,7 @@ function isDiaUtil(date: any): boolean {
 }
 
 let isProcessing = false;
+let lastCampaignVerifyDiagnosticAt = 0;
 
 async function handleSendMessage(job) {
   try {
@@ -1039,7 +1040,21 @@ async function handleVerifyCampaigns(job) {
         `SELECT id, "scheduledAt", "nextScheduledAt"
          FROM "Campaigns" c
          WHERE (
-           ("scheduledAt" BETWEEN NOW() AND NOW() + INTERVAL '3 hour' AND status = 'PROGRAMADA' AND "executionCount" = 0)
+           (
+             status = 'PROGRAMADA'
+             AND "executionCount" = 0
+             AND "scheduledAt" BETWEEN NOW() - INTERVAL '1 minute' AND NOW() + INTERVAL '3 hour'
+           )
+           OR
+           (
+             status = 'EM_ANDAMENTO'
+             AND "executionCount" = 0
+             AND "updatedAt" < NOW() - INTERVAL '2 minute'
+             AND "scheduledAt" BETWEEN NOW() - INTERVAL '24 hour' AND NOW() + INTERVAL '3 hour'
+             AND NOT EXISTS (
+               SELECT 1 FROM "CampaignShipping" cs WHERE cs."campaignId" = c.id
+             )
+           )
            OR
            ("nextScheduledAt" BETWEEN NOW() - INTERVAL '1 minute' AND NOW() + INTERVAL '3 hour' AND status IN ('PROGRAMADA', 'EM_ANDAMENTO') AND "isRecurring" = true)
          )`,
@@ -1088,6 +1103,34 @@ async function handleVerifyCampaigns(job) {
 
       const validPromises = (await Promise.all(promises)).filter(p => p !== null);
       logger.info(`${validPromises.length} campanhas processadas efetivamente`);
+    } else {
+      const now = Date.now();
+      if (now - lastCampaignVerifyDiagnosticAt > 60000) {
+        const diagnostics: {
+          overdue: string | number;
+          inWindow: string | number;
+          farFuture: string | number;
+          recurringInWindow: string | number;
+        }[] = await sequelize.query(
+          `SELECT
+             COUNT(*) FILTER (WHERE status = 'PROGRAMADA' AND "executionCount" = 0 AND "scheduledAt" < NOW() - INTERVAL '1 minute') AS overdue,
+             COUNT(*) FILTER (WHERE status = 'PROGRAMADA' AND "executionCount" = 0 AND "scheduledAt" BETWEEN NOW() - INTERVAL '1 minute' AND NOW() + INTERVAL '3 hour') AS "inWindow",
+             COUNT(*) FILTER (WHERE status = 'PROGRAMADA' AND "executionCount" = 0 AND "scheduledAt" > NOW() + INTERVAL '3 hour') AS "farFuture",
+             COUNT(*) FILTER (WHERE status IN ('PROGRAMADA', 'EM_ANDAMENTO') AND "isRecurring" = true AND "nextScheduledAt" BETWEEN NOW() - INTERVAL '1 minute' AND NOW() + INTERVAL '3 hour') AS "recurringInWindow"
+           FROM "Campaigns"`,
+          { type: QueryTypes.SELECT }
+        );
+
+        const row = diagnostics?.[0] || ({} as any);
+        logger.info(
+          `[CAMPAIGN-VERIFY] Nenhuma campanha elegível nesta rodada. ` +
+          `programadasVencidas=${row.overdue || 0}, ` +
+          `programadasNaJanela=${row.inWindow || 0}, ` +
+          `programadasFuturas=${row.farFuture || 0}, ` +
+          `recorrentesNaJanela=${row.recurringInWindow || 0}`
+        );
+        lastCampaignVerifyDiagnosticAt = now;
+      }
     }
   } catch (err) {
     Sentry.captureException(err);
@@ -1455,67 +1498,98 @@ function getProcessedMessage(msg: string, variables: any[], contact: any) {
   return finalMessage;
 }
 
-const checkerWeek = async () => {
+const getCampaignSettingValue = async (
+  companyId: number,
+  key: string
+): Promise<string | null> => {
+  const companySetting = await CampaignSetting.findOne({
+    where: { key, companyId },
+    attributes: ["value"],
+    order: [["updatedAt", "DESC"]]
+  });
+
+  if (companySetting?.value !== undefined && companySetting?.value !== null) {
+    return companySetting.value;
+  }
+
+  // Fallback de compatibilidade para bases antigas sem companyId.
+  const fallbackSetting = await CampaignSetting.findOne({
+    where: { key },
+    attributes: ["value"],
+    order: [["updatedAt", "DESC"]]
+  });
+
+  return fallbackSetting?.value ?? null;
+};
+
+const parseHourMinutes = (
+  value: string | null,
+  defaultMinutes: number
+): number => {
+  if (!value) return defaultMinutes;
+
+  const match = String(value).trim().match(/^(\d{1,2})(?::(\d{1,2}))?$/);
+  if (!match) return defaultMinutes;
+
+  const hour = Number(match[1]);
+  const minutes = Number(match[2] ?? 0);
+
+  if (
+    Number.isNaN(hour) ||
+    Number.isNaN(minutes) ||
+    hour < 0 ||
+    hour > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return defaultMinutes;
+  }
+
+  return hour * 60 + minutes;
+};
+
+const checkerWeek = async (companyId: number) => {
   const sab = moment().day() === 6;
   const dom = moment().day() === 0;
 
-  const sabado = await CampaignSetting.findOne({
-    where: { key: "sabado" }
-  });
+  const sabado = await getCampaignSettingValue(companyId, "sabado");
+  const domingo = await getCampaignSettingValue(companyId, "domingo");
 
-  const domingo = await CampaignSetting.findOne({
-    where: { key: "domingo" }
-  });
-
-  if (sabado?.value === "false" && sab) {
-    messageQueue.pause();
+  if (sabado === "false" && sab) {
     return true;
   }
 
-  if (domingo?.value === "false" && dom) {
-    messageQueue.pause();
+  if (domingo === "false" && dom) {
     return true;
   }
 
-  messageQueue.resume();
   return false;
 };
 
-const checkTime = async () => {
-  const startHour = await CampaignSetting.findOne({
-    where: {
-      key: "startHour"
-    }
-  });
+const checkTime = async (companyId: number) => {
+  const startHourRaw = await getCampaignSettingValue(companyId, "startHour");
+  const endHourRaw = await getCampaignSettingValue(companyId, "endHour");
 
-  const endHour = await CampaignSetting.findOne({
-    where: {
-      key: "endHour"
-    }
-  });
+  // Defaults seguros caso configuração não exista.
+  const startMinutes = parseHourMinutes(startHourRaw, 0);
+  const endMinutes = parseHourMinutes(endHourRaw, 23 * 60 + 59);
+  const now = moment();
+  const nowMinutes = now.hours() * 60 + now.minutes();
 
-  const hour = startHour.value as unknown as number;
-  const endHours = endHour.value as unknown as number;
+  // Suporta janelas normais e overnight (ex: 22:00-06:00).
+  const isOpen =
+    startMinutes <= endMinutes
+      ? nowMinutes >= startMinutes && nowMinutes <= endMinutes
+      : nowMinutes >= startMinutes || nowMinutes <= endMinutes;
 
-  const timeNow = moment().format("HH:mm") as unknown as number;
-
-  if (timeNow <= endHours && timeNow >= hour) {
-    messageQueue.resume();
-
-    return true;
+  if (!isOpen) {
+    logger.info(
+      `[RDS-Campaign] Fora de horário para empresa ${companyId}. ` +
+      `Início=${startHourRaw || "00:00"}, fim=${endHourRaw || "23:59"}, agora=${now.format("HH:mm")}`
+    );
   }
 
-  logger.info(
-    `Envio inicia as ${hour} e termina as ${endHours}, hora atual ${timeNow} não está dentro do horário`
-  );
-  messageQueue.clean(0, "delayed");
-  messageQueue.clean(0, "wait");
-  messageQueue.clean(0, "active");
-  messageQueue.clean(0, "completed");
-  messageQueue.clean(0, "failed");
-  messageQueue.pause();
-
-  return false;
+  return isOpen;
 };
 
 // const checkerLimitToday = async (whatsappId: number) => {
@@ -1669,74 +1743,101 @@ async function handleProcessCampaign(job) {
   try {
     const { id }: ProcessCampaignData = job.data;
     const campaign = await getCampaign(id);
+
+    if (!campaign) {
+      logger.warn(`[RDS-Campaign] Campanha ${id} não encontrada no processamento`);
+      return;
+    }
+
     const settings = await getSettings(campaign);
-    if (campaign) {
-      const { contacts } = campaign.contactList;
-      if (isArray(contacts)) {
-        const contactData = contacts.map(contact => ({
-          contactId: contact.id,
-          campaignId: campaign.id,
-          variables: settings.variables,
-          isGroup: contact.isGroup
-        }));
 
-        // const baseDelay = job.data.delay || 0;
-        const longerIntervalAfter = parseToMilliseconds(
-          settings.longerIntervalAfter
+    const contacts = campaign.contactList?.contacts || [];
+    if (!contacts.length) {
+      logger.warn(`[RDS-Campaign] Campanha ${campaign.id} sem contatos elegíveis. Finalizando sem envio.`);
+      await campaign.update({
+        status: "FINALIZADA",
+        completedAt: moment()
+      });
+      return;
+    }
+
+    if (isArray(contacts)) {
+      const contactData = contacts.map(contact => ({
+        contactId: contact.id,
+        campaignId: campaign.id,
+        variables: settings.variables,
+        isGroup: contact.isGroup
+      }));
+
+      // const baseDelay = job.data.delay || 0;
+      const longerIntervalAfter = parseToMilliseconds(
+        settings.longerIntervalAfter
+      );
+      const greaterInterval = parseToMilliseconds(settings.greaterInterval);
+      const messageInterval = settings.messageInterval;
+
+      let baseDelay = campaign.scheduledAt;
+
+      // ✅ CORREÇÃO: validar horário/fds por empresa
+      const isOpen = await checkTime(campaign.companyId);
+      const isFds = await checkerWeek(campaign.companyId);
+
+      if (!isOpen || isFds) {
+        const retryAt = moment().add(2, "minutes").toDate();
+        const updateData: any = {
+          status: "PROGRAMADA",
+          scheduledAt: retryAt
+        };
+
+        if (campaign.isRecurring) {
+          updateData.nextScheduledAt = retryAt;
+        }
+
+        await campaign.update(updateData);
+        logger.info(
+          `[RDS-Campaign] Campanha ${campaign.id} fora do horário/fds (isOpen=${isOpen}, isFds=${isFds}). ` +
+          `Reagendada para ${moment(retryAt).format("YYYY-MM-DD HH:mm:ss")}`
         );
-        const greaterInterval = parseToMilliseconds(settings.greaterInterval);
-        const messageInterval = settings.messageInterval;
-
-        let baseDelay = campaign.scheduledAt;
-
-        // ✅ CORREÇÃO: Re-habilitar verificação de horário e fins de semana
-        const isOpen = await checkTime();
-        const isFds = await checkerWeek();
-
-        if (!isOpen || isFds) {
-          logger.info(
-            `[RDS-Campaign] Campanha ${campaign.id} fora do horário permitido (isOpen=${isOpen}, isFds=${isFds}). Adiando.`
-          );
-          return;
-        }
-
-        const queuePromises = [];
-        for (let i = 0; i < contactData.length; i++) {
-          baseDelay = addSeconds(
-            baseDelay,
-            i > longerIntervalAfter ? greaterInterval : messageInterval
-          );
-
-          const { contactId, campaignId, variables } = contactData[i];
-          let delay = calculateDelay(
-            i,
-            baseDelay,
-            longerIntervalAfter,
-            greaterInterval,
-            messageInterval
-          );
-
-          // ✅ CORREÇÃO: Clamp delay para mínimo de 1s para evitar burst
-          if (delay < 1000) {
-            delay = 1000 * (i + 1); // Escalonar: 1s, 2s, 3s...
-          }
-
-          const queuePromise = campaignQueue.add(
-            "PrepareContact",
-            { contactId, campaignId, variables, delay },
-            { removeOnComplete: true }
-          );
-          queuePromises.push(queuePromise);
-          logger.info(
-            `[RDS-Campaign Update] Registro enviado pra fila de disparo: Campanha=${campaign.id};Contato=${contacts[i].name};delay=${delay}`
-          );
-        }
-        await Promise.all(queuePromises);
-        // await campaign.update({ status: "EM_ANDAMENTO" });
+        return;
       }
+
+      const queuePromises = [];
+      for (let i = 0; i < contactData.length; i++) {
+        baseDelay = addSeconds(
+          baseDelay,
+          i > longerIntervalAfter ? greaterInterval : messageInterval
+        );
+
+        const { contactId, campaignId, variables } = contactData[i];
+        let delay = calculateDelay(
+          i,
+          baseDelay,
+          longerIntervalAfter,
+          greaterInterval,
+          messageInterval
+        );
+
+        // ✅ CORREÇÃO: Clamp delay para mínimo de 1s para evitar burst
+        if (delay < 1000) {
+          delay = 1000 * (i + 1); // Escalonar: 1s, 2s, 3s...
+        }
+
+        const queuePromise = campaignQueue.add(
+          "PrepareContact",
+          { contactId, campaignId, variables, delay },
+          { removeOnComplete: true }
+        );
+        queuePromises.push(queuePromise);
+        logger.info(
+          `[RDS-Campaign Update] Registro enviado pra fila de disparo: Campanha=${campaign.id};Contato=${contacts[i].name};delay=${delay}`
+        );
+      }
+      await Promise.all(queuePromises);
+      // await campaign.update({ status: "EM_ANDAMENTO" });
     }
   } catch (err: any) {
     Sentry.captureException(err);
+    logger.error(`[RDS-Campaign] Erro no ProcessCampaign: ${err?.message || err}`);
   }
 }
 
