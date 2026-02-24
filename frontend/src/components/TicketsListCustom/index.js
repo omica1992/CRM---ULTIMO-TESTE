@@ -72,27 +72,16 @@ const useStyles = makeStyles((theme) => ({
     },
 }));
 
-const ticketSortAsc = (a, b) => {
-    
-    if (a.updatedAt < b.updatedAt) {
-        return -1;
-    }
-    if (a.updatedAt > b.updatedAt) {
-        return 1;
-    }
-    return 0;
-}
+const getTicketSortTime = (ticket) => {
+    const raw = ticket?.lastMessageAt || ticket?.updatedAt || ticket?.createdAt;
+    if (!raw) return 0;
+    const time = new Date(raw).getTime();
+    return Number.isNaN(time) ? 0 : time;
+};
 
-const ticketSortDesc = (a, b) => {
-   
-    if (a.updatedAt > b.updatedAt) {
-        return -1;
-    }
-    if (a.updatedAt < b.updatedAt) {
-        return 1;
-    }
-    return 0;
-}
+const ticketSortAsc = (a, b) => getTicketSortTime(a) - getTicketSortTime(b);
+
+const ticketSortDesc = (a, b) => getTicketSortTime(b) - getTicketSortTime(a);
 
 const reducer = (state, action) => {
     //console.log("action", action, state)
@@ -104,7 +93,12 @@ const reducer = (state, action) => {
         newTickets.forEach((ticket) => {
             const ticketIndex = state.findIndex((t) => t.id === ticket.id);
             if (ticketIndex !== -1) {
-                state[ticketIndex] = ticket;
+                state[ticketIndex] = {
+                    ...state[ticketIndex],
+                    ...ticket,
+                    lastMessageAt: ticket.lastMessageAt || state[ticketIndex].lastMessageAt,
+                    lastMessagePreview: ticket.lastMessagePreview || state[ticketIndex].lastMessagePreview
+                };
                 if (ticket.unreadMessages > 0) {
                     state.unshift(state.splice(ticketIndex, 1)[0]);
                 }
@@ -139,7 +133,12 @@ const reducer = (state, action) => {
 
         const ticketIndex = state.findIndex((t) => t.id === ticket.id);
         if (ticketIndex !== -1) {
-            state[ticketIndex] = ticket;
+            state[ticketIndex] = {
+                ...state[ticketIndex],
+                ...ticket,
+                lastMessageAt: ticket.lastMessageAt || state[ticketIndex].lastMessageAt,
+                lastMessagePreview: ticket.lastMessagePreview || state[ticketIndex].lastMessagePreview
+            };
         } else {
             state.unshift(ticket);
         }
@@ -155,7 +154,12 @@ const reducer = (state, action) => {
 
         const ticketIndex = state.findIndex((t) => t.id === ticket.id);
         if (ticketIndex !== -1) {
-            state[ticketIndex] = ticket;
+            state[ticketIndex] = {
+                ...state[ticketIndex],
+                ...ticket,
+                lastMessageAt: ticket.lastMessageAt || state[ticketIndex].lastMessageAt,
+                lastMessagePreview: ticket.lastMessagePreview || state[ticketIndex].lastMessagePreview
+            };
             state.unshift(state.splice(ticketIndex, 1)[0]);
         } else {
             if (action.status === action.payload.status) {
