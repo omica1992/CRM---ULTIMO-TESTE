@@ -237,7 +237,12 @@ const SendWhatsAppOficialMessage = async ({
 
     logger.info(`[WHATSAPP OFICIAL - SEND] ✅ Mensagem enviada via API - Ticket: ${ticket.id}`);
 
-    await ticket.update({ lastMessage: !bodyMsg && !!media ? bodyTicket : bodyMsg, imported: null, unreadMessages: 0 });
+    await ticket.update({
+      lastMessage: !bodyMsg && !!media ? bodyTicket : bodyMsg,
+      imported: null,
+      unreadMessages: 0,
+      fromMe: true
+    });
 
     const wid: any = sendMessage
 

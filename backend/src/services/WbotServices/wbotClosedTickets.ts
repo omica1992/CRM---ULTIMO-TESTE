@@ -731,7 +731,7 @@ export const ClosedAllOpenTickets = async (companyId: number): Promise<void> => 
 
   try {
     const whatsapps = await Whatsapp.findAll({
-      attributes: ["id", "name", "status", "timeSendQueue", "sendIdQueue", "timeInactiveMessage",
+      attributes: ["id", "name", "status", "channel", "timeSendQueue", "sendIdQueue", "timeInactiveMessage",
         "expiresInactiveMessage", "inactiveMessage", "expiresTicket", "expiresTicketNPS", "whenExpiresTicket",
         "complationMessage", "flowInactiveTime", "flowIdInactiveTime", "maxUseInactiveTime", "timeToReturnQueue", "timeAwaitActiveFlowId", "timeAwaitActiveFlow"],
       where: {
