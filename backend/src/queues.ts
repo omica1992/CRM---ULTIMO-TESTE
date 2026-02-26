@@ -90,6 +90,10 @@ interface DispatchCampaignData {
   contactListItemId: number;
 }
 
+interface GetCampaignOptions {
+  includeContacts?: boolean;
+}
+
 interface LidRetryData {
   contactId: number;
   whatsappId: number;
@@ -189,6 +193,34 @@ function isDiaUtil(date: any): boolean {
 
 let isProcessing = false;
 let lastCampaignVerifyDiagnosticAt = 0;
+const campaignFinalizeTimers = new Map<number, NodeJS.Timeout>();
+
+function scheduleCampaignFinalizeCheck(campaignId: number) {
+  if (campaignFinalizeTimers.has(campaignId)) {
+    return;
+  }
+
+  const timer = setTimeout(async () => {
+    campaignFinalizeTimers.delete(campaignId);
+
+    try {
+      const campaign = await getCampaignLite(campaignId);
+      if (campaign) {
+        await verifyAndFinalizeCampaign(campaign);
+      }
+    } catch (error: any) {
+      logger.error(
+        `[CAMPAIGN-FINALIZE] Erro ao verificar campanha ${campaignId}: ${error?.message || error}`
+      );
+    }
+  }, 5000);
+
+  if (typeof (timer as any).unref === "function") {
+    (timer as any).unref();
+  }
+
+  campaignFinalizeTimers.set(campaignId, timer);
+}
 
 async function handleSendMessage(job) {
   try {
@@ -1140,32 +1172,38 @@ async function handleVerifyCampaigns(job) {
   }
 }
 
-async function getCampaign(id) {
+async function getCampaign(id, options: GetCampaignOptions = {}) {
+  const includeContacts = options.includeContacts ?? false;
+
   const campaign = await Campaign.findOne({
     where: { id },
     include: [
-      {
-        model: ContactList,
-        as: "contactList",
-        attributes: ["id", "name"],
-        required: false, // LEFT JOIN para campanhas que podem usar tags
-        include: [
-          {
-            model: ContactListItem,
-            as: "contacts",
-            attributes: [
-              "id",
-              "name",
-              "number",
-              "email",
-              "isWhatsappValid",
-              "isGroup"
-            ],
-            where: { isWhatsappValid: true },
-            required: false
-          }
-        ]
-      },
+      ...(includeContacts
+        ? [
+            {
+              model: ContactList,
+              as: "contactList",
+              attributes: ["id", "name"],
+              required: false, // LEFT JOIN para campanhas que podem usar tags
+              include: [
+                {
+                  model: ContactListItem,
+                  as: "contacts",
+                  attributes: [
+                    "id",
+                    "name",
+                    "number",
+                    "email",
+                    "isWhatsappValid",
+                    "isGroup"
+                  ],
+                  where: { isWhatsappValid: true },
+                  required: false
+                }
+              ]
+            }
+          ]
+        : []),
       {
         model: Whatsapp,
         as: "whatsapp",
@@ -1179,76 +1217,41 @@ async function getCampaign(id) {
   }
 
   // Se a campanha usa tagListId em vez de contactListId, buscar contatos por tag
-  if (campaign.tagListId && !campaign.contactListId) {
+  if (includeContacts && campaign.tagListId && !campaign.contactListId) {
     logger.info(`[TAG-DEBUG] Buscando contatos por tagId: ${campaign.tagListId} para campanha: ${id}, companyId: ${campaign.companyId}`);
 
     // Primeiro, vamos verificar quais contatos realmente têm essa tag
-    const contactTags = await ContactTag.findAll({
+    const taggedContacts = await ContactTag.findAll({
       where: { tagId: campaign.tagListId },
-      attributes: ["contactId", "tagId"],
+      attributes: ["contactId"],
       include: [
         {
           model: Contact,
           as: "contact",
-          attributes: ["id", "name", "number", "companyId", "active"]
+          attributes: ["id", "name", "number", "email", "isGroup"],
+          where: {
+            companyId: campaign.companyId,
+            active: true
+          },
+          required: true
         }
       ]
     });
 
-    logger.info(`[TAG-DEBUG] ContactTags encontrados para tagId ${campaign.tagListId}:`, contactTags.map(ct => ({
-      contactId: ct.contactId,
-      tagId: ct.tagId,
-      contactName: ct.contact?.name,
-      contactNumber: ct.contact?.number,
-      contactCompanyId: ct.contact?.companyId,
-      contactActive: ct.contact?.active
-    })));
-
-    // Buscar contatos usando uma abordagem mais robusta
-    const contactIds = await ContactTag.findAll({
-      where: { tagId: campaign.tagListId },
-      attributes: ["contactId"]
-    });
-
-    const contactIdList = contactIds.map(ct => ct.contactId);
-    logger.info(`[TAG-DEBUG] ContactIds encontrados para tagId ${campaign.tagListId}:`, contactIdList);
-
-    const contacts = await Contact.findAll({
-      attributes: [
-        "id",
-        "name",
-        "number",
-        "email",
-        "isGroup"
-      ],
-      where: {
-        id: { [Op.in]: contactIdList },
-        companyId: campaign.companyId,
-        active: true // Apenas contatos ativos
+    // Reaproveitar os contatos já carregados no include para evitar N+1 queries.
+    const contactsById = new Map<number, any>();
+    for (const taggedContact of taggedContacts) {
+      const contact = (taggedContact as any).contact;
+      if (!contact || !contact.number) {
+        continue;
       }
-    });
 
-    logger.info(`[TAG-DEBUG] Contatos encontrados via Contact.findAll:`, contacts.map(c => ({
-      id: c.id,
-      name: c.name,
-      number: c.number,
-      companyId: c.companyId
-    })));
-
-    // Verificação adicional: confirmar que os contatos realmente têm a tag correta
-    for (const contact of contacts) {
-      const contactTags = await ContactTag.findAll({
-        where: { contactId: contact.id },
-        attributes: ["tagId"]
-      });
-
-      const tagIds = contactTags.map(ct => ct.tagId);
-      logger.info(`[TAG-DEBUG] Contato ${contact.id} (${contact.name}) tem as tags:`, tagIds);
-
-      if (!tagIds.includes(Number(campaign.tagListId))) {
-        logger.error(`[TAG-DEBUG] ERRO: Contato ${contact.id} (${contact.name}) não deveria estar na tag ${campaign.tagListId}!`);
+      if (!contactsById.has(contact.id)) {
+        contactsById.set(contact.id, contact);
       }
     }
+
+    const contacts = Array.from(contactsById.values());
 
     logger.info(`[TAG-DEBUG] Total de ${contacts.length} contatos encontrados para tag ${campaign.tagListId}`);
 
@@ -1274,17 +1277,41 @@ async function getCampaign(id) {
   return campaign;
 }
 
-async function getContact(id, campaignId = null) {
+async function getCampaignLite(id) {
+  return Campaign.findOne({
+    where: { id },
+    include: [
+      {
+        model: Whatsapp,
+        as: "whatsapp",
+        attributes: ["id", "name"]
+      }
+    ]
+  });
+}
+
+async function getContact(
+  id,
+  campaignId = null,
+  context: { companyId?: number; isTagCampaign?: boolean } = {}
+) {
   logger.info(`[RDS-CAMPAIGN-DEBUG] Buscando contato com ID: ${id}, Campaign ID: ${campaignId}`);
 
   // Se temos campaignId, buscar informações da campanha para determinar o tipo
-  let companyId = null;
-  let isTagCampaign = false;
-  if (campaignId) {
-    const campaign = await Campaign.findByPk(campaignId, { attributes: ["companyId", "tagListId", "contactListId"] });
+  let companyId = context.companyId ?? null;
+  let isTagCampaign = context.isTagCampaign ?? false;
+
+  if ((context.companyId === undefined || context.isTagCampaign === undefined) && campaignId) {
+    const campaign = await Campaign.findByPk(campaignId, {
+      attributes: ["companyId", "tagListId", "contactListId"]
+    });
     if (campaign) {
-      companyId = campaign.companyId;
-      isTagCampaign = campaign.tagListId && !campaign.contactListId;
+      if (context.companyId === undefined) {
+        companyId = campaign.companyId;
+      }
+      if (context.isTagCampaign === undefined) {
+        isTagCampaign = !!(campaign.tagListId && !campaign.contactListId);
+      }
     }
   }
 
@@ -1329,6 +1356,43 @@ async function getContact(id, campaignId = null) {
 
   logger.error(`[RDS-CAMPAIGN-DEBUG] ERRO: Contato com ID ${id} não encontrado em nenhuma tabela (Company filter: ${companyId || 'none'})`);
   return null;
+}
+
+async function getCampaignAudienceSize(campaign): Promise<number> {
+  if (!campaign) {
+    return 0;
+  }
+
+  if (campaign.tagListId && !campaign.contactListId) {
+    const result: { total: number }[] = await sequelize.query(
+      `SELECT COUNT(DISTINCT ct."contactId")::int AS total
+       FROM "ContactTags" ct
+       INNER JOIN "Contacts" c ON c.id = ct."contactId"
+       WHERE ct."tagId" = :tagListId
+         AND c."companyId" = :companyId
+         AND c.active = true`,
+      {
+        replacements: {
+          tagListId: campaign.tagListId,
+          companyId: campaign.companyId
+        },
+        type: QueryTypes.SELECT
+      }
+    );
+
+    return Number(result?.[0]?.total || 0);
+  }
+
+  if (campaign.contactListId) {
+    return ContactListItem.count({
+      where: {
+        contactListId: campaign.contactListId,
+        isWhatsappValid: true
+      }
+    });
+  }
+
+  return 0;
 }
 
 async function getSettings(campaign): Promise<CampaignSettings> {
@@ -1645,10 +1709,9 @@ export function randomValue(min, max) {
 
 async function verifyAndFinalizeCampaign(campaign) {
   // Garantir que a campanha tenha os contatos carregados
-  const campaignWithContacts = await getCampaign(campaign.id);
+  const audienceSize = await getCampaignAudienceSize(campaign);
   // ✅ CORREÇÃO: Para campanhas por tag, contactList é virtual e não tem companyId
-  const contacts = campaignWithContacts.contactList?.contacts || [];
-  const companyId = campaignWithContacts.companyId;
+  const companyId = campaign.companyId;
 
   // Contar mensagens entregues com sucesso
   const deliveredCount = await CampaignShipping.count({
@@ -1681,13 +1744,18 @@ async function verifyAndFinalizeCampaign(campaign) {
   });
 
   logger.info(
-    `[VERIFY CAMPAIGN] Campanha ${campaign.id}: ${deliveredCount} entregues, ${failedCount} falharam, ${totalProcessed}/${contacts.length} processados`
+    `[VERIFY CAMPAIGN] Campanha ${campaign.id}: ${deliveredCount} entregues, ${failedCount} falharam, ${totalProcessed}/${audienceSize} processados`
   );
 
-  const realExecutionCount = Math.floor(totalProcessed / contacts.length);
+  if (!audienceSize) {
+    logger.warn(`[VERIFY CAMPAIGN] Campanha ${campaign.id} sem publico elegivel para finalizar.`);
+    return;
+  }
+
+  const realExecutionCount = Math.floor(totalProcessed / audienceSize);
 
   // ✅ LÓGICA CORRIGIDA: Verificar se todos os contatos foram processados
-  if (totalProcessed >= contacts.length) {
+  if (totalProcessed >= audienceSize) {
     // Salvar executionCount antigo antes de atualizar
     const oldExecutionCount = campaign.executionCount;
 
@@ -1742,7 +1810,7 @@ async function verifyAndFinalizeCampaign(campaign) {
 async function handleProcessCampaign(job) {
   try {
     const { id }: ProcessCampaignData = job.data;
-    const campaign = await getCampaign(id);
+    const campaign = await getCampaign(id, { includeContacts: true });
 
     if (!campaign) {
       logger.warn(`[RDS-Campaign] Campanha ${id} não encontrada no processamento`);
@@ -1802,6 +1870,7 @@ async function handleProcessCampaign(job) {
       }
 
       const queuePromises = [];
+      const queueBatchSize = 200;
       for (let i = 0; i < contactData.length; i++) {
         baseDelay = addSeconds(
           baseDelay,
@@ -1831,8 +1900,15 @@ async function handleProcessCampaign(job) {
         logger.info(
           `[RDS-Campaign Update] Registro enviado pra fila de disparo: Campanha=${campaign.id};Contato=${contacts[i].name};delay=${delay}`
         );
+
+        if (queuePromises.length >= queueBatchSize) {
+          await Promise.all(queuePromises);
+          queuePromises.length = 0;
+        }
       }
-      await Promise.all(queuePromises);
+      if (queuePromises.length > 0) {
+        await Promise.all(queuePromises);
+      }
       // await campaign.update({ status: "EM_ANDAMENTO" });
     }
   } catch (err: any) {
@@ -1859,8 +1935,17 @@ function calculateDelay(
 async function handlePrepareContact(job) {
   try {
     const { contactId, campaignId, delay, variables }: PrepareContactData = job.data;
-    const campaign = await getCampaign(campaignId);
-    const contact = await getContact(contactId, campaignId);
+    const campaign = await getCampaignLite(campaignId);
+
+    if (!campaign) {
+      logger.error(`[RDS-CAMPAIGN-DEBUG] Campanha ${campaignId} nao encontrada no PrepareContact`);
+      return;
+    }
+
+    const contact = await getContact(contactId, campaignId, {
+      companyId: campaign.companyId,
+      isTagCampaign: !!(campaign.tagListId && !campaign.contactListId)
+    });
 
     if (!contact) {
       logger.error(`[RDS-CAMPAIGN-DEBUG] Não foi possível processar campanha ${campaignId} para contato ${contactId}: Contato não encontrado`);
@@ -1965,7 +2050,9 @@ async function handlePrepareContact(job) {
           backoff: {
             type: "exponential",
             delay: 30000 // 30s, 60s, 120s
-          }
+          },
+          removeOnComplete: { age: 60 * 60, count: 2000 },
+          removeOnFail: { age: 24 * 60 * 60, count: 5000 }
         }
       );
 
@@ -2139,7 +2226,7 @@ async function handleDispatchCampaign(job) {
   logger.info(`[CAMPAIGN-DISPATCH] 🎯 INICIANDO handleDispatchCampaign - Job #${job.id}, Campanha=${campaignId}, Shipping=${campaignShippingId}`);
 
   try {
-    const campaign = await getCampaign(campaignId);
+    const campaign = await getCampaignLite(campaignId);
 
     // ✅ CORREÇÃO: Verificar status da campanha antes de enviar
     if (!campaign || !['EM_ANDAMENTO', 'PROGRAMADA'].includes(campaign.status)) {
@@ -2501,16 +2588,7 @@ async function handleDispatchCampaign(job) {
         );
       }
     }
-    await verifyAndFinalizeCampaign(campaign);
-
-    const io = getIO();
-    io.of(String(campaign.companyId)).emit(
-      `company-${campaign.companyId}-campaign`,
-      {
-        action: "update",
-        record: campaign
-      }
-    );
+    scheduleCampaignFinalizeCheck(campaign.id);
 
     logger.info(
       `Campanha enviada para: Campanha=${campaignId};Contato=${campaignShipping.contact ? campaignShipping.contact.name : campaignShipping.number}`
@@ -2537,10 +2615,7 @@ async function handleDispatchCampaign(job) {
 
     // Ainda assim verifica e finaliza a campanha
     try {
-      const failedCampaign = await getCampaign(data.campaignId);
-      if (failedCampaign) {
-        await verifyAndFinalizeCampaign(failedCampaign);
-      }
+      scheduleCampaignFinalizeCheck(data.campaignId);
     } catch (verifyError) {
       logger.error(`[CAMPAIGN-ERROR] Erro ao verificar campanha após falha: ${verifyError.message}`);
     }

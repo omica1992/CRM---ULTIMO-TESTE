@@ -8,6 +8,8 @@ interface Request {
   companyId: number | string;
   searchParam?: string;
   pageNumber?: string;
+  status?: string;
+  isRecurring?: string;
 }
 
 interface Response {
@@ -19,7 +21,9 @@ interface Response {
 const ListService = async ({
   searchParam = "",
   pageNumber = "1",
-  companyId
+  companyId,
+  status,
+  isRecurring
 }: Request): Promise<Response> => {
   let whereCondition: any = {
     companyId
@@ -40,7 +44,21 @@ const ListService = async ({
     };
   }
 
-  const limit = 9999999;
+  if (!isEmpty(status)) {
+    whereCondition = {
+      ...whereCondition,
+      status
+    };
+  }
+
+  if (isRecurring !== undefined && isRecurring !== "") {
+    whereCondition = {
+      ...whereCondition,
+      isRecurring: isRecurring === "true"
+    };
+  }
+
+  const limit = 100;
   const offset = limit * (+pageNumber - 1);
 
   const { count, rows: records } = await Campaign.findAndCountAll({
@@ -49,7 +67,7 @@ const ListService = async ({
     offset,
     order: [["status", "ASC"], ["scheduledAt", "DESC"]],
     include: [
-      { model: ContactList },
+      { model: ContactList, attributes: ["id", "name"] },
       { model: Whatsapp, attributes: ["id", "name", "color"] }
     ]
   });

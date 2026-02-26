@@ -66,6 +66,27 @@ interface Response {
   oldUserId: number | undefined;
 }
 
+const clearTicketFlowRuntimeState = (ticketId: string | number): void => {
+  try {
+    const ticketKeyPrefix = `${ticketId}_`;
+    const flowVariables = (global as any).flowVariables;
+
+    if (flowVariables && typeof flowVariables === "object") {
+      Object.keys(flowVariables).forEach((key) => {
+        if (key.startsWith(ticketKeyPrefix)) {
+          delete flowVariables[key];
+        }
+      });
+    }
+
+    delete (global as any)[`processing_flow_${ticketId}`];
+  } catch (error) {
+    logger.warn(
+      `[FLOW CLEANUP] Falha ao limpar estado em memória do ticket ${ticketId}: ${error?.message || error}`
+    );
+  }
+};
+
 const UpdateTicketService = async ({
   ticketData,
   ticketId,
@@ -136,6 +157,8 @@ const UpdateTicketService = async ({
           action: "delete",
           ticketId: ticket.id
         });
+
+      clearTicketFlowRuntimeState(ticket.id);
       return { ticket, oldStatus, oldUserId };
     }
 
@@ -418,6 +441,8 @@ const UpdateTicketService = async ({
           action: "delete",
           ticketId: ticket.id
         });
+
+      clearTicketFlowRuntimeState(ticket.id);
       return { ticket, oldStatus, oldUserId };
     }
     let queue;
@@ -1012,6 +1037,10 @@ const UpdateTicketService = async ({
         action: "update",
         ticket
       });
+
+    if (ticket.status === "closed" || ticketData.flowWebhook === false) {
+      clearTicketFlowRuntimeState(ticket.id);
+    }
 
     return { ticket, oldStatus, oldUserId };
   } catch (err) {

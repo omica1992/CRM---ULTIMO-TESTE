@@ -84,7 +84,23 @@ const verifyMessageOficial = async (
         channel: 'whatsapp_oficial',
         remoteJid: `${fromNumber}@s.whatsapp.net`,
         participant: null,
-        dataJson: JSON.stringify(data),
+        // Evita persistir payloads gigantes (ex.: base64 de mídia) no dataJson.
+        // Mantemos apenas um snapshot leve para rastreabilidade.
+        dataJson: JSON.stringify({
+            fromNumber: data?.fromNumber || fromNumber,
+            nameContact: data?.nameContact || null,
+            companyId: data?.companyId || companyId,
+            message: {
+                type: message.type,
+                timestamp: message.timestamp,
+                idMessage: message.idMessage,
+                idFile: message.idFile || null,
+                mimeType: message.mimeType || null,
+                quoteMessageId: quoteMessageId || null,
+                hasFile: !!message.file,
+                fileSize: message.file ? String(message.file).length : 0
+            }
+        }),
         ticketTrakingId: null,
         isPrivate: false,
         createdAt: new Date(

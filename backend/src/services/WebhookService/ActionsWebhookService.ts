@@ -63,6 +63,47 @@ declare global {
 if (!global.flowVariables) {
   global.flowVariables = {};
 }
+
+const MAX_FLOW_VARIABLE_KEYS = 15000;
+
+const pruneFlowVariables = () => {
+  if (!global.flowVariables) {
+    global.flowVariables = {};
+    return;
+  }
+
+  const keys = Object.keys(global.flowVariables);
+  if (keys.length <= MAX_FLOW_VARIABLE_KEYS) {
+    return;
+  }
+
+  const overflow = keys.length - MAX_FLOW_VARIABLE_KEYS;
+  const removableKeys = keys.filter((key) => /^\d+_/.test(key)).slice(0, overflow);
+
+  removableKeys.forEach((key) => {
+    delete global.flowVariables[key];
+  });
+
+  logger.warn(
+    `[FLOW CLEANUP] pruneFlowVariables executado: totalAntes=${keys.length}, removidas=${removableKeys.length}, totalDepois=${Object.keys(global.flowVariables).length}`
+  );
+};
+
+if (!(global as any).__flowVarCleanupIntervalStarted) {
+  (global as any).__flowVarCleanupIntervalStarted = true;
+
+  const cleanupTimer = setInterval(() => {
+    try {
+      pruneFlowVariables();
+    } catch (error) {
+      logger.error(`[FLOW CLEANUP] erro no pruneFlowVariables: ${error?.message || error}`);
+    }
+  }, 5 * 60 * 1000);
+
+  if (typeof (cleanupTimer as any).unref === "function") {
+    (cleanupTimer as any).unref();
+  }
+}
 interface IAddContact {
   companyId: number;
   name: string;
@@ -255,18 +296,9 @@ export const ActionsWebhookService = async (
     console.log(`[FLOW DEBUG] Ticket ${idTicket} - NextStage: ${nextStage}, InputResponded: ${inputResponded}, PressKey: "${pressKey || 'VAZIO'}"`);
   }
 
-  console.log("details", details);
-  console.log("numberPhrase", numberPhrase);
-  console.log("inputResponded", inputResponded);
-  console.log("msg", JSON.stringify(msg, null, 2));
-  console.log("idTicket", idTicket);
-  console.log("pressKey", pressKey);
-  console.log("nextStage", nextStage);
-  console.log("dataWebhook", dataWebhook);
-  console.log("hashWebhookId", hashWebhookId);
-  console.log("whatsappId", whatsappId);
-  console.log("idFlowDb", idFlowDb);
-  console.log("companyId", companyId);
+  logger.info(
+    `[FLOW EXECUTION] Contexto - companyId=${companyId}, whatsappId=${whatsappId}, flow=${idFlowDb}, ticket=${idTicket}, nextStage=${nextStage}, inputResponded=${inputResponded}, pressKeyLen=${pressKey ? String(pressKey).length : 0}, hasMsg=${!!msg}, hasDataWebhook=${!!dataWebhook}, hasDetails=${!!details}`
+  );
   try {
     const io = getIO()
     let next = nextStage;
@@ -2410,6 +2442,7 @@ export const setFlowVariable = (name: string, value: any): any => {
   }
 
   global.flowVariables[name] = value;
+  pruneFlowVariables();
 
   const savedValue = global.flowVariables[name];
   if (savedValue !== value && typeof value !== "object") {

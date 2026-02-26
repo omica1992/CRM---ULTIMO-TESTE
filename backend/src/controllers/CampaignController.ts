@@ -35,6 +35,8 @@ import logger from "../utils/logger";
 type IndexQuery = {
   searchParam: string;
   pageNumber: string;
+  status?: string;
+  isRecurring?: string;
 };
 
 // src/controllers/CampaignController.ts - Type StoreData completo
@@ -86,12 +88,14 @@ type FindParams = {
 };
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
-  const { searchParam, pageNumber } = req.query as IndexQuery;
+  const { searchParam, pageNumber, status, isRecurring } = req.query as IndexQuery;
   const { companyId } = req.user;
 
   const { records, count, hasMore } = await ListService({
     searchParam,
     pageNumber,
+    status,
+    isRecurring,
     companyId
   });
 
