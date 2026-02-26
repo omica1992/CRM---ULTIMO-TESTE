@@ -72,11 +72,43 @@ const useStyles = makeStyles((theme) => ({
     },
 }));
 
+const parseDateToTimestamp = (rawValue) => {
+    if (!rawValue) return 0;
+    const parsed = new Date(rawValue).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
+};
+
 const getTicketSortTime = (ticket) => {
-    const raw = ticket?.lastMessageAt || ticket?.updatedAt || ticket?.createdAt;
-    if (!raw) return 0;
-    const time = new Date(raw).getTime();
-    return Number.isNaN(time) ? 0 : time;
+    const lastMessageAtTime = parseDateToTimestamp(ticket?.lastMessageAt);
+    const updatedAtTime = parseDateToTimestamp(ticket?.updatedAt);
+    const createdAtTime = parseDateToTimestamp(ticket?.createdAt);
+    return Math.max(lastMessageAtTime, updatedAtTime, createdAtTime);
+};
+
+const getBestPreview = (ticket) => {
+    const preview = ticket?.lastMessagePreview ?? ticket?.lastMessage;
+    if (preview === undefined || preview === null) return null;
+    if (typeof preview === "string" && preview.trim() === "") return null;
+    return preview;
+};
+
+const normalizeTicketPayload = (currentTicket = {}, nextTicket = {}) => {
+    const nextPreview = getBestPreview(nextTicket);
+    const currentPreview = getBestPreview(currentTicket);
+
+    const normalizedLastMessageAt =
+        nextTicket?.lastMessageAt ??
+        nextTicket?.updatedAt ??
+        currentTicket?.lastMessageAt ??
+        currentTicket?.updatedAt ??
+        currentTicket?.createdAt;
+
+    return {
+        ...currentTicket,
+        ...nextTicket,
+        lastMessageAt: normalizedLastMessageAt,
+        lastMessagePreview: nextPreview ?? currentPreview ?? ""
+    };
 };
 
 const ticketSortAsc = (a, b) => getTicketSortTime(a) - getTicketSortTime(b);
@@ -93,17 +125,12 @@ const reducer = (state, action) => {
         newTickets.forEach((ticket) => {
             const ticketIndex = state.findIndex((t) => t.id === ticket.id);
             if (ticketIndex !== -1) {
-                state[ticketIndex] = {
-                    ...state[ticketIndex],
-                    ...ticket,
-                    lastMessageAt: ticket.lastMessageAt || state[ticketIndex].lastMessageAt,
-                    lastMessagePreview: ticket.lastMessagePreview || state[ticketIndex].lastMessagePreview
-                };
+                state[ticketIndex] = normalizeTicketPayload(state[ticketIndex], ticket);
                 if (ticket.unreadMessages > 0) {
                     state.unshift(state.splice(ticketIndex, 1)[0]);
                 }
             } else {
-                state.push(ticket);
+                state.push(normalizeTicketPayload({}, ticket));
             }
         });
         if (sortDir && ['ASC', 'DESC'].includes(sortDir)) {
@@ -133,14 +160,9 @@ const reducer = (state, action) => {
 
         const ticketIndex = state.findIndex((t) => t.id === ticket.id);
         if (ticketIndex !== -1) {
-            state[ticketIndex] = {
-                ...state[ticketIndex],
-                ...ticket,
-                lastMessageAt: ticket.lastMessageAt || state[ticketIndex].lastMessageAt,
-                lastMessagePreview: ticket.lastMessagePreview || state[ticketIndex].lastMessagePreview
-            };
+            state[ticketIndex] = normalizeTicketPayload(state[ticketIndex], ticket);
         } else {
-            state.unshift(ticket);
+            state.unshift(normalizeTicketPayload({}, ticket));
         }
         if (sortDir && ['ASC', 'DESC'].includes(sortDir)) {
             sortDir === 'ASC' ? state.sort(ticketSortAsc) : state.sort(ticketSortDesc);
@@ -154,16 +176,11 @@ const reducer = (state, action) => {
 
         const ticketIndex = state.findIndex((t) => t.id === ticket.id);
         if (ticketIndex !== -1) {
-            state[ticketIndex] = {
-                ...state[ticketIndex],
-                ...ticket,
-                lastMessageAt: ticket.lastMessageAt || state[ticketIndex].lastMessageAt,
-                lastMessagePreview: ticket.lastMessagePreview || state[ticketIndex].lastMessagePreview
-            };
+            state[ticketIndex] = normalizeTicketPayload(state[ticketIndex], ticket);
             state.unshift(state.splice(ticketIndex, 1)[0]);
         } else {
             if (action.status === action.payload.status) {
-                state.unshift(ticket);
+                state.unshift(normalizeTicketPayload({}, ticket));
             }
         }
         if (sortDir && ['ASC', 'DESC'].includes(sortDir)) {
