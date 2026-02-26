@@ -511,6 +511,48 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
   return res.status(200).json(record);
 };
 
+export const shipping = async (req: Request, res: Response): Promise<Response> => {
+  const { id } = req.params;
+  const { companyId } = req.user;
+  const pageNumber = Math.max(1, Number(req.query.pageNumber || 1));
+  const pageSize = Math.min(5000, Math.max(1, Number(req.query.pageSize || 1000)));
+  const offset = (pageNumber - 1) * pageSize;
+
+  const campaign = await Campaign.findByPk(id, {
+    attributes: ["id", "companyId"]
+  });
+
+  if (!campaign || campaign.companyId !== companyId) {
+    throw new AppError("Campanha não encontrada", 404);
+  }
+
+  const { count, rows } = await CampaignShipping.findAndCountAll({
+    where: { campaignId: Number(id) },
+    attributes: [
+      "id",
+      "jobId",
+      "number",
+      "message",
+      "deliveredAt",
+      "failedAt",
+      "errorMessage",
+      "createdAt"
+    ],
+    order: [["createdAt", "ASC"]],
+    limit: pageSize,
+    offset
+  });
+
+  const hasMore = offset + rows.length < count;
+
+  return res.status(200).json({
+    records: rows,
+    count,
+    hasMore,
+    pageNumber
+  });
+};
+
 export const cancel = async (
   req: Request,
   res: Response

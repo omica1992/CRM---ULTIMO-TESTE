@@ -313,119 +313,75 @@ const CampaignReport = () => {
       setLoading(true);
       const { data } = await api.get(`/campaigns/${campaignId}`);
       setCampaign(data);
-      
-      // Se não tiver contactList nem shipping, tente obter os envios separadamente
-      if (!has(data, "shipping")) {
-        try {
-          const shippingResponse = await api.get(`/campaigns/${campaignId}/shipping`);
-          if (shippingResponse.data && Array.isArray(shippingResponse.data)) {
-            const shippingData = shippingResponse.data;
-            
-            // Processar dados para a tabela
-            const formattedRows = shippingData.map(item => ({
-              id: item.id,
-              jobId: item.jobId,
-              number: item.number,
-              message: item.message ? item.message.substring(0, 50) + (item.message.length > 50 ? '...' : '') : '',
-              fullMessage: item.message || '',
-              deliveredAt: item.deliveredAt ? datetimeToClient(item.deliveredAt) : null,
-              failedAt: item.failedAt ? datetimeToClient(item.failedAt) : null,
-              errorMessage: item.errorMessage || null,
-              createdAt: item.createdAt ? datetimeToClient(item.createdAt) : null,
-              status: item.deliveredAt ? 'delivered' : (item.failedAt ? 'failed' : 'pending')
-            }));
-            
-            setMessageRows(formattedRows);
-            
-            // Atualizar contadores
-            const delivered = shippingData.filter(item => item.deliveredAt).length;
-            const failed = shippingData.filter(item => item.failedAt && !item.deliveredAt).length;
-            const pending = shippingData.length - delivered - failed;
-            
-            // Contar números únicos
-            const uniquePhoneNumbers = new Set(shippingData.map(item => item.number)).size;
-            setUniqueNumbers(uniquePhoneNumbers);
-            setFailedMessages(failed);
-            
-            // Atualizar dados do gráfico
-            setChartData({
-              labels: ['Entregues', 'Aguardando', 'Falhas'],
-              datasets: [
-                {
-                  data: [delivered, pending, failed],
-                  backgroundColor: [
-                    'rgba(75, 192, 192, 0.7)',
-                    'rgba(255, 206, 86, 0.7)',
-                    'rgba(255, 99, 132, 0.7)',
-                  ],
-                  borderColor: [
-                    'rgba(75, 192, 192, 1)',
-                    'rgba(255, 206, 86, 1)',
-                    'rgba(255, 99, 132, 1)',
-                  ],
-                  borderWidth: 1,
-                },
-              ],
-            });
-            
-            setCampaign(prevCampaign => ({
-              ...prevCampaign,
-              shipping: shippingData
-            }));
+
+      let shippingData = [];
+      try {
+        const shippingResponse = await api.get(`/campaigns/${campaignId}/shipping`, {
+          params: {
+            pageNumber: 1,
+            pageSize: 5000
           }
-        } catch (shippingError) {
-          console.error("Erro ao buscar dados de envio:", shippingError);
-        }
-      } else if (Array.isArray(data.shipping)) {
-        const shippingData = data.shipping;
-        
-        // Processar dados para a tabela
-        const formattedRows = shippingData.map(item => ({
-          id: item.id,
-          jobId: item.jobId,
-          number: item.number,
-          message: item.message ? item.message.substring(0, 50) + (item.message.length > 50 ? '...' : '') : '',
-          fullMessage: item.message || '',
-          deliveredAt: item.deliveredAt ? datetimeToClient(item.deliveredAt) : null,
-          failedAt: item.failedAt ? datetimeToClient(item.failedAt) : null,
-          errorMessage: item.errorMessage || null,
-          createdAt: item.createdAt ? datetimeToClient(item.createdAt) : null,
-          status: item.deliveredAt ? 'delivered' : (item.failedAt ? 'failed' : 'pending')
-        }));
-        
-        setMessageRows(formattedRows);
-        
-        // Atualizar contadores
-        const delivered = shippingData.filter(item => item.deliveredAt).length;
-        const failed = shippingData.filter(item => item.failedAt && !item.deliveredAt).length;
-        const pending = shippingData.length - delivered - failed;
-        
-        // Contar números únicos
-        const uniquePhoneNumbers = new Set(shippingData.map(item => item.number)).size;
-        setUniqueNumbers(uniquePhoneNumbers);
-        setFailedMessages(failed);
-        
-        // Atualizar dados do gráfico
-        setChartData({
-          labels: ['Entregues', 'Aguardando', 'Falhas'],
-          datasets: [
-            {
-              data: [delivered, pending, failed],
-              backgroundColor: [
-                'rgba(75, 192, 192, 0.7)',
-                'rgba(255, 206, 86, 0.7)',
-                'rgba(255, 99, 132, 0.7)',
-              ],
-              borderColor: [
-                'rgba(75, 192, 192, 1)',
-                'rgba(255, 206, 86, 1)',
-                'rgba(255, 99, 132, 1)',
-              ],
-              borderWidth: 1,
-            },
-          ],
         });
+
+        if (Array.isArray(shippingResponse.data)) {
+          shippingData = shippingResponse.data;
+        } else if (Array.isArray(shippingResponse.data?.records)) {
+          shippingData = shippingResponse.data.records;
+        }
+      } catch (shippingError) {
+        console.error("Erro ao buscar dados de envio:", shippingError);
+        if (Array.isArray(data.shipping)) {
+          shippingData = data.shipping;
+        }
       }
+
+      const formattedRows = shippingData.map(item => ({
+        id: item.id,
+        jobId: item.jobId,
+        number: item.number,
+        message: item.message ? item.message.substring(0, 50) + (item.message.length > 50 ? '...' : '') : '',
+        fullMessage: item.message || '',
+        deliveredAt: item.deliveredAt ? datetimeToClient(item.deliveredAt) : null,
+        failedAt: item.failedAt ? datetimeToClient(item.failedAt) : null,
+        errorMessage: item.errorMessage || null,
+        createdAt: item.createdAt ? datetimeToClient(item.createdAt) : null,
+        status: item.deliveredAt ? 'delivered' : (item.failedAt ? 'failed' : 'pending')
+      }));
+
+      setMessageRows(formattedRows);
+
+      const delivered = shippingData.filter(item => item.deliveredAt).length;
+      const failed = shippingData.filter(item => item.failedAt && !item.deliveredAt).length;
+      const pending = shippingData.length - delivered - failed;
+
+      const uniquePhoneNumbers = new Set(shippingData.map(item => item.number)).size;
+      setUniqueNumbers(uniquePhoneNumbers);
+      setFailedMessages(failed);
+
+      setChartData({
+        labels: ['Entregues', 'Aguardando', 'Falhas'],
+        datasets: [
+          {
+            data: [delivered, pending, failed],
+            backgroundColor: [
+              'rgba(75, 192, 192, 0.7)',
+              'rgba(255, 206, 86, 0.7)',
+              'rgba(255, 99, 132, 0.7)',
+            ],
+            borderColor: [
+              'rgba(75, 192, 192, 1)',
+              'rgba(255, 206, 86, 1)',
+              'rgba(255, 99, 132, 1)',
+            ],
+            borderWidth: 1,
+          },
+        ],
+      });
+
+      setCampaign(prevCampaign => ({
+        ...prevCampaign,
+        shipping: shippingData
+      }));
     } catch (error) {
       console.error("Erro ao buscar campanha:", error);
       toast.error(i18n.t("campaignReport.fetchError"));
