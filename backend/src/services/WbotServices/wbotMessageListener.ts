@@ -93,6 +93,7 @@ import { normalizeJid } from "../../utils";
 import { handleOpenAiFlow } from "../IntegrationsServices/OpenAiService";
 import { getJidOf } from "./getJidOf";
 import { verifyContact } from "./verifyContact";
+import { shouldCloseOutOfHoursTicket } from "../../helpers/ShouldCloseOutOfHoursTicket";
 // import { verifyContact } from "./verifyContact";
 import os from "os";
 import request from "request";
@@ -1809,13 +1810,21 @@ const verifyQueue = async (
           };
 
           // ✅ NOVA FUNCIONALIDADE: Verificar configuração da empresa para fechar ticket
-          if (settings?.closeTicketOutOfHours && ticket.userId === null) {
+          const closeDecision = await shouldCloseOutOfHoursTicket({
+            ticket,
+            settings,
+            queue
+          });
+
+          if (closeDecision.shouldClose) {
             ticketUpdate.status = "closed";
-            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Fechando ticket ${ticket.id} fora de expediente (configuração habilitada)`);
-          } else if (settings?.closeTicketOutOfHours && ticket.userId !== null) {
+            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Fechando ticket ${ticket.id} fora de expediente (${closeDecision.reason === "botQueue" ? "fila com isBotQueue" : "ticket novo pendente sem fila"})`);
+          } else if (closeDecision.reason === "hasAttendant") {
             logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Ticket ${ticket.id} tem atendente, mantendo aberto`);
-          } else {
+          } else if (closeDecision.reason === "disabled") {
             logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (configuração desabilitada)`);
+          } else {
+            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (regra: somente pending sem fila ou fila isBotQueue)`);
           }
 
           await ticket.update(ticketUpdate);
@@ -4317,13 +4326,20 @@ const handleMessage = async (
         };
 
         // ✅ CORREÇÃO: Fechar ticket se configuração habilitada E não tem atendente
-        if (settings?.closeTicketOutOfHours && ticket.userId === null) {
+        const closeDecision = await shouldCloseOutOfHoursTicket({
+          ticket,
+          settings
+        });
+
+        if (closeDecision.shouldClose) {
           ticketUpdate.status = "closed";
-          logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Fechando ticket ${ticket.id} fora de expediente (configuração habilitada)`);
-        } else if (settings?.closeTicketOutOfHours && ticket.userId !== null) {
+          logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Fechando ticket ${ticket.id} fora de expediente (${closeDecision.reason === "botQueue" ? "fila com isBotQueue" : "ticket novo pendente sem fila"})`);
+        } else if (closeDecision.reason === "hasAttendant") {
           logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Ticket ${ticket.id} tem atendente, mantendo aberto`);
-        } else {
+        } else if (closeDecision.reason === "disabled") {
           logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (configuração desabilitada)`);
+        } else {
+          logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (regra: somente pending sem fila ou fila isBotQueue)`);
         }
 
         await ticket.update(ticketUpdate);
@@ -4439,13 +4455,21 @@ const handleMessage = async (
           };
 
           // ✅ CORREÇÃO: Fechar ticket se configuração habilitada E não tem atendente
-          if (settings?.closeTicketOutOfHours && ticket.userId === null) {
+          const closeDecision = await shouldCloseOutOfHoursTicket({
+            ticket,
+            settings,
+            queue
+          });
+
+          if (closeDecision.shouldClose) {
             ticketUpdate.status = "closed";
-            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS 2] Fechando ticket ${ticket.id} fora de expediente (configuração habilitada)`);
-          } else if (settings?.closeTicketOutOfHours && ticket.userId !== null) {
+            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS 2] Fechando ticket ${ticket.id} fora de expediente (${closeDecision.reason === "botQueue" ? "fila com isBotQueue" : "ticket novo pendente sem fila"})`);
+          } else if (closeDecision.reason === "hasAttendant") {
             logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS 2] Ticket ${ticket.id} tem atendente, mantendo aberto`);
-          } else {
+          } else if (closeDecision.reason === "disabled") {
             logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS 2] Mantendo ticket ${ticket.id} aberto (configuração desabilitada)`);
+          } else {
+            logger.info(`[WBOT MESSAGE LISTENER - OUT OF HOURS 2] Mantendo ticket ${ticket.id} aberto (regra: somente pending sem fila ou fila isBotQueue)`);
           }
 
           await ticket.update(ticketUpdate);

@@ -22,6 +22,7 @@ import { IMetaMessageinteractive, IMetaMessageinteractiveActionSections, IMetaMe
 import ShowQueueIntegrationService from "../QueueIntegrationServices/ShowQueueIntegrationService";
 import { handleMessageIntegration } from "../WbotServices/wbotMessageListener";
 import { getIO } from "../../libs/socket";
+import { shouldCloseOutOfHoursTicket } from "../../helpers/ShouldCloseOutOfHoursTicket";
 
 
 const verifyQueueOficial = async (
@@ -295,11 +296,22 @@ const verifyQueueOficial = async (
                     amountUsedBotQueues: ticket.amountUsedBotQueues + 1
                 };
 
-                // ✅ CORREÇÃO: Verificar configuração da empresa
-                if (settings?.closeTicketOutOfHours) {
+                const closeDecision = await shouldCloseOutOfHoursTicket({
+                    ticket,
+                    settings,
+                    queue
+                });
+
+                if (closeDecision.shouldClose) {
                     ticketUpdate.isOutOfHour = true;
                     ticketUpdate.status = "closed";
-                    logger.info(`[VERIFY QUEUE - OUT OF HOURS] Encerrando ticket ${ticket.id} fora de expediente`);
+                    logger.info(`[VERIFY QUEUE - OUT OF HOURS] Encerrando ticket ${ticket.id} fora de expediente (${closeDecision.reason === "botQueue" ? "fila com isBotQueue" : "ticket novo pendente sem fila"})`);
+                } else if (closeDecision.reason === "hasAttendant") {
+                    logger.info(`[VERIFY QUEUE - OUT OF HOURS] Ticket ${ticket.id} tem atendente, mantendo aberto`);
+                } else if (closeDecision.reason === "disabled") {
+                    logger.info(`[VERIFY QUEUE - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (configuração desabilitada)`);
+                } else {
+                    logger.info(`[VERIFY QUEUE - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (regra: somente pending sem fila ou fila isBotQueue)`);
                 }
 
                 await ticket.update(ticketUpdate);
@@ -712,11 +724,22 @@ const verifyQueueOficial = async (
                     amountUsedBotQueues: ticket.amountUsedBotQueues + 1
                 };
 
-                // ✅ CORREÇÃO: Verificar configuração da empresa
-                if (settings?.closeTicketOutOfHours) {
+                const closeDecision = await shouldCloseOutOfHoursTicket({
+                    ticket,
+                    settings,
+                    queue
+                });
+
+                if (closeDecision.shouldClose) {
                     ticketUpdate.isOutOfHour = true;
                     ticketUpdate.status = "closed";
-                    logger.info(`[VERIFY QUEUE - OUT OF HOURS] Encerrando ticket ${ticket.id} fora de expediente`);
+                    logger.info(`[VERIFY QUEUE - OUT OF HOURS] Encerrando ticket ${ticket.id} fora de expediente (${closeDecision.reason === "botQueue" ? "fila com isBotQueue" : "ticket novo pendente sem fila"})`);
+                } else if (closeDecision.reason === "hasAttendant") {
+                    logger.info(`[VERIFY QUEUE - OUT OF HOURS] Ticket ${ticket.id} tem atendente, mantendo aberto`);
+                } else if (closeDecision.reason === "disabled") {
+                    logger.info(`[VERIFY QUEUE - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (configuração desabilitada)`);
+                } else {
+                    logger.info(`[VERIFY QUEUE - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (regra: somente pending sem fila ou fila isBotQueue)`);
                 }
 
                 await ticket.update(ticketUpdate);

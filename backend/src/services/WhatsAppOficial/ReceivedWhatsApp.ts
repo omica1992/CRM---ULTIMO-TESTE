@@ -30,6 +30,7 @@ import { isNil } from "lodash";
 import CreateOrUpdateContactService from "../ContactServices/CreateOrUpdateContactService";
 import VerifyCurrentSchedule from "../CompanyService/VerifyCurrentSchedule";
 import formatBody from "../../helpers/Mustache";
+import { shouldCloseOutOfHoursTicket } from "../../helpers/ShouldCloseOutOfHoursTicket";
 import SendWhatsAppOficialMessage from "./SendWhatsAppOficialMessage";
 import flowBuilderQueue from "../WebhookService/flowBuilderQueue";
 import CreateMessageService from "../MessageServices/CreateMessageService";
@@ -669,13 +670,20 @@ export class ReceibedWhatsAppService {
                 };
 
                 // ✅ CORREÇÃO: Fechar ticket se configuração habilitada E não tem atendente
-                if (settings?.closeTicketOutOfHours && ticket.userId === null) {
+                const closeDecision = await shouldCloseOutOfHoursTicket({
+                    ticket,
+                    settings
+                });
+
+                if (closeDecision.shouldClose) {
                     ticketUpdate.status = "closed";
-                    logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Encerrando ticket ${ticket.id} fora de expediente (configuração habilitada)`);
-                } else if (settings?.closeTicketOutOfHours && ticket.userId !== null) {
+                    logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Encerrando ticket ${ticket.id} fora de expediente (${closeDecision.reason === "botQueue" ? "fila com isBotQueue" : "ticket novo pendente sem fila"})`);
+                } else if (closeDecision.reason === "hasAttendant") {
                     logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Ticket ${ticket.id} tem atendente, mantendo aberto`);
-                } else {
+                } else if (closeDecision.reason === "disabled") {
                     logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (configuração desabilitada)`);
+                } else {
+                    logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS] Mantendo ticket ${ticket.id} aberto (regra: somente pending sem fila ou fila isBotQueue)`);
                 }
 
                 await ticket.update(ticketUpdate);
@@ -958,9 +966,21 @@ export class ReceibedWhatsAppService {
                             amountUsedBotQueues: ticket.amountUsedBotQueues + 1
                         };
 
-                        if (settings?.closeTicketOutOfHours) {
+                        const closeDecision = await shouldCloseOutOfHoursTicket({
+                            ticket,
+                            settings,
+                            queue: queueData || null
+                        });
+
+                        if (closeDecision.shouldClose) {
                             ticketUpdate.status = "closed";
-                            logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS QUEUE] Encerrando ticket ${ticket.id} fora de expediente (configuração habilitada)`);
+                            logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS QUEUE] Encerrando ticket ${ticket.id} fora de expediente (${closeDecision.reason === "botQueue" ? "fila com isBotQueue" : "ticket novo pendente sem fila"})`);
+                        } else if (closeDecision.reason === "hasAttendant") {
+                            logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS QUEUE] Ticket ${ticket.id} tem atendente, mantendo aberto`);
+                        } else if (closeDecision.reason === "disabled") {
+                            logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS QUEUE] Mantendo ticket ${ticket.id} aberto (configuração desabilitada)`);
+                        } else {
+                            logger.info(`[WHATSAPP OFICIAL - OUT OF HOURS QUEUE] Mantendo ticket ${ticket.id} aberto (regra: somente pending sem fila ou fila isBotQueue)`);
                         }
 
                         await ticket.update(ticketUpdate);
