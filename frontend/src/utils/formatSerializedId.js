@@ -1,10 +1,15 @@
-import { FormatMask } from './FormatMask';
+import { FormatMask } from "./FormatMask";
 
 const formatSerializedId = (serializedId) => {
-  const formatMask = new FormatMask();
-  const number = serializedId?.replace('@c.us', '');
+  if (serializedId === null || serializedId === undefined) {
+    return serializedId;
+  }
 
-  return formatMask.setPhoneFormatMask(number)?.replace('+55', '🇧🇷');
+  const formatMask = new FormatMask();
+  const number = String(serializedId).replace("@c.us", "");
+  const formattedNumber = formatMask.setPhoneFormatMask(number);
+
+  return formattedNumber?.replace("+55", "\u{1F1E7}\u{1F1F7}");
 };
 
 export default formatSerializedId;
