@@ -244,6 +244,7 @@ const Reports = () => {
           id: ticket.id,
           Conexão: ticket.whatsappName,
           Contato: ticket.contactName,
+          Empresa: ticket.empresa || "-",
           Usuário: ticket.userName,
           Fila: ticket.queueName,
           Status: ticket.status,
@@ -306,6 +307,10 @@ const Reports = () => {
             "reports.exportExcel.columns.contact",
             "Contato"
           ),
+          company: getTranslation(
+            "reports.exportExcel.columns.company",
+            "Empresa"
+          ),
           user: getTranslation("reports.exportExcel.columns.user", "Usuário"),
           queue: getTranslation("reports.exportExcel.columns.queue", "Fila"),
           status: getTranslation(
@@ -362,6 +367,7 @@ const Reports = () => {
           translations.columns.id,
           translations.columns.connection,
           translations.columns.contact,
+          translations.columns.company,
           translations.columns.user,
           translations.columns.queue,
           translations.columns.status,
@@ -384,7 +390,7 @@ const Reports = () => {
       });
 
       if (!ws["!merges"]) ws["!merges"] = [];
-      ws["!merges"].push({ s: { c: 0, r: 0 }, e: { c: 12, r: 0 } });
+      ws["!merges"].push({ s: { c: 0, r: 0 }, e: { c: 16, r: 0 } });
 
       if (!ws["!cols"]) ws["!cols"] = [];
       ws["!cols"] = [
@@ -395,6 +401,7 @@ const Reports = () => {
         { wch: 15 },
         { wch: 12 },
         { wch: 30 },
+        { wch: 12 },
         { wch: 12 },
         { wch: 12 },
         { wch: 12 },

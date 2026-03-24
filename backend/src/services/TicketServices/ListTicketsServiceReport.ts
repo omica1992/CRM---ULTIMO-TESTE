@@ -43,6 +43,7 @@ export default async function ListTicketsServiceReport(
 	  t.id,
 	  w."name" as "whatsappName",
     c."name" as "contactName",
+    c."empresa" as "empresa",
 	  u."name" as "userName",
 	  q."name" as "queueName",
 	  wallet_user."name" as "walletName",
@@ -96,6 +97,7 @@ export default async function ListTicketsServiceReport(
 	  t.id,
 	  w."name" as "whatsappName",
     c."name" as "contactName",
+    c."empresa" as "empresa",
 	  u."name" as "userName",
 	  q."name" as "queueName",
 	  wallet_user."name" as "walletName",
@@ -195,8 +197,9 @@ export default async function ListTicketsServiceReport(
   const finalQuery = query.replace("-- filterPeriod", where);
 
   const totalTicketsQuery = `
-    SELECT COUNT(*) as total FROM "Tickets" t
-    ${where}  `;
+    SELECT COUNT(*) as total
+    FROM (${finalQuery}) AS report_data
+  `;
 
   const totalTicketsResult = await sequelize.query(totalTicketsQuery, {
     type: QueryTypes.SELECT
