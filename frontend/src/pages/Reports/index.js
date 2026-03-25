@@ -765,6 +765,7 @@ const Reports = () => {
               <TableCell align="left">
                 {i18n.t("reports.table.contact")}
               </TableCell>
+              <TableCell align="left">Empresa</TableCell>
               <TableCell align="left">{i18n.t("reports.table.user")}</TableCell>
               <TableCell align="left">
                 {i18n.t("reports.table.queue")}
@@ -803,6 +804,7 @@ const Reports = () => {
                   <TableCell align="center">{ticket.id}</TableCell>
                   <TableCell align="left">{ticket?.whatsappName}</TableCell>
                   <TableCell align="left">{ticket?.contactName}</TableCell>
+                  <TableCell align="left">{ticket?.empresa || "-"}</TableCell>
                   <TableCell align="left">{ticket?.userName}</TableCell>
                   <TableCell align="left">{ticket?.queueName}</TableCell>
                   <TableCell align="left">
