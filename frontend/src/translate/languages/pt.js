@@ -876,6 +876,7 @@ const messages = {
             pending: "Pendente",
           },
           filterUsers: "Filtro por Usuarios",
+          filterCompany: "Filtro por Empresa",
           filterContacts: "Filtro por Contatos",
           ticketsPerPage: "Tickets por página",
         },

@@ -19,7 +19,8 @@ const useTickets = ({
   forceSearch,
   userFilter,
   sortTickets,
-  searchOnMessages
+  searchOnMessages,
+  empresa
 }) => {
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
@@ -47,7 +48,8 @@ const useTickets = ({
                 whatsapps: whatsappIds,
                 statusFilter,
                 sortTickets,
-                searchOnMessages
+                searchOnMessages,
+                empresa
               },
             });
             
@@ -115,7 +117,8 @@ const useTickets = ({
     statusFilter,
     forceSearch,
     sortTickets,
-    searchOnMessages
+    searchOnMessages,
+    empresa
   ]);
 
   // Função para recarregar os dados sem mudar os parâmetros
@@ -134,11 +137,12 @@ const useTickets = ({
           showAll,
           queueIds,
           withUnreadMessages,
-          whatsappIds,
+          whatsapps: whatsappIds,
           statusFilter,
           userFilter,
           sortTickets,
-          searchOnMessages
+          searchOnMessages,
+          empresa
         }
       });
       setCount(data.count);
@@ -163,7 +167,8 @@ const useTickets = ({
     statusFilter,
     userFilter,
     sortTickets,
-    searchOnMessages
+    searchOnMessages,
+    empresa
   ]);
 
   return { tickets, loading, hasMore, count, refetch };

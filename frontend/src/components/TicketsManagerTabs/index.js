@@ -13,6 +13,8 @@ import {
   Grid,
   Tooltip,
   Switch,
+  Box,
+  TextField,
 } from "@material-ui/core";
 import {
   Group,
@@ -420,6 +422,8 @@ const TicketsManagerTabs = () => {
   const [selectedWhatsapp, setSelectedWhatsapp] = useState([]);
   const [forceSearch, setForceSearch] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState([]);
+  const [selectedEmpresa, setSelectedEmpresa] = useState("");
+  const [empresaInput, setEmpresaInput] = useState("");
   const [filter, setFilter] = useState(false);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [hoveredButton, setHoveredButton] = useState(null);
@@ -590,6 +594,23 @@ const TicketsManagerTabs = () => {
     }, 500);
   };
 
+  const handleSelectedEmpresa = (value) => {
+    clearTimeout(searchTimeout);
+
+    setEmpresaInput(value);
+
+    if (value.trim() === "") {
+      setForceSearch(!forceSearch);
+    } else if (tab !== "search") {
+      setTab("search");
+    }
+
+    searchTimeout = setTimeout(() => {
+      setSelectedEmpresa(value.trim());
+      setForceSearch(!forceSearch);
+    }, 500);
+  };
+
   const handleFilter = () => {
     if (filter) {
       setFilter(false);
@@ -599,6 +620,8 @@ const TicketsManagerTabs = () => {
       setSelectedUsers([]);
       setSelectedWhatsapp([]);
       setSelectedStatus([]);
+      setSelectedEmpresa("");
+      setEmpresaInput("");
       setForceSearch(!forceSearch);
       if (searchInputRef.current) {
         searchInputRef.current.value = "";
@@ -689,6 +712,16 @@ const TicketsManagerTabs = () => {
               <UsersFilter onFiltered={handleSelectedUsers} />
             </>
           )}
+          <Box style={{ padding: "0px 10px 10px" }}>
+            <TextField
+              fullWidth
+              size="small"
+              variant="outlined"
+              placeholder={i18n.t("tickets.search.filterCompany")}
+              value={empresaInput}
+              onChange={(e) => handleSelectedEmpresa(e.target.value)}
+            />
+          </Box>
         </>
       )}
 
@@ -1131,6 +1164,7 @@ const TicketsManagerTabs = () => {
               users={selectedUsers}
               selectedQueueIds={selectedQueueIds}
               whatsappIds={selectedWhatsapp}
+              empresa={selectedEmpresa}
               forceSearch={forceSearch}
               searchOnMessages={searchOnMessages}
               status="search"
@@ -1146,6 +1180,7 @@ const TicketsManagerTabs = () => {
             tags={selectedTags}
             selectedQueueIds={selectedQueueIds}
             whatsappIds={selectedWhatsapp}
+            empresa={selectedEmpresa}
             forceSearch={forceSearch}
             searchOnMessages={searchOnMessages}
             status="search"

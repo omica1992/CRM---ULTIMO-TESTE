@@ -843,6 +843,7 @@ const messages = {
             pending: "Pendiente",
           },
           filterUsers: "Filtro por usuarios",
+          filterCompany: "Filtro por empresa",
           filterContacts: "Filtrar por Contactos",
           ticketsPerPage: "Entradas por página",
         },

@@ -847,6 +847,7 @@ const messages = {
             pending: "Pending",
           },
           filterUsers: "Filter by Users",
+          filterCompany: "Filter by Company",
           filterContacts: "Filter by Contacts",
           ticketsPerPage: "Tickets per page",
         },

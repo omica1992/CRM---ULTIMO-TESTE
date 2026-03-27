@@ -851,6 +851,7 @@ const messages = {
             pending: "معلق",
           },
           filterUsers: "تصفية حسب المستخدمين",
+          filterCompany: "تصفية حسب الشركة",
           filterContacts: "تصفية حسب جهات الاتصال",
           ticketsPerPage: "محادثات لكل صفحة",
         },

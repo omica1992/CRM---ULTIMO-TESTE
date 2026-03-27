@@ -44,6 +44,7 @@ interface Request {
   allTicket?: string;
   sortTickets?: string;
   searchOnMessages?: string;
+  empresa?: string;
 }
 
 interface Response {
@@ -70,7 +71,8 @@ const ListTicketsService = async ({
   statusFilters,
   companyId,
   sortTickets = "DESC",
-  searchOnMessages = "false"
+  searchOnMessages = "false",
+  empresa = ""
 }: Request): Promise<Response> => {
   const user = await ShowUserService(userId, companyId);
 
@@ -405,6 +407,18 @@ const ListTicketsService = async ({
           };
         }
 
+      }
+
+      if (empresa) {
+        const sanitizedEmpresa = removeAccents(empresa.toLocaleLowerCase().trim());
+        whereCondition = {
+          ...whereCondition,
+          "$contact.empresa$": where(
+            fn("LOWER", fn("unaccent", col("contact.empresa"))),
+            "LIKE",
+            `%${sanitizedEmpresa}%`
+          )
+        };
       }
 
       if (Array.isArray(tags) && tags.length > 0) {

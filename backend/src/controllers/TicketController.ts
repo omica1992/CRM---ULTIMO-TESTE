@@ -41,6 +41,7 @@ type IndexQuery = {
   isGroup?: string;
   sortTickets?: string;
   searchOnMessages?: string;
+  empresa?: string;
 };
 
 type IndexQueryReport = {
@@ -90,7 +91,8 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     whatsapps: whatsappIdsStringified,
     statusFilter: statusStringfied,
     sortTickets,
-    searchOnMessages
+    searchOnMessages,
+    empresa
   } = req.query as IndexQuery;
 
   const userId = Number(req.user.id);
@@ -140,7 +142,8 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     statusFilters,
     companyId,
     sortTickets,
-    searchOnMessages
+    searchOnMessages,
+    empresa
   });
 
   return res.status(200).json({ tickets, count, hasMore });

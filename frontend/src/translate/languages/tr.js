@@ -535,6 +535,9 @@ const messages = {
           closed: { title: "Kapalı" },
           search: { title: "Ara" }
         },
+        search: {
+          filterCompany: "Sirket filtresi"
+        },
         buttons: {
           showAll: "Tüm"
         }
