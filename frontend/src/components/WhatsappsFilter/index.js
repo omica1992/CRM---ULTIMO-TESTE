@@ -47,6 +47,7 @@ export function WhatsappsFilter({ onFiltered, initialWhatsapps, disablePadding =
     <Box style={disablePadding ? { padding: 0 } : { padding: "0px 10px 10px" }}>
       <Autocomplete
         multiple
+        fullWidth
         size="small"
         options={whatsapps}
         value={selecteds}
@@ -76,6 +77,7 @@ export function WhatsappsFilter({ onFiltered, initialWhatsapps, disablePadding =
         renderInput={(params) => (
           <TextField
             {...params}
+            fullWidth
             variant="outlined"
             placeholder={i18n.t("tickets.search.filterConections")}
           />

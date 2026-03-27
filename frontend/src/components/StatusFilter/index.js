@@ -36,6 +36,7 @@ export function StatusFilter({ onFiltered, disablePadding = false }) {
     <Box style={disablePadding ? { padding: 0 } : { padding: "0px 10px 10px" }}>
       <Autocomplete
         multiple
+        fullWidth
         size="small"
         options={status}
         value={selecteds}
@@ -59,6 +60,7 @@ export function StatusFilter({ onFiltered, disablePadding = false }) {
         renderInput={(params) => (
           <TextField
             {...params}
+            fullWidth
             variant="outlined"
             placeholder={i18n.t("statusFilter.statusFilter")}
           />

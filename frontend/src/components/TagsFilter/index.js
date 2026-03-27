@@ -33,6 +33,7 @@ export function TagsFilter({ onFiltered, disablePadding = false }) {
     <Box style={disablePadding ? { padding: 0 } : { padding: 10 }}>
       <Autocomplete
         multiple
+        fullWidth
         size="small"
         options={tags}
         value={selecteds}
@@ -56,6 +57,7 @@ export function TagsFilter({ onFiltered, disablePadding = false }) {
         renderInput={(params) => (
           <TextField
             {...params}
+            fullWidth
             variant="outlined"
             placeholder="Filtro por Tags"
           />
