@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import toastError from "../../errors/toastError";
 import api from "../../services/api";
 
-export function TagsFilter({ onFiltered }) {
+export function TagsFilter({ onFiltered, disablePadding = false }) {
   const [tags, setTags] = useState([]);
   const [selecteds, setSelecteds] = useState([]);
 
@@ -30,7 +30,7 @@ export function TagsFilter({ onFiltered }) {
   };
 
   return (
-    <Box style={{ padding: 10 }}>
+    <Box style={disablePadding ? { padding: 0 } : { padding: 10 }}>
       <Autocomplete
         multiple
         size="small"

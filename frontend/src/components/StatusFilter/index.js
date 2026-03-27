@@ -3,7 +3,7 @@ import Autocomplete from "@material-ui/lab/Autocomplete";
 import React, { useEffect, useState } from "react";
 import { i18n } from "../../translate/i18n";
 
-export function StatusFilter({ onFiltered }) {
+export function StatusFilter({ onFiltered, disablePadding = false }) {
   const [selecteds, setSelecteds] = useState([]);
 
   useEffect(() => {
@@ -33,7 +33,7 @@ export function StatusFilter({ onFiltered }) {
   ];
 
   return (
-    <Box style={{ padding: "0px 10px 10px" }}>
+    <Box style={disablePadding ? { padding: 0 } : { padding: "0px 10px 10px" }}>
       <Autocomplete
         multiple
         size="small"

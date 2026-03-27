@@ -19,7 +19,7 @@ const useStyles = makeStyles(theme => ({
 	},
 })); 
 
-const QueueSelectCustom = ({ selectedQueueIds, onChange }) => {
+const QueueSelectCustom = ({ selectedQueueIds, onChange, disableTopMargin = false }) => {
 	const classes = useStyles();
 	const [queues, setQueues] = useState([]);
 
@@ -39,7 +39,7 @@ const QueueSelectCustom = ({ selectedQueueIds, onChange }) => {
 	};
 
 	return (
-		<div style={{ marginTop: 6 }}>
+		<div style={disableTopMargin ? { marginTop: 0 } : { marginTop: 6 }}>
 			<FormControl fullWidth margin="dense" variant="outlined">
 				<InputLabel>{i18n.t("queueSelect.inputLabel")}</InputLabel>
 				<Select

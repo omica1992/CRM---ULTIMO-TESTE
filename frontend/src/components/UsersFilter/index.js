@@ -5,7 +5,7 @@ import toastError from "../../errors/toastError";
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
 
-export function UsersFilter({ onFiltered, initialUsers }) {
+export function UsersFilter({ onFiltered, initialUsers, disablePadding = false }) {
   const [users, setUsers] = useState([]);
   const [selecteds, setSelecteds] = useState([]);
 
@@ -44,7 +44,7 @@ export function UsersFilter({ onFiltered, initialUsers }) {
   };
 
   return (
-    <Box style={{ padding: "0px 10px 10px" }}>
+    <Box style={disablePadding ? { padding: 0 } : { padding: "0px 10px 10px" }}>
       <Autocomplete
         multiple
         size="small"

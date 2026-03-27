@@ -93,9 +93,10 @@ const useStyles = makeStyles((theme) => ({
   },
   mainPaperFilter: {
     flex: 1,
-    overflow: "auto",
-    height: "20vh",
-    ...theme.scrollbarStylesSoftBig,
+    width: "100%",
+    height: "auto",
+    overflow: "visible",
+    padding: theme.spacing(1.5),
   },
   mainHeaderBlock: {
     [theme.breakpoints.down("md")]: {
@@ -107,6 +108,40 @@ const useStyles = makeStyles((theme) => ({
     width: 200,
     [theme.breakpoints.down("md")]: {
       width: "45%",
+    },
+  },
+  filterGrid: {
+    width: "100%",
+    margin: 0,
+  },
+  filterCell: {
+    display: "flex",
+    alignItems: "stretch",
+    width: "100%",
+    "& .MuiFormControl-root": {
+      width: "100%",
+      margin: 0,
+    },
+    "& .MuiAutocomplete-root": {
+      width: "100%",
+    },
+    "& .MuiTextField-root": {
+      width: "100%",
+    },
+    "& .MuiOutlinedInput-root": {
+      minHeight: 40,
+    },
+  },
+  actionsCell: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    gap: theme.spacing(1),
+    flexWrap: "wrap",
+    width: "100%",
+    minHeight: 40,
+    "& .MuiFormControlLabel-root": {
+      marginRight: 0,
     },
   },
 }));
@@ -677,44 +712,41 @@ const Reports = () => {
   };
   const renderContactAutocomplete = () => {
     return (
-      <Grid xs={12} item>
-        <Autocomplete
-          fullWidth
-          options={options}
-          loading={loading}
-          clearOnBlur
-          autoHighlight
-          freeSolo
-          size="small"
-          clearOnEscape
-          getOptionLabel={renderOptionLabel}
-          renderOption={renderOption}
-          filterOptions={createAddContactOption}
-          onChange={(e, newValue) => handleSelectOption(e, newValue)}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label={i18n.t("newTicketModal.fieldLabel")}
-              variant="outlined"
-              autoFocus
-              size="small"
-              onChange={(e) => setSearchParam(e.target.value)}
-              // onKeyPress={(e, newValue) => handleSelectOption(e, newValue)}
-              InputProps={{
-                ...params.InputProps,
-                endAdornment: (
-                  <React.Fragment>
-                    {loading ? (
-                      <CircularProgress color="inherit" size={20} />
-                    ) : null}
-                    {params.InputProps.endAdornment}
-                  </React.Fragment>
-                ),
-              }}
-            />
-          )}
-        />
-      </Grid>
+      <Autocomplete
+        fullWidth
+        options={options}
+        loading={loading}
+        clearOnBlur
+        autoHighlight
+        freeSolo
+        size="small"
+        clearOnEscape
+        getOptionLabel={renderOptionLabel}
+        renderOption={renderOption}
+        filterOptions={createAddContactOption}
+        onChange={(e, newValue) => handleSelectOption(e, newValue)}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label={i18n.t("newTicketModal.fieldLabel")}
+            variant="outlined"
+            autoFocus
+            size="small"
+            onChange={(e) => setSearchParam(e.target.value)}
+            InputProps={{
+              ...params.InputProps,
+              endAdornment: (
+                <React.Fragment>
+                  {loading ? (
+                    <CircularProgress color="inherit" size={20} />
+                  ) : null}
+                  {params.InputProps.endAdornment}
+                </React.Fragment>
+              ),
+            }}
+          />
+        )}
+      />
     );
   };
 
@@ -744,30 +776,33 @@ const Reports = () => {
         style={{ display: "flex" }}
       >
         <Paper className={classes.mainPaperFilter}>
-          <div style={{ paddingTop: "15px" }} />
-          <Grid container spacing={1}>
-            <Grid item xs={12} md={3} xl={3}>
+          <Grid container spacing={2} className={classes.filterGrid}>
+            <Grid item xs={12} md={3} xl={3} className={classes.filterCell}>
               {renderContactAutocomplete()}
             </Grid>
-            <Grid item xs={12} md={3} xl={3}>
-              <WhatsappsFilter onFiltered={handleSelectedWhatsapps} />
+            <Grid item xs={12} md={3} xl={3} className={classes.filterCell}>
+              <WhatsappsFilter
+                onFiltered={handleSelectedWhatsapps}
+                disablePadding
+              />
             </Grid>
-            <Grid item xs={12} md={3} xl={3}>
-              <StatusFilter onFiltered={handleSelectedStatus} />
+            <Grid item xs={12} md={3} xl={3} className={classes.filterCell}>
+              <StatusFilter onFiltered={handleSelectedStatus} disablePadding />
             </Grid>
-            <Grid item xs={12} md={3} xl={3}>
-              <UsersFilter onFiltered={handleSelectedUsers} />
+            <Grid item xs={12} md={3} xl={3} className={classes.filterCell}>
+              <UsersFilter onFiltered={handleSelectedUsers} disablePadding />
             </Grid>
-            <Grid item xs={12} md={3} xl={3}>
-              <TagsFilter onFiltered={handleSelectedTags} />
+            <Grid item xs={12} md={3} xl={3} className={classes.filterCell}>
+              <TagsFilter onFiltered={handleSelectedTags} disablePadding />
             </Grid>
-            <Grid item xs={12} md={3} xl={3} style={{ marginTop: "-13px" }}>
+            <Grid item xs={12} md={3} xl={3} className={classes.filterCell}>
               <QueueSelectCustom
                 selectedQueueIds={queueIds}
                 onChange={(values) => setQueueIds(values)}
+                disableTopMargin
               />
             </Grid>
-            <Grid item xs={12} md={3} xl={3}>
+            <Grid item xs={12} md={3} xl={3} className={classes.filterCell}>
               <TextField
                 label="Empresa"
                 value={empresa}
@@ -778,7 +813,7 @@ const Reports = () => {
                 placeholder="Filtrar por empresa"
               />
             </Grid>
-            <Grid item xs={12} md={3} xl={3}>
+            <Grid item xs={12} md={3} xl={3} className={classes.filterCell}>
               <TextField
                 label="CPF"
                 value={cpf}
@@ -790,7 +825,7 @@ const Reports = () => {
               />
             </Grid>
 
-            <Grid item xs={12} sm={3} md={3}>
+            <Grid item xs={12} sm={6} md={3} className={classes.filterCell}>
               <TextField
                 label={i18n.t("reports.startDate")}
                 type="date"
@@ -804,7 +839,7 @@ const Reports = () => {
                 }}
               />
             </Grid>
-            <Grid item xs={12} sm={3} md={3}>
+            <Grid item xs={12} sm={6} md={3} className={classes.filterCell}>
               <TextField
                 label={i18n.t("reports.endDate")}
                 type="date"
@@ -821,9 +856,9 @@ const Reports = () => {
             <Grid
               item
               xs={12}
-              sm={3}
-              md={3}
-              style={{ display: "flex", justifyContent: "center" }}
+              sm={12}
+              md={6}
+              className={classes.actionsCell}
             >
               <FormControlLabel
                 control={
@@ -835,10 +870,7 @@ const Reports = () => {
                 }
                 label={i18n.t("reports.buttons.onlyRated")}
               />
-              <IconButton
-                onClick={exportarGridParaExcel}
-                aria-label="Exportar para Excel"
-              >
+              <IconButton onClick={exportarGridParaExcel} aria-label="Exportar para Excel">
                 <SaveAlt />
               </IconButton>
               <Button

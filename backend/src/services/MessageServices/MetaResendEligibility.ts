@@ -10,7 +10,7 @@ interface EligibilityResult {
   reason: string | null;
 }
 
-const SUPPORTED_MEDIA_TYPES = new Set([
+const SUPPORTED_TEXT_MEDIA_TYPES = new Set([
   "conversation",
   "extendedTextMessage",
   "text"
@@ -56,23 +56,9 @@ export const getMetaResendEligibility = ({
   deliveryErrorCode
 }: EligibilityInput): EligibilityResult => {
   const normalizedMediaType = (mediaType || "").trim();
-  const normalizedBody = (body || "").trim();
+  const normalizedBody = (body || "").split("||||")[0].trim();
   const normalizedError = (deliveryError || "").toLowerCase();
   const normalizedErrorCode = (deliveryErrorCode || "").trim();
-
-  if (!SUPPORTED_MEDIA_TYPES.has(normalizedMediaType)) {
-    return {
-      eligible: false,
-      reason: "Reenvio automático disponível apenas para mensagens de texto."
-    };
-  }
-
-  if (!normalizedBody) {
-    return {
-      eligible: false,
-      reason: "Mensagem sem conteúdo para reenvio."
-    };
-  }
 
   if (NON_RETRYABLE_CODES.has(normalizedErrorCode)) {
     return {
@@ -91,9 +77,29 @@ export const getMetaResendEligibility = ({
     };
   }
 
+  if (normalizedMediaType === "template") {
+    return {
+      eligible: false,
+      reason: "Reenvio automático de template ainda não é suportado."
+    };
+  }
+
+  if (!SUPPORTED_TEXT_MEDIA_TYPES.has(normalizedMediaType)) {
+    return {
+      eligible: false,
+      reason: "Reenvio automático disponível apenas para mensagens de texto."
+    };
+  }
+
+  if (!normalizedBody) {
+    return {
+      eligible: false,
+      reason: "Mensagem sem conteúdo para reenvio."
+    };
+  }
+
   return {
     eligible: true,
     reason: null
   };
 };
-
