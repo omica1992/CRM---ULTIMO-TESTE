@@ -27,7 +27,8 @@ const MessageOptionsMenu = ({
   anchorEl,
   isGroup,
   queueId,
-  whatsappId
+  whatsappId,
+  channel
 }) => {
   const { setReplyingMessage } = useContext(ReplyMessageContext);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
@@ -140,6 +141,9 @@ const MessageOptionsMenu = ({
     return currentTime - messageTime <= fifteenMinutesInMilliseconds;
   };
 
+  const isOfficialApiConnection =
+    channel === "whatsapp_oficial" || channel === "whatsapp-oficial";
+
   const handleOpenConfirmationModal = (e) => {
     setConfirmationOpen(true);
     handleClose();
@@ -195,7 +199,7 @@ const MessageOptionsMenu = ({
             {i18n.t("messageOptionsMenu.delete")}
           </MenuItem>
         )}
-        {message.fromMe && isWithinFifteenMinutes() && (
+        {message.fromMe && isWithinFifteenMinutes() && !isOfficialApiConnection && (
           <MenuItem key="edit" onClick={handleEditMessage}>
             {i18n.t("messageOptionsMenu.edit")}
           </MenuItem>

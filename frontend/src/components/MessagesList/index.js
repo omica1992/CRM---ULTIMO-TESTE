@@ -1542,6 +1542,7 @@ const MessagesList = ({
         isGroup={isGroup}
         whatsappId={whatsappId}
         queueId={queueId}
+        channel={channel}
       />
 
 

@@ -10,6 +10,7 @@ import Ticket from "../../models/Ticket";
 import formatBody from "../../helpers/Mustache";
 import Whatsapp from "../../models/Whatsapp";
 import { getJidOf } from "../WbotServices/getJidOf";
+import logger from "../../utils/logger";
 
 interface Request {
   messageId: string;
@@ -41,25 +42,60 @@ const EditWhatsAppMessage = async ({
   }
 
   const { ticket } = message;
+  const isOfficialConnection =
+    ticket.whatsapp?.provider === "oficial" ||
+    ticket.whatsapp?.channel === "whatsapp-oficial" ||
+    ticket.whatsapp?.channel === "whatsapp_oficial" ||
+    ticket.channel === "whatsapp_oficial";
 
-  const wbot = await GetTicketWbot(ticket);
+  let parsedMessage: any = null;
+  if (message.dataJson) {
+    try {
+      parsedMessage = JSON.parse(message.dataJson);
+    } catch (error) {
+      logger.warn(
+        `[EDIT MESSAGE] Falha ao fazer parse de dataJson da mensagem ${message.id}`
+      );
+    }
+  }
 
-  const msg = JSON.parse(message.dataJson);
+  const keyToEdit = parsedMessage?.key;
+  const canEditRemotely =
+    !message.isPrivate &&
+    ticket.channel === "whatsapp" &&
+    !isOfficialConnection &&
+    !!keyToEdit;
+
+  // Tenta editar no WhatsApp apenas quando o canal suporta e há key da mensagem.
+  if (canEditRemotely) {
+    try {
+      const wbot = await GetTicketWbot(ticket);
+      await wbot.sendMessage(
+        getJidOf(message.remoteJid || ticket),
+        {
+          text: body,
+          edit: keyToEdit
+        },
+        {}
+      );
+    } catch (err) {
+      logger.warn(
+        `[EDIT MESSAGE] Falha ao editar remotamente mensagem ${message.id}. Aplicando fallback local.`
+      );
+    }
+  }
 
   try {
-    await wbot.sendMessage(getJidOf(message.remoteJid), {
-      text: body,
-      edit: msg.key,
-    }, {});
-
-
-    // await OldMessage.upsert(oldMessage);
+    const previousBody = message.body;
     await message.update({ body, isEdited: true });
 
-    await ticket.update({ lastMessage: body });
+    // Atualiza preview do ticket apenas se a mensagem editada era a última exibida.
+    if (ticket.lastMessage === previousBody) {
+      await ticket.update({ lastMessage: body });
+    }
+
     await ticket.reload();
-    
-    return { ticket: message.ticket, message: message };
+    return { ticket: message.ticket, message };
   } catch (err) {
     console.log(err);
     throw new AppError("ERR_EDITING_WAPP_MSG");
