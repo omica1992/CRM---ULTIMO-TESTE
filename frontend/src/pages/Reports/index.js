@@ -36,7 +36,9 @@ import {
   InputLabel,
   MenuItem,
   Select,
+  Tab,
   Switch,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -186,6 +188,7 @@ const Reports = () => {
   const [metaBlockedLoading, setMetaBlockedLoading] = useState(false);
   const [selectedMetaMessageIds, setSelectedMetaMessageIds] = useState([]);
   const [resendingMeta, setResendingMeta] = useState(false);
+  const [activeReportTab, setActiveReportTab] = useState(0);
 
   useEffect(() => {
     setLoading(true);
@@ -758,6 +761,24 @@ const Reports = () => {
       selectedMetaMessageIds.includes(message.id)
     );
 
+  const handleChangeReportTab = (event, value) => {
+    setActiveReportTab(value);
+
+    if (value === 1 && metaBlockedMessages.length === 0) {
+      handleFilterMetaBlocked(1);
+    }
+
+    if (value === 0 && tickets.length === 0) {
+      handleFilter(1);
+    }
+  };
+
+  useEffect(() => {
+    handleFilter(1);
+    handleFilterMetaBlocked(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <MainContainer className={classes.mainContainer}>
       {openTicketMessageDialog && (
@@ -875,7 +896,11 @@ const Reports = () => {
                 variant="contained"
                 color="primary"
                 onClick={() => {
-                  handleFilter(pageNumber);
+                  if (activeReportTab === 0) {
+                    handleFilter(1);
+                    return;
+                  }
+
                   handleFilterMetaBlocked(1);
                 }}
                 size="small"
@@ -886,6 +911,23 @@ const Reports = () => {
           </Grid>
         </Paper>
       </MainHeader>
+
+      <Paper variant="outlined" style={{ marginBottom: 12 }}>
+        <Tabs
+          value={activeReportTab}
+          onChange={handleChangeReportTab}
+          indicatorColor="primary"
+          textColor="primary"
+          variant="scrollable"
+          scrollButtons="auto"
+        >
+          <Tab label="Relatório de Atendimentos" />
+          <Tab label="Bloqueios Meta" />
+        </Tabs>
+      </Paper>
+
+      {activeReportTab === 0 && (
+      <>
       <Paper className={classes.mainPaperTable} variant="outlined">
         <Table size="small" id="grid-attendants">
           <TableHead>
@@ -1054,7 +1096,11 @@ const Reports = () => {
           </Grid>
         </Grid>
       </div>
+      </>
+      )}
 
+      {activeReportTab === 1 && (
+      <>
       <Paper
         variant="outlined"
         style={{ marginTop: 20, padding: 12, borderRadius: 12 }}
@@ -1253,6 +1299,8 @@ const Reports = () => {
           </Grid>
         </Grid>
       </div>
+      </>
+      )}
     </MainContainer>
   );
 };
