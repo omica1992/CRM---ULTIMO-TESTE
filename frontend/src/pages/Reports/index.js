@@ -896,11 +896,7 @@ const Reports = () => {
                 variant="contained"
                 color="primary"
                 onClick={() => {
-                  if (activeReportTab === 0) {
-                    handleFilter(1);
-                    return;
-                  }
-
+                  handleFilter(1);
                   handleFilterMetaBlocked(1);
                 }}
                 size="small"
