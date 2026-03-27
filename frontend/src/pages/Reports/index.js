@@ -110,14 +110,12 @@ const useStyles = makeStyles((theme) => ({
       width: "45%",
     },
   },
-  filterGrid: {
-    width: "100%",
-    margin: 0,
-  },
   filterCell: {
-    display: "flex",
-    alignItems: "stretch",
     width: "100%",
+    minWidth: 0,
+    "& > *": {
+      width: "100%",
+    },
     "& .MuiFormControl-root": {
       width: "100%",
       margin: 0,
@@ -776,7 +774,7 @@ const Reports = () => {
         style={{ display: "flex" }}
       >
         <Paper className={classes.mainPaperFilter}>
-          <Grid container spacing={2} className={classes.filterGrid}>
+          <Grid container spacing={2}>
             <Grid item xs={12} md={3} xl={3} className={classes.filterCell}>
               {renderContactAutocomplete()}
             </Grid>
