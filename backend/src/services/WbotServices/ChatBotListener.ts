@@ -38,6 +38,25 @@ type Session = WASocket & {
 
 const isNumeric = (value: string) => /^-?\d+$/.test(value);
 
+const buildMenuOptionsText = (
+  options: Pick<Chatbot, "name">[] = [],
+  includeBackToMainMenu = true
+) => {
+  let menuOptions = "";
+
+  options.forEach((option, index) => {
+    menuOptions += `*[ ${index + 1} ]* - ${option.name}\n`;
+  });
+
+  if (includeBackToMainMenu) {
+    menuOptions += `*[ # ]* Voltar para o menu principal\n`;
+  }
+
+  menuOptions += `*[ Sair ]* Encerrar atendimento`;
+
+  return menuOptions.trim();
+};
+
 export const deleteAndCreateDialogStage = async (
   contact: Contact,
   chatbotId: number,
@@ -799,10 +818,13 @@ export const sayChatbot = async (
   //   msg?.message?.listResponseMessage?.singleSelectReply.selectedRowId ||
   //   getBodyMessage(msg);
 
-  const selectedOption =
+  const selectedOptionRaw =
     msg?.message?.buttonsResponseMessage?.selectedButtonId ||
     msg?.message?.listResponseMessage?.singleSelectReply.selectedRowId ||
     getBodyMessage(msg);
+
+  const selectedOption =
+    typeof selectedOptionRaw === "string" ? selectedOptionRaw.trim() : "";
 
   if (!queueId && selectedOption && msg.key.fromMe) return;
 
@@ -1471,7 +1493,7 @@ export const sayChatbot = async (
 
   //  }
 
-  if (String(selectedOption).toLocaleLowerCase() === "sair") {
+  if (selectedOption.toLocaleLowerCase() === "sair") {
     const ticketData = {
       status: "closed",
       sendFarewellMessage: true,
@@ -1551,13 +1573,23 @@ export const sayChatbot = async (
     // }
 
     const queue = await ShowQueueService(queueId, ticket.companyId);
+    const choosenQueue = queue.chatbots[+selectedOption - 1];
 
-    const selectedOptions =
-      msg?.message?.buttonsResponseMessage?.selectedButtonId ||
-      msg?.message?.listResponseMessage?.singleSelectReply.selectedRowId ||
-      getBodyMessage(msg);
+    if (!choosenQueue) {
+      const invalidMenu = buildMenuOptionsText(queue.chatbots || [], true);
+      const invalidMessage = selectedOption
+        ? "\u200eOpção inválida! Digite um número válido para continuar."
+        : "\u200eRecebi sua mensagem, mas preciso de uma opção do menu para continuar.";
 
-    const choosenQueue = queue.chatbots[+selectedOptions - 1];
+      const body = `${invalidMessage}\n\n${formatBody(
+        queue.greetingMessage || "Digite uma das opções abaixo:",
+        ticket
+      )}\n\n${invalidMenu}`;
+
+      await sleep(1500);
+      await sendMessage(wbot, contact, ticket, body);
+      return;
+    }
 
     if (choosenQueue) {
       if (choosenQueue.queueType === "integration") {
@@ -1678,7 +1710,13 @@ export const sayChatbot = async (
     const bots = await ShowChatBotServices(getStageBot.chatbotId);
 
     if (selected === 0 || +selected > bots.options.length) {
-      const body = "\u200eOpção inválida! Digite um número válido para continuar!";
+      const invalidMenu = buildMenuOptionsText(bots.options || [], true);
+      const body =
+        `\u200eOpção inválida! Digite um número válido para continuar!\n\n` +
+        `${formatBody(
+          bots.greetingMessage || "Digite uma das opções abaixo:",
+          ticket
+        )}\n\n${invalidMenu}`;
       await sleep(2000);
       await sendMessage(wbot, ticket.contact, ticket, body);
       return;
