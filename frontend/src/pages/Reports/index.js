@@ -27,6 +27,7 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import { Can } from "../../components/Can";
 
 import {
+  Checkbox,
   CircularProgress,
   FormControl,
   FormControlLabel,
@@ -56,6 +57,7 @@ import {
   Forward,
   History,
   Instagram,
+  Replay,
   SaveAlt,
   Visibility,
   WhatsApp,
@@ -144,6 +146,14 @@ const Reports = () => {
   const [ticketOpen, setTicketOpen] = useState(null);
   const [hasMore, setHasMore] = useState(false);
 
+  const [metaBlockedMessages, setMetaBlockedMessages] = useState([]);
+  const [metaBlockedTotal, setMetaBlockedTotal] = useState(0);
+  const [metaBlockedPageNumber, setMetaBlockedPageNumber] = useState(1);
+  const [metaBlockedPageSize, setMetaBlockedPageSize] = useState(10);
+  const [metaBlockedLoading, setMetaBlockedLoading] = useState(false);
+  const [selectedMetaMessageIds, setSelectedMetaMessageIds] = useState([]);
+  const [resendingMeta, setResendingMeta] = useState(false);
+
   useEffect(() => {
     setLoading(true);
     const delayDebounceFn = setTimeout(() => {
@@ -169,25 +179,114 @@ const Reports = () => {
     setTagIds(tags);
   };
 
+  const buildReportFilters = () => ({
+    searchParam,
+    contactId: selectedContactId,
+    whatsappId: JSON.stringify(selectedWhatsapp),
+    tags: JSON.stringify(tagIds),
+    users: JSON.stringify(userIds),
+    queueIds: JSON.stringify(queueIds),
+    status: JSON.stringify(selectedStatus),
+    dateFrom,
+    dateTo,
+    empresa: empresa || "",
+    cpf: cpf || ""
+  });
+
+  const handleFilterMetaBlocked = async (
+    page = metaBlockedPageNumber,
+    customPageSize = metaBlockedPageSize
+  ) => {
+    setMetaBlockedLoading(true);
+
+    try {
+      const filters = buildReportFilters();
+      const { data } = await api.get("/messages/meta-blocked", {
+        params: {
+          ...filters,
+          page,
+          pageSize: customPageSize
+        }
+      });
+
+      setMetaBlockedMessages(data?.messages || []);
+      setMetaBlockedTotal(data?.totalMessages || 0);
+      setMetaBlockedPageNumber(page);
+      setSelectedMetaMessageIds([]);
+    } catch (error) {
+      toastError(error);
+    } finally {
+      setMetaBlockedLoading(false);
+    }
+  };
+
+  const handleToggleMetaMessageSelection = (messageId, canSelect) => {
+    if (!canSelect) return;
+
+    setSelectedMetaMessageIds((prevState) => {
+      if (prevState.includes(messageId)) {
+        return prevState.filter((id) => id !== messageId);
+      }
+
+      return [...prevState, messageId];
+    });
+  };
+
+  const handleToggleSelectAllEligibleMetaMessages = (checked) => {
+    if (!checked) {
+      setSelectedMetaMessageIds([]);
+      return;
+    }
+
+    const eligibleIds = metaBlockedMessages
+      .filter((message) => message.resendEligible)
+      .map((message) => message.id);
+
+    setSelectedMetaMessageIds(eligibleIds);
+  };
+
+  const handleResendMetaMessages = async (messageIds) => {
+    if (!Array.isArray(messageIds) || messageIds.length === 0) {
+      toast.info("Selecione ao menos uma mensagem elegível para reenviar.");
+      return;
+    }
+
+    setResendingMeta(true);
+
+    try {
+      const { data } = await api.post("/messages/meta-blocked/resend", {
+        messageIds
+      });
+
+      const successCount = data?.successCount || 0;
+      const failedCount = data?.failedCount || 0;
+
+      if (successCount > 0) {
+        toast.success(`${successCount} mensagem(ns) reenviada(s) com sucesso.`);
+      }
+
+      if (failedCount > 0) {
+        toast.warn(`${failedCount} mensagem(ns) não puderam ser reenviadas.`);
+      }
+
+      await handleFilterMetaBlocked(metaBlockedPageNumber);
+    } catch (error) {
+      toastError(error);
+    } finally {
+      setResendingMeta(false);
+    }
+  };
+
   const exportarGridParaExcel = async () => {
     setLoading(true); // Define o estado de loading como true durante o carregamento
 
     try {
+      const filters = buildReportFilters();
       const data = await getReport({
-        searchParam,
-        contactId: selectedContactId,
-        whatsappId: JSON.stringify(selectedWhatsapp),
-        tags: JSON.stringify(tagIds),
-        users: JSON.stringify(userIds),
-        queueIds: JSON.stringify(queueIds),
-        status: JSON.stringify(selectedStatus),
-        dateFrom,
-        dateTo,
+        ...filters,
         page: 1,
         pageSize: 9999999,
-        onlyRated: onlyRated ? "true" : "false",
-        empresa: empresa || "",
-        cpf: cpf || "",
+        onlyRated: onlyRated ? "true" : "false"
       });
 
       const ticketsData = data.tickets.map((ticket) => {
@@ -470,21 +569,12 @@ const Reports = () => {
     setLoading(true);
     console.log(onlyRated);
     try {
+      const filters = buildReportFilters();
       const data = await getReport({
-        searchParam,
-        contactId: selectedContactId,
-        whatsappId: JSON.stringify(selectedWhatsapp),
-        tags: JSON.stringify(tagIds),
-        users: JSON.stringify(userIds),
-        queueIds: JSON.stringify(queueIds),
-        status: JSON.stringify(selectedStatus),
-        dateFrom,
-        dateTo,
+        ...filters,
         page: pageNumber,
         pageSize: pageSize,
-        onlyRated: onlyRated ? "true" : "false",
-        empresa: empresa || "",
-        cpf: cpf || "",
+        onlyRated: onlyRated ? "true" : "false"
       });
 
       setTotalTickets(data.totalTickets.total);
@@ -628,6 +718,16 @@ const Reports = () => {
     );
   };
 
+  const eligibleMetaMessagesOnPage = metaBlockedMessages.filter(
+    (message) => message.resendEligible
+  );
+
+  const allEligibleMetaSelected =
+    eligibleMetaMessagesOnPage.length > 0 &&
+    eligibleMetaMessagesOnPage.every((message) =>
+      selectedMetaMessageIds.includes(message.id)
+    );
+
   return (
     <MainContainer className={classes.mainContainer}>
       {openTicketMessageDialog && (
@@ -744,7 +844,10 @@ const Reports = () => {
               <Button
                 variant="contained"
                 color="primary"
-                onClick={() => handleFilter(pageNumber)}
+                onClick={() => {
+                  handleFilter(pageNumber);
+                  handleFilterMetaBlocked(1);
+                }}
                 size="small"
               >
                 {i18n.t("reports.buttons.filter")}
@@ -897,6 +1000,205 @@ const Reports = () => {
                 value={pageSize}
                 onChange={(e) => {
                   setPageSize(e.target.value);
+                }}
+                label={i18n.t("tickets.search.ticketsPerPage")}
+                fullWidth
+                MenuProps={{
+                  anchorOrigin: {
+                    vertical: "center",
+                    horizontal: "left",
+                  },
+                  transformOrigin: {
+                    vertical: "center",
+                    horizontal: "left",
+                  },
+                  getContentAnchorEl: null,
+                }}
+              >
+                <MenuItem value={5}>{"5"}</MenuItem>
+                <MenuItem value={10}>{"10"}</MenuItem>
+                <MenuItem value={20}>{"20"}</MenuItem>
+                <MenuItem value={50}>{"50"}</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+      </div>
+
+      <Paper
+        variant="outlined"
+        style={{ marginTop: 20, padding: 12, borderRadius: 12 }}
+      >
+        <Grid container spacing={1} alignItems="center">
+          <Grid item xs={12} md={5}>
+            <Typography variant="h6" style={{ fontWeight: 600 }}>
+              Mensagens bloqueadas Meta
+            </Typography>
+            <Typography variant="body2" color="textSecondary">
+              Total encontrado: {metaBlockedTotal}
+            </Typography>
+          </Grid>
+          <Grid item xs={12} md={7} style={{ textAlign: "right" }}>
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={() => handleFilterMetaBlocked(1)}
+              disabled={metaBlockedLoading || resendingMeta}
+              style={{ marginRight: 8 }}
+            >
+              Atualizar bloqueios
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => handleResendMetaMessages(selectedMetaMessageIds)}
+              disabled={
+                selectedMetaMessageIds.length === 0 ||
+                metaBlockedLoading ||
+                resendingMeta
+              }
+            >
+              Reenviar selecionadas
+            </Button>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      <Paper
+        className={classes.mainPaperTable}
+        variant="outlined"
+        style={{ marginTop: 12, height: "48vh" }}
+      >
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell padding="checkbox">
+                <Checkbox
+                  color="primary"
+                  checked={allEligibleMetaSelected}
+                  indeterminate={
+                    selectedMetaMessageIds.length > 0 && !allEligibleMetaSelected
+                  }
+                  onChange={(e) =>
+                    handleToggleSelectAllEligibleMetaMessages(e.target.checked)
+                  }
+                />
+              </TableCell>
+              <TableCell align="center">ID Msg</TableCell>
+              <TableCell align="center">Ticket</TableCell>
+              <TableCell align="left">Conexão</TableCell>
+              <TableCell align="left">Contato</TableCell>
+              <TableCell align="left">Usuário</TableCell>
+              <TableCell align="left">Fila</TableCell>
+              <TableCell align="left">Mensagem</TableCell>
+              <TableCell align="left">Erro Meta</TableCell>
+              <TableCell align="center">Código</TableCell>
+              <TableCell align="center">Data Erro</TableCell>
+              <TableCell align="center">Elegível</TableCell>
+              <TableCell align="left">Motivo Bloqueio</TableCell>
+              <TableCell align="center">Ações</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {metaBlockedMessages.map((message) => (
+              <TableRow key={message.id}>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    color="primary"
+                    checked={selectedMetaMessageIds.includes(message.id)}
+                    disabled={!message.resendEligible || resendingMeta}
+                    onChange={() =>
+                      handleToggleMetaMessageSelection(
+                        message.id,
+                        message.resendEligible
+                      )
+                    }
+                  />
+                </TableCell>
+                <TableCell align="center">{message.id}</TableCell>
+                <TableCell align="center">{message.ticketId}</TableCell>
+                <TableCell align="left">{message.whatsappName || "-"}</TableCell>
+                <TableCell align="left">{message.contactName || "-"}</TableCell>
+                <TableCell align="left">{message.userName || "-"}</TableCell>
+                <TableCell align="left">{message.queueName || "-"}</TableCell>
+                <TableCell align="left">{message.body || "-"}</TableCell>
+                <TableCell align="left">{message.deliveryError || "-"}</TableCell>
+                <TableCell align="center">
+                  {message.deliveryErrorCode || "-"}
+                </TableCell>
+                <TableCell align="center">
+                  {moment(message.deliveryErrorAt || message.createdAt).format(
+                    "DD/MM/YYYY HH:mm"
+                  )}
+                </TableCell>
+                <TableCell align="center">
+                  {message.resendEligible ? "Sim" : "Não"}
+                </TableCell>
+                <TableCell align="left">
+                  {message.resendBlockedReason || "-"}
+                </TableCell>
+                <TableCell align="center">
+                  <Tooltip
+                    title={
+                      message.resendEligible
+                        ? "Reenviar mensagem"
+                        : message.resendBlockedReason || "Mensagem não elegível"
+                    }
+                  >
+                    <span>
+                      <IconButton
+                        size="small"
+                        disabled={!message.resendEligible || resendingMeta}
+                        onClick={() => handleResendMetaMessages([message.id])}
+                      >
+                        <Replay fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  <Tooltip title="Acessar Ticket">
+                    <IconButton
+                      size="small"
+                      onClick={() => history.push(`/tickets/${message.ticketUuid}`)}
+                    >
+                      <Forward fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </TableCell>
+              </TableRow>
+            ))}
+
+            {metaBlockedLoading && <TableRowSkeleton avatar columns={3} />}
+
+            {!metaBlockedLoading && metaBlockedMessages.length === 0 && (
+              <TableRow>
+                <TableCell align="center" colSpan={14}>
+                  Nenhuma mensagem bloqueada pela Meta encontrada com os filtros atuais.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </Paper>
+
+      <div style={{ marginTop: 8 }}>
+        <Grid container>
+          <Grid item xs={12} sm={10} md={10}>
+            <Pagination
+              count={Math.max(1, Math.ceil(metaBlockedTotal / metaBlockedPageSize))}
+              page={metaBlockedPageNumber}
+              onChange={(event, value) => handleFilterMetaBlocked(value)}
+            />
+          </Grid>
+          <Grid item xs={12} sm={2} md={2}>
+            <FormControl margin="dense" variant="outlined" fullWidth>
+              <InputLabel>{i18n.t("tickets.search.ticketsPerPage")}</InputLabel>
+              <Select
+                value={metaBlockedPageSize}
+                onChange={(e) => {
+                  const selectedPageSize = Number(e.target.value);
+                  setMetaBlockedPageSize(selectedPageSize);
+                  setMetaBlockedPageNumber(1);
+                  handleFilterMetaBlocked(1, selectedPageSize);
                 }}
                 label={i18n.t("tickets.search.ticketsPerPage")}
                 fullWidth

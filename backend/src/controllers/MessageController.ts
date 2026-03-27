@@ -44,11 +44,33 @@ import ShowService from "../services/QuickMessageService/ShowService";
 import { IMetaMessageTemplateComponents, IMetaMessageTemplate } from "../libs/whatsAppOficial/IWhatsAppOficial.interfaces";
 import CheckContactNumber from "../services/WbotServices/CheckNumber";
 import TranscribeAudioMessageToText from "../services/MessageServices/TranscribeAudioMessageService";
+import ListMetaBlockedMessagesService from "../services/MessageServices/ListMetaBlockedMessagesService";
+import ResendMetaBlockedMessagesService from "../services/MessageServices/ResendMetaBlockedMessagesService";
 
 type IndexQuery = {
   pageNumber: string;
   ticketTrakingId: string;
   selectedQueues?: string;
+};
+
+type MetaBlockedQuery = {
+  searchParam?: string;
+  contactId?: string;
+  whatsappId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  status?: string;
+  queueIds?: string;
+  tags?: string;
+  users?: string;
+  page?: string;
+  pageSize?: string;
+  empresa?: string;
+  cpf?: string;
+};
+
+type ResendMetaBlockedBody = {
+  messageIds: number[];
 };
 
 interface TokenPayload {
@@ -537,6 +559,89 @@ export const allMe = async (req: Request, res: Response): Promise<Response> => {
   });
 
   return res.json({ count });
+};
+
+export const listMetaBlocked = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const {
+    searchParam,
+    contactId,
+    whatsappId: whatsappIdsStringified,
+    dateFrom,
+    dateTo,
+    status: statusStringified,
+    queueIds: queueIdsStringified,
+    tags: tagIdsStringified,
+    users: userIdsStringified,
+    page: pageNumber = "1",
+    pageSize = "20",
+    empresa,
+    cpf
+  } = req.query as MetaBlockedQuery;
+
+  const { companyId } = req.user;
+
+  let queueIds: number[] = [];
+  let whatsappIds: number[] = [];
+  let tagIds: number[] = [];
+  let userIds: number[] = [];
+  let statusIds: string[] = [];
+
+  if (queueIdsStringified) {
+    queueIds = JSON.parse(queueIdsStringified);
+  }
+
+  if (whatsappIdsStringified) {
+    whatsappIds = JSON.parse(whatsappIdsStringified);
+  }
+
+  if (tagIdsStringified) {
+    tagIds = JSON.parse(tagIdsStringified);
+  }
+
+  if (userIdsStringified) {
+    userIds = JSON.parse(userIdsStringified);
+  }
+
+  if (statusStringified) {
+    statusIds = JSON.parse(statusStringified);
+  }
+
+  const response = await ListMetaBlockedMessagesService({
+    companyId,
+    searchParam,
+    contactId,
+    whatsappIds,
+    queueIds,
+    tagIds,
+    userIds,
+    statusIds,
+    dateFrom,
+    dateTo,
+    pageNumber: Number(pageNumber),
+    pageSize: Number(pageSize),
+    empresa,
+    cpf
+  });
+
+  return res.status(200).json(response);
+};
+
+export const resendMetaBlocked = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId } = req.user;
+  const { messageIds } = req.body as ResendMetaBlockedBody;
+
+  const response = await ResendMetaBlockedMessagesService({
+    companyId,
+    messageIds
+  });
+
+  return res.status(200).json(response);
 };
 
 export const send = async (req: Request, res: Response): Promise<Response> => {
