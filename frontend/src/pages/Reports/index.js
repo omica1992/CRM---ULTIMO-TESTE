@@ -229,6 +229,17 @@ const Reports = () => {
     cpf: cpf || ""
   });
 
+  const sanitizeMetaMessageBody = (body) => {
+    if (!body || typeof body !== "string") {
+      return "";
+    }
+
+    return body
+      .replace(/[\u200B-\u200D\u200E\u200F\uFEFF]/g, "")
+      .split("||||")[0]
+      .trim();
+  };
+
   const handleFilterMetaBlocked = async (
     page = metaBlockedPageNumber,
     customPageSize = metaBlockedPageSize
@@ -1193,7 +1204,9 @@ const Reports = () => {
                 <TableCell align="left">{message.contactName || "-"}</TableCell>
                 <TableCell align="left">{message.userName || "-"}</TableCell>
                 <TableCell align="left">{message.queueName || "-"}</TableCell>
-                <TableCell align="left">{message.body || "-"}</TableCell>
+                <TableCell align="left">
+                  {sanitizeMetaMessageBody(message.body) || "-"}
+                </TableCell>
                 <TableCell align="left">{message.deliveryError || "-"}</TableCell>
                 <TableCell align="center">
                   {message.deliveryErrorCode || "-"}
