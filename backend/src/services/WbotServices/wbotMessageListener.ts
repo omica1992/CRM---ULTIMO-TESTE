@@ -98,6 +98,8 @@ import { shouldCloseOutOfHoursTicket } from "../../helpers/ShouldCloseOutOfHours
 import os from "os";
 import request from "request";
 import { Session } from "../../libs/wbot";
+import ShowDialogChatBotsServices from "../DialogChatBotsServices/ShowDialogChatBotsServices";
+import { shouldRunMenuBot } from "./MenuBotUtils";
 
 let ffmpegPath: string;
 if (os.platform() === "win32") {
@@ -4498,7 +4500,15 @@ const handleMessage = async (
       !ticket.useIntegration &&
       !ticket.integrationId
     ) {
-      if (!ticket.user || ticket.queue?.chatbots?.length > 0) {
+      const hasQueueOptions = (ticket.queue?.chatbots?.length || 0) > 0;
+      const hasStage = Boolean(await ShowDialogChatBotsServices(contact.id));
+      const runMenuBot = shouldRunMenuBot({
+        hasAttendant: Boolean(ticket.userId || ticket.user),
+        hasStage,
+        hasQueueOptions
+      });
+
+      if (runMenuBot) {
         await sayChatbot(
           ticket.queueId,
           wbot,
@@ -4506,6 +4516,10 @@ const handleMessage = async (
           contact,
           msg,
           ticketTraking
+        );
+      } else {
+        logger.info(
+          `[MENU BOT] event=ignored_no_menu channel=baileys ticketId=${ticket.id} queueId=${ticket.queueId} hasStage=${hasStage} hasQueueOptions=${hasQueueOptions}`
         );
       }
 

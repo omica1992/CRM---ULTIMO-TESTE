@@ -34,6 +34,7 @@ import { shouldCloseOutOfHoursTicket } from "../../helpers/ShouldCloseOutOfHours
 import SendWhatsAppOficialMessage from "./SendWhatsAppOficialMessage";
 import flowBuilderQueue from "../WebhookService/flowBuilderQueue";
 import CreateMessageService from "../MessageServices/CreateMessageService";
+import { shouldRunMenuBot } from "../WbotServices/MenuBotUtils";
 
 const mimeToExtension: { [key: string]: string } = {
     'audio/aac': 'aac',
@@ -1001,7 +1002,14 @@ export class ReceibedWhatsAppService {
                 logger.info(`[WHATSAPP OFICIAL - CHATBOT CHECK] Ticket ${ticket.id} - userId: ${ticket.userId}, hasUser: ${!!ticket.user}, chatbots: ${ticket.queue?.chatbots?.length || 0}`);
 
                 // ✅ CORREÇÃO: Trocar OR (||) por AND (&&) para garantir que chatbot só execute sem atendente
-                if (!ticket.user && ticket.queue?.chatbots?.length > 0) {
+                const hasQueueOptions = (ticket.queue?.chatbots?.length || 0) > 0;
+                const runMenuBot = shouldRunMenuBot({
+                    hasAttendant: Boolean(ticket.user || ticket.userId),
+                    hasStage: false,
+                    hasQueueOptions
+                });
+
+                if (runMenuBot) {
                     console.log("[WHATSAPP OFICIAL] Executando sayChatbot para ticket", ticket.id);
 
                     // Criar um objeto msg simulado para compatibilidade com sayChatbot
@@ -1033,6 +1041,7 @@ export class ReceibedWhatsAppService {
                         logger.error(`[WHATSAPP OFICIAL] Erro sayChatbotOficial: ${error}`);
                     }
                 } else {
+                    logger.info(`[MENU BOT] event=ignored_no_menu channel=oficial ticketId=${ticket.id} queueId=${ticket.queueId} hasStage=false hasQueueOptions=${hasQueueOptions}`);
                     logger.info(`[WHATSAPP OFICIAL - CHATBOT CHECK] Pulando chatbot para ticket ${ticket.id} - ${ticket.user ? 'ticket atribuído a atendente' : 'sem chatbots configurados'}`);
                 }
 

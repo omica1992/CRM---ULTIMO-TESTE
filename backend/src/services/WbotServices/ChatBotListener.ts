@@ -29,6 +29,13 @@ import TicketTraking from "../../models/TicketTraking";
 import CreateLogTicketService from "../TicketServices/CreateLogTicketService";
 import { ENABLE_LID_DEBUG } from "../../config/debug";
 import logger from "../../utils/logger";
+import {
+  classifyMenuInput,
+  clearMenuMediaWarning,
+  getMenuStageKey,
+  MENU_MEDIA_WARNING_TEXT,
+  shouldSendMenuMediaWarning
+} from "./MenuBotUtils";
 
 const fs = require("fs");
 
@@ -55,6 +62,48 @@ const buildMenuOptionsText = (
   menuOptions += `*[ Sair ]* Encerrar atendimento`;
 
   return menuOptions.trim();
+};
+
+const isBaileysMediaWithoutText = (msg: proto.IWebMessageInfo): boolean => {
+  const baseMessage = msg?.message;
+
+  const audioMessage =
+    baseMessage?.audioMessage ||
+    baseMessage?.ephemeralMessage?.message?.audioMessage ||
+    baseMessage?.viewOnceMessageV2Extension?.message?.audioMessage;
+
+  if (audioMessage) return true;
+
+  const stickerMessage =
+    baseMessage?.stickerMessage ||
+    baseMessage?.ephemeralMessage?.message?.stickerMessage;
+
+  if (stickerMessage) return true;
+
+  const imageMessage =
+    baseMessage?.imageMessage ||
+    baseMessage?.ephemeralMessage?.message?.imageMessage ||
+    baseMessage?.viewOnceMessage?.message?.imageMessage ||
+    baseMessage?.viewOnceMessageV2?.message?.imageMessage;
+
+  if (imageMessage && !imageMessage.caption) return true;
+
+  const videoMessage =
+    baseMessage?.videoMessage ||
+    baseMessage?.ephemeralMessage?.message?.videoMessage ||
+    baseMessage?.viewOnceMessage?.message?.videoMessage ||
+    baseMessage?.viewOnceMessageV2?.message?.videoMessage;
+
+  if (videoMessage && !videoMessage.caption) return true;
+
+  const documentMessage =
+    baseMessage?.documentMessage ||
+    baseMessage?.documentWithCaptionMessage?.message?.documentMessage ||
+    baseMessage?.ephemeralMessage?.message?.documentMessage;
+
+  if (documentMessage && !documentMessage.caption) return true;
+
+  return false;
 };
 
 export const deleteAndCreateDialogStage = async (
@@ -818,17 +867,31 @@ export const sayChatbot = async (
   //   msg?.message?.listResponseMessage?.singleSelectReply.selectedRowId ||
   //   getBodyMessage(msg);
 
+  const hasInteractiveSelection = Boolean(
+    msg?.message?.buttonsResponseMessage?.selectedButtonId ||
+      msg?.message?.listResponseMessage?.singleSelectReply?.selectedRowId
+  );
+
   const selectedOptionRaw =
     msg?.message?.buttonsResponseMessage?.selectedButtonId ||
-    msg?.message?.listResponseMessage?.singleSelectReply.selectedRowId ||
+    msg?.message?.listResponseMessage?.singleSelectReply?.selectedRowId ||
     getBodyMessage(msg);
 
   const selectedOption =
     typeof selectedOptionRaw === "string" ? selectedOptionRaw.trim() : "";
 
+  const menuInputType = classifyMenuInput({
+    text: selectedOption,
+    isMediaWithoutText: isBaileysMediaWithoutText(msg),
+    hasInteractiveSelection
+  });
+
   if (!queueId && selectedOption && msg.key.fromMe) return;
 
-  if (ticket.userId) return;
+  if (ticket.userId) {
+    clearMenuMediaWarning(ticket.id);
+    return;
+  }
 
   const getStageBot = await ShowDialogChatBotsServices(contact.id);
 
@@ -1494,6 +1557,11 @@ export const sayChatbot = async (
   //  }
 
   if (selectedOption.toLocaleLowerCase() === "sair") {
+    clearMenuMediaWarning(ticket.id);
+    logger.info(
+      `[MENU BOT] event=valid_option_processed channel=baileys ticketId=${ticket.id} option=sair`
+    );
+
     const ticketData = {
       status: "closed",
       sendFarewellMessage: true,
@@ -1534,6 +1602,10 @@ export const sayChatbot = async (
   }
 
   if (selectedOption === "#") {
+    clearMenuMediaWarning(ticket.id);
+    logger.info(
+      `[MENU BOT] event=valid_option_processed channel=baileys ticketId=${ticket.id} option=#`
+    );
     const backTo = await backToMainMenu(wbot, contact, ticket, ticketTraking);
     return;
   }
@@ -1573,6 +1645,39 @@ export const sayChatbot = async (
     // }
 
     const queue = await ShowQueueService(queueId, ticket.companyId);
+    const hasQueueOptions = (queue.chatbots?.length || 0) > 0;
+    const queueStageKey = getMenuStageKey({
+      channel: "baileys",
+      queueId,
+      stageChatbotId: null
+    });
+
+    if (!hasQueueOptions) {
+      clearMenuMediaWarning(ticket.id);
+      logger.info(
+        `[MENU BOT] event=ignored_no_menu channel=baileys ticketId=${ticket.id} queueId=${queueId} reason=no_queue_options`
+      );
+      return;
+    }
+
+    if (menuInputType === "media_no_text") {
+      const shouldWarn = shouldSendMenuMediaWarning(ticket.id, queueStageKey);
+      if (shouldWarn) {
+        const body = `${MENU_MEDIA_WARNING_TEXT}\n\n${formatBody(
+          queue.greetingMessage || "Digite uma das opções abaixo:",
+          ticket
+        )}\n\n${buildMenuOptionsText(queue.chatbots || [], true)}`;
+
+        await sleep(1200);
+        await sendMessage(wbot, contact, ticket, body);
+        logger.info(
+          `[MENU BOT] event=warned_media_once channel=baileys ticketId=${ticket.id} queueId=${queueId} stageKey=${queueStageKey}`
+        );
+      }
+
+      return;
+    }
+
     const choosenQueue = queue.chatbots[+selectedOption - 1];
 
     if (!choosenQueue) {
@@ -1588,8 +1693,16 @@ export const sayChatbot = async (
 
       await sleep(1500);
       await sendMessage(wbot, contact, ticket, body);
+      logger.info(
+        `[MENU BOT] event=invalid_option_sent channel=baileys ticketId=${ticket.id} queueId=${queueId} inputType=${menuInputType}`
+      );
       return;
     }
+
+    clearMenuMediaWarning(ticket.id);
+    logger.info(
+      `[MENU BOT] event=valid_option_processed channel=baileys ticketId=${ticket.id} queueId=${queueId} option=${selectedOption}`
+    );
 
     if (choosenQueue) {
       if (choosenQueue.queueType === "integration") {
@@ -1706,8 +1819,41 @@ export const sayChatbot = async (
   }
 
   if (getStageBot) {
+    const stageKey = getMenuStageKey({
+      channel: "baileys",
+      queueId,
+      stageChatbotId: getStageBot.chatbotId
+    });
     const selected = isNumeric(selectedOption) ? selectedOption : 0;
     const bots = await ShowChatBotServices(getStageBot.chatbotId);
+    const hasStageOptions = (bots.options?.length || 0) > 0;
+
+    if (!hasStageOptions) {
+      await DeleteDialogChatBotsServices(contact.id);
+      clearMenuMediaWarning(ticket.id);
+      logger.info(
+        `[MENU BOT] event=ignored_no_menu channel=baileys ticketId=${ticket.id} queueId=${queueId} reason=empty_stage_options`
+      );
+      return;
+    }
+
+    if (menuInputType === "media_no_text") {
+      const shouldWarn = shouldSendMenuMediaWarning(ticket.id, stageKey);
+      if (shouldWarn) {
+        const body = `${MENU_MEDIA_WARNING_TEXT}\n\n${formatBody(
+          bots.greetingMessage || "Digite uma das opções abaixo:",
+          ticket
+        )}\n\n${buildMenuOptionsText(bots.options || [], true)}`;
+
+        await sleep(1200);
+        await sendMessage(wbot, ticket.contact, ticket, body);
+        logger.info(
+          `[MENU BOT] event=warned_media_once channel=baileys ticketId=${ticket.id} queueId=${queueId} stageKey=${stageKey}`
+        );
+      }
+
+      return;
+    }
 
     if (selected === 0 || +selected > bots.options.length) {
       const invalidMenu = buildMenuOptionsText(bots.options || [], true);
@@ -1719,14 +1865,22 @@ export const sayChatbot = async (
         )}\n\n${invalidMenu}`;
       await sleep(2000);
       await sendMessage(wbot, ticket.contact, ticket, body);
+      logger.info(
+        `[MENU BOT] event=invalid_option_sent channel=baileys ticketId=${ticket.id} queueId=${queueId} stageKey=${stageKey} inputType=${menuInputType}`
+      );
       return;
     }
+    clearMenuMediaWarning(ticket.id);
+    logger.info(
+      `[MENU BOT] event=valid_option_processed channel=baileys ticketId=${ticket.id} queueId=${queueId} stageKey=${stageKey} option=${selectedOption}`
+    );
     const choosenQueue = bots.options[+selected - 1]
       ? bots.options[+selected - 1]
       : bots.options[0];
     // console.log("linha 1508")
     if (!choosenQueue.greetingMessage) {
       await DeleteDialogChatBotsServices(contact.id);
+      clearMenuMediaWarning(ticket.id);
       return;
     } // nao tem mensagem de boas vindas
 

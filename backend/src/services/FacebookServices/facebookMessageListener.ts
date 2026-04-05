@@ -39,6 +39,9 @@ import { get } from "http";
 import { WebhookModel } from "../../models/Webhook";
 import { is } from "bluebird";
 import ShowTicketService from "../TicketServices/ShowTicketService";
+import ShowDialogChatBotsServices from "../DialogChatBotsServices/ShowDialogChatBotsServices";
+import { shouldRunMenuBot } from "../WbotServices/MenuBotUtils";
+import logger from "../../utils/logger";
 
 interface IMe {
   name: string;
@@ -890,13 +893,25 @@ export const handleMessage = async (
       }
 
       if (ticket.queue && ticket.queueId) {
-        if (!ticket.user) {
+        const hasQueueOptions = (ticket.queue?.chatbots?.length || 0) > 0;
+        const hasStage = Boolean(await ShowDialogChatBotsServices(contact.id));
+        const runMenuBot = shouldRunMenuBot({
+          hasAttendant: Boolean(ticket.userId || ticket.user),
+          hasStage,
+          hasQueueOptions
+        });
+
+        if (runMenuBot) {
           await sayChatbot(
             ticket.queueId,
             getSession,
             ticket,
             contact,
             message
+          );
+        } else {
+          logger.info(
+            `[MENU BOT] event=ignored_no_menu channel=facebook ticketId=${ticket.id} queueId=${ticket.queueId} hasStage=${hasStage} hasQueueOptions=${hasQueueOptions}`
           );
         }
       }

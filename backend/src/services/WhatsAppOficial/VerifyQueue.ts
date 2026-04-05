@@ -23,6 +23,13 @@ import ShowQueueIntegrationService from "../QueueIntegrationServices/ShowQueueIn
 import { handleMessageIntegration } from "../WbotServices/wbotMessageListener";
 import { getIO } from "../../libs/socket";
 import { shouldCloseOutOfHoursTicket } from "../../helpers/ShouldCloseOutOfHoursTicket";
+import {
+    classifyMenuInput,
+    clearMenuMediaWarning,
+    getMenuStageKey,
+    MENU_MEDIA_WARNING_TEXT,
+    shouldSendMenuMediaWarning
+} from "../WbotServices/MenuBotUtils";
 
 
 const verifyQueueOficial = async (
@@ -212,7 +219,75 @@ const verifyQueueOficial = async (
         await ticket.reload();
     }
 
+    const menuStageKey = getMenuStageKey({
+        channel: "oficial",
+        queueId: ticket.queueId || null,
+        stageChatbotId: null
+    });
+    const menuInputType = classifyMenuInput({
+        text: selectedOption,
+        isMediaWithoutText: ["audio", "sticker", "document", "image", "video"].includes(msg.type || "")
+    });
+
+    if (!queues.length) {
+        clearMenuMediaWarning(ticket.id);
+        logger.info(`[MENU BOT] event=ignored_no_menu channel=oficial ticketId=${ticket.id} queueId=${ticket.queueId} reason=no_queue_options`);
+        return;
+    }
+
+    if (menuInputType === "media_no_text") {
+        const shouldWarn = shouldSendMenuMediaWarning(ticket.id, menuStageKey);
+        if (shouldWarn) {
+            let options = "";
+            queues.forEach((queue, index) => {
+                options += `*[ ${index + 1} ]* - ${queue.name}\n`;
+            });
+            options += `\n*[ Sair ]* - Encerrar atendimento`;
+
+            const body = `${MENU_MEDIA_WARNING_TEXT}\n\n${formatBody(
+                greetingMessage || "Digite uma das opções abaixo:",
+                ticket
+            )}\n\n${options}`;
+
+            await SendWhatsAppOficialMessage({
+                body,
+                ticket,
+                quotedMsg: null,
+                type: "text",
+                media: null,
+                vCard: null
+            });
+
+            logger.info(`[MENU BOT] event=warned_media_once channel=oficial ticketId=${ticket.id} queueId=${ticket.queueId} stageKey=${menuStageKey}`);
+        }
+        return;
+    }
+
+    if (selectedOption === "#") {
+        clearMenuMediaWarning(ticket.id);
+        logger.info(`[MENU BOT] event=valid_option_processed channel=oficial ticketId=${ticket.id} queueId=${ticket.queueId} option=#`);
+
+        let options = "";
+        queues.forEach((queue, index) => {
+            options += `*[ ${index + 1} ]* - ${queue.name}\n`;
+        });
+        options += `\n*[ Sair ]* - Encerrar atendimento`;
+
+        const body = formatBody(`${greetingMessage}\n\n${options}`, ticket);
+        await SendWhatsAppOficialMessage({
+            body,
+            ticket,
+            quotedMsg: null,
+            type: "text",
+            media: null,
+            vCard: null
+        });
+        return;
+    }
+
     if (String(selectedOption).toLocaleLowerCase() == "sair") {
+        clearMenuMediaWarning(ticket.id);
+        logger.info(`[MENU BOT] event=valid_option_processed channel=oficial ticketId=${ticket.id} queueId=${ticket.queueId} option=sair`);
         // Encerra atendimento
 
         const ticketData = {
@@ -228,6 +303,34 @@ const verifyQueueOficial = async (
     }
 
     let choosenQueue = (chatbot && queues.length === 1) ? queues[+selectedOption] : queues[+selectedOption - 1];
+
+    if (!choosenQueue) {
+        let options = "";
+        queues.forEach((queue, index) => {
+            options += `*[ ${index + 1} ]* - ${queue.name}\n`;
+        });
+        options += `\n*[ Sair ]* - Encerrar atendimento`;
+
+        const body = `\u200eOpção inválida! Digite um número válido para continuar.\n\n${formatBody(
+            greetingMessage || "Digite uma das opções abaixo:",
+            ticket
+        )}\n\n${options}`;
+
+        await SendWhatsAppOficialMessage({
+            body,
+            ticket,
+            quotedMsg: null,
+            type: "text",
+            media: null,
+            vCard: null
+        });
+
+        logger.info(`[MENU BOT] event=invalid_option_sent channel=oficial ticketId=${ticket.id} queueId=${ticket.queueId} inputType=${menuInputType}`);
+        return;
+    }
+
+    clearMenuMediaWarning(ticket.id);
+    logger.info(`[MENU BOT] event=valid_option_processed channel=oficial ticketId=${ticket.id} queueId=${ticket.queueId} option=${selectedOption}`);
 
     const typeBot = settings?.chatBotType || "text";
 
