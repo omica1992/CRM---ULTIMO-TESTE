@@ -231,49 +231,103 @@ export class MetaService {
         Authorization: `Bearer ${token}`,
       };
 
-      let allTemplates = [];
-      let nextUrl = `${this.urlMeta}/${wabaId}/message_templates?limit=100`;
+      let allTemplates: IResultTemplates['data'] = [];
+      const templatesUrl = `${this.urlMeta}/${wabaId}/message_templates`;
+      const fields = 'name,components,language,status,category,id,parameter_format';
+      let after: string | undefined;
+      let limit = 100;
       let pageCount = 0;
+      const seenCursors = new Set<string>();
 
       this.logger.log(`[GET TEMPLATES] Iniciando busca de templates para WABA ${wabaId}`);
 
-      // Loop para buscar todas as páginas
-      while (nextUrl) {
-        pageCount++;
-        this.logger.log(`[GET TEMPLATES] 📄 Buscando página ${pageCount}...`);
+      while (true) {
+        const currentPage = pageCount + 1;
+        let result;
 
-        const result = await axios.get(nextUrl, {
-          headers,
-          httpsAgent: this.ipv4Agent,
-        });
+        while (true) {
+          try {
+            this.logger.log(
+              `[GET TEMPLATES] Buscando pagina ${currentPage} (limit=${limit}${after ? ', after=...' : ''})...`,
+            );
+
+            result = await axios.get(templatesUrl, {
+              headers,
+              httpsAgent: this.ipv4Agent,
+              timeout: 30000,
+              params: {
+                limit,
+                fields,
+                ...(after ? { after } : {}),
+              },
+            });
+            break;
+          } catch (error: any) {
+            const metaError = error.response?.data?.error;
+            const status = error.response?.status || 'unknown';
+            const message = metaError?.message || error.message;
+
+            this.logger.error(
+              `[GET TEMPLATES] Erro na pagina ${currentPage} (status=${status}, limit=${limit}): code=${metaError?.code || 'n/a'} type=${metaError?.type || 'n/a'} message=${message} fbtrace=${metaError?.fbtrace_id || 'n/a'}`,
+            );
+
+            if (status === 400 && limit > 25) {
+              limit = limit > 50 ? 50 : 25;
+              this.logger.warn(
+                `[GET TEMPLATES] Tentando novamente a pagina ${currentPage} com limit=${limit}`,
+              );
+              continue;
+            }
+
+            if (status === 400 && allTemplates.length > 0) {
+              this.logger.warn(
+                `[GET TEMPLATES] Falha na pagina ${currentPage}; retornando ${allTemplates.length} templates ja carregados`,
+              );
+              return {
+                data: allTemplates,
+                paging: {},
+              } as IResultTemplates;
+            }
+
+            throw error;
+          }
+        }
+
+        pageCount = currentPage;
 
         const pageData = result.data as IResultTemplates;
+        const pageTemplates = Array.isArray(pageData.data) ? pageData.data : [];
 
-        // Adicionar templates da página atual
-        if (pageData.data && pageData.data.length > 0) {
-          allTemplates = allTemplates.concat(pageData.data);
-          this.logger.log(`[GET TEMPLATES] ✅ Página ${pageCount}: ${pageData.data.length} templates encontrados`);
+        if (pageTemplates.length > 0) {
+          allTemplates = allTemplates.concat(pageTemplates);
+          this.logger.log(`[GET TEMPLATES] Pagina ${pageCount}: ${pageTemplates.length} templates encontrados`);
         }
 
-        // Verificar se há próxima página
-        if (pageData.paging?.next) {
-          nextUrl = pageData.paging.next;
-          this.logger.log(`[GET TEMPLATES] 🔄 Próxima página disponível`);
-        } else {
-          nextUrl = null;
-          this.logger.log(`[GET TEMPLATES] ✅ Última página alcançada`);
+        const nextCursor = pageData.paging?.cursors?.after;
+        if (!pageData.paging?.next || !nextCursor) {
+          this.logger.log(`[GET TEMPLATES] Ultima pagina alcancada`);
+          break;
         }
+
+        if (seenCursors.has(nextCursor)) {
+          this.logger.warn(`[GET TEMPLATES] Cursor repetido detectado; encerrando paginacao`);
+          break;
+        }
+
+        seenCursors.add(nextCursor);
+        after = nextCursor;
       }
 
-      this.logger.log(`[GET TEMPLATES] 🎉 Total de templates carregados: ${allTemplates.length} (${pageCount} páginas)`);
+      this.logger.log(`[GET TEMPLATES] Total de templates carregados: ${allTemplates.length} (${pageCount} paginas)`);
 
-      // Retornar no formato esperado
       return {
         data: allTemplates,
-        paging: {} // Paging vazio pois já buscamos tudo
+        paging: {},
       } as IResultTemplates;
     } catch (error: any) {
-      this.logger.error(`getListTemplates - ${error.message}`);
+      const metaError = error.response?.data?.error;
+      const message = metaError?.message || error.message;
+      this.logger.error(`getListTemplates - ${message}`);
       throw Error('Erro ao buscar templates');
     }
   }

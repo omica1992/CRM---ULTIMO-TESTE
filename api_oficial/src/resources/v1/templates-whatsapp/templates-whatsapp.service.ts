@@ -5,7 +5,7 @@ import { AppError } from 'src/@core/infra/errors/app.error';
 
 @Injectable()
 export class TemplatesWhatsappService {
-  logger = new Logger(`${TemplatesWhatsappService}`);
+  logger = new Logger(TemplatesWhatsappService.name);
 
   constructor(
     private readonly whatsappOficial: WhatsappOficialService,
