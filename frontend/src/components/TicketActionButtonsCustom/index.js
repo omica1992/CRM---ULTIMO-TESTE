@@ -48,9 +48,7 @@ import ShowTicketOpen from "../ShowTicketOpenModal";
 import { toast } from "react-toastify";
 import useCompanySettings from "../../hooks/useSettings/companySettings";
 import ShowTicketLogModal from "../../components/ShowTicketLogModal";
-import TicketMessagesDialog from "../TicketMessagesDialog";
 import { useTheme } from "@material-ui/styles";
-// import html2pdf from "html2pdf.js";
 import FinalizacaoVendaModal from "../FinalizacaoVendaModal";
 import QuickMessageModal from "../QuickMessageModal";
 
@@ -111,7 +109,6 @@ const TicketActionButtonsCustom = ({
     setAcceptTicketWithouSelectQueueOpen,
   ] = useState(false);
   const [showTicketLogOpen, setShowTicketLogOpen] = useState(false);
-  const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
   const [disableBot, setDisableBot] = useState(ticket.contact.disableBot);
 
   const [showSchedules, setShowSchedules] = useState(false);
@@ -131,7 +128,6 @@ const TicketActionButtonsCustom = ({
   const [menuOpen, setMenuOpen] = useState(false);
 
   const [showTestButton, setShowTestButton] = useState(false);
-  const [exportedToPDF, setExportedToPDF] = useState(false);
   const [linkingWallet, setLinkingWallet] = useState(false);
 
   const [openFinalizacaoVenda, setOpenFinalizacaoVenda] = useState(false);
@@ -173,7 +169,6 @@ const TicketActionButtonsCustom = ({
     const planConfigs = await getPlanCompany(undefined, companyId);
     if (isMounted.current) {
       setShowSchedules(planConfigs.plan.useSchedules);
-      setOpenTicketMessageDialog(false);
       setDisableBot(ticket.contact.disableBot);
       setShowTicketLogOpen(false);
     }
@@ -361,8 +356,8 @@ const TicketActionButtonsCustom = ({
   };
 
   const handleExportPDF = async () => {
-    setOpenTicketMessageDialog(true);
     handleCloseMenu();
+    await handleExportToPDF();
   };
 
   const handleEnableIntegration = async () => {
@@ -531,32 +526,30 @@ const TicketActionButtonsCustom = ({
     }
   };
 
-  const handleExportToPDF = () => {
-    const messagesListElement = document.getElementById("messagesList");
-    const headerElement = document.getElementById("TicketHeader");
+  const handleExportToPDF = async () => {
+    try {
+      setLoading(true);
 
-    const pdfOptions = {
-      margin: 1,
-      filename: `${i18n.t("whatsappModalRel.form.reportFilename")}${
-        ticket.id
-      }.pdf`,
-      image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-    };
+      const response = await api.get(`/tickets/${ticket.id}/export/pdf`, {
+        responseType: "blob"
+      });
 
-    if (messagesListElement && headerElement) {
-      const headerClone = headerElement.cloneNode(true);
-      const messagesListClone = messagesListElement.cloneNode(true);
+      const fileName = `${i18n.t("whatsappModalRel.form.reportFilename")}${ticket.id}.pdf`;
+      const blobUrl = window.URL.createObjectURL(
+        new Blob([response.data], { type: "application/pdf" })
+      );
+      const link = document.createElement("a");
 
-      const containerElement = document.createElement("div");
-      containerElement.appendChild(headerClone);
-      containerElement.appendChild(messagesListClone);
-
-      // return html2pdf().from(containerElement).set(pdfOptions).output("blob");
-    } else {
-      toast.error(i18n.t("whatsappModalRel.form.elementNotFoundForExport"));
-      return null;
+      link.href = blobUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -712,14 +705,6 @@ const TicketActionButtonsCustom = ({
           ticketId={ticket.id}
         />
       )}
-      {openTicketMessageDialog && (
-        <TicketMessagesDialog
-          open={openTicketMessageDialog}
-          handleClose={() => setOpenTicketMessageDialog(false)}
-          ticketId={ticket.id}
-        />
-      )}
-      
       {quickMessageModalOpen && (
   <QuickMessageModal
     open={quickMessageModalOpen}

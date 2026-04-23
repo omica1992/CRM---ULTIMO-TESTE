@@ -21,6 +21,7 @@ import RelatorioVendasService from "../services/ReportService/RelatorioVendasSer
 import SetTicketMessagesAsRead from "../helpers/SetTicketMessagesAsRead";
 import BulkTransferTicketsService from "../services/TicketServices/BulkTransferTicketsService";
 import BulkCloseTicketsService from "../services/TicketServices/BulkCloseTicketsService";
+import GenerateTicketConversationPdfService from "../services/TicketServices/GenerateTicketConversationPdfService";
 import { Mutex } from "async-mutex";
 
 type IndexQuery = {
@@ -745,4 +746,25 @@ export const bulkClose = async (req: Request, res: Response): Promise<Response> 
       error: error.message || "Erro interno do servidor"
     });
   }
+};
+
+export const exportConversationPdf = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { companyId } = req.user;
+  const userId = Number(req.user.id);
+
+  const { buffer, filename } = await GenerateTicketConversationPdfService({
+    ticketId,
+    companyId,
+    userId
+  });
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.setHeader("Content-Length", buffer.length);
+
+  return res.send(buffer);
 };

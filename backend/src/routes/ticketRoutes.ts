@@ -8,6 +8,11 @@ const ticketRoutes = express.Router();
 ticketRoutes.get("/tickets", isAuth, TicketController.index);
 
 ticketRoutes.get("/tickets/:ticketId", isAuth, TicketController.show);
+ticketRoutes.get(
+  "/tickets/:ticketId/export/pdf",
+  isAuth,
+  TicketController.exportConversationPdf
+);
 
 ticketRoutes.post(
   "/tickets/:ticketId/trigger-flow",
