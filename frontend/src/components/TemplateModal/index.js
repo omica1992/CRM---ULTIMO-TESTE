@@ -176,6 +176,17 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
         }
     }, [templateId, open]);
 
+    const getMediaPreviewUrl = (component) => {
+        if (component?.mediaPreviewUrl) {
+            return component.mediaPreviewUrl;
+        }
+
+        const mediaReference = component?.example?.header_handle?.[0];
+        return typeof mediaReference === "string" && mediaReference.startsWith("http")
+            ? mediaReference
+            : "";
+    };
+
     const fetchTemplate = async () => {
         try {
             setLoading(true);
@@ -459,27 +470,26 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
             if (file.type.startsWith('video/')) format = 'VIDEO';
             if (file.type === 'application/pdf') format = 'DOCUMENT';
 
-            // ✅ CORREÇÃO: Usar metaHandle se disponível, senão usar publicUrl
-            const handleValue = data.metaHandle || data.publicUrl;
-
-            if (data.metaHandle) {
-                console.log('[TEMPLATE MODAL] ✅ Usando Meta Handle (CORRETO):', data.metaHandle);
-                toast.success('Mídia enviada com sucesso! Handle da Meta gerado.');
-            } else {
-                console.warn('[TEMPLATE MODAL] ⚠️ Usando URL local (pode não funcionar):', data.publicUrl);
-                toast.warning('Mídia salva localmente. Recomenda-se configurar tokenAPI e wabaId para garantir aprovação.');
+            if (!data.metaHandle) {
+                throw new Error('Nao foi possivel gerar o handle da Meta para a midia enviada.');
             }
 
-            // Atualizar o componente com o handle ou URL
+            console.log('[TEMPLATE MODAL] ✅ Usando Meta Handle (CORRETO):', data.metaHandle);
+            toast.success('Mídia enviada com sucesso! Handle da Meta gerado.');
+
+            // Atualizar o componente com o handle da Meta e manter URL local apenas para preview
             setFieldValue(`components[${index}].format`, format);
             setFieldValue(`components[${index}].example`, {
-                header_handle: [handleValue]
+                header_handle: [data.metaHandle]
             });
+            setFieldValue(`components[${index}].mediaPreviewUrl`, data.publicUrl || "");
+            setFieldValue(`components[${index}].mediaFileName`, data.filename || file.name);
 
             console.log('[TEMPLATE MODAL] Componente atualizado:', {
                 format,
-                example: { header_handle: [handleValue] },
-                isMetaHandle: !!data.metaHandle
+                example: { header_handle: [data.metaHandle] },
+                isMetaHandle: true,
+                mediaPreviewUrl: data.publicUrl || ""
             });
 
         } catch (err) {
@@ -769,6 +779,10 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                                                             {/* Preview da mídia */}
                                                             {component.example?.header_handle?.[0] && (
                                                                 <Box mt={2}>
+                                                                    {(() => {
+                                                                        const previewUrl = getMediaPreviewUrl(component);
+                                                                        return (
+                                                                    <>
                                                                     <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                                                                         <Typography variant="caption" color="textSecondary">
                                                                             Mídia carregada:
@@ -780,21 +794,23 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                                                                             onClick={() => {
                                                                                 setFieldValue(`components[${index}].format`, null);
                                                                                 setFieldValue(`components[${index}].example`, null);
+                                                                                setFieldValue(`components[${index}].mediaPreviewUrl`, "");
+                                                                                setFieldValue(`components[${index}].mediaFileName`, "");
                                                                             }}
                                                                         >
                                                                             Remover Mídia
                                                                         </Button>
                                                                     </Box>
-                                                                    {component.format === 'IMAGE' && (
+                                                                    {component.format === 'IMAGE' && previewUrl && (
                                                                         <img
-                                                                            src={component.example.header_handle[0]}
+                                                                            src={previewUrl}
                                                                             alt="Preview"
                                                                             className={classes.imagePreview}
                                                                         />
                                                                     )}
-                                                                    {component.format === 'VIDEO' && (
+                                                                    {component.format === 'VIDEO' && previewUrl && (
                                                                         <video
-                                                                            src={component.example.header_handle[0]}
+                                                                            src={previewUrl}
                                                                             controls
                                                                             className={classes.imagePreview}
                                                                         />
@@ -803,13 +819,21 @@ const TemplateModal = ({ open, onClose, templateId, whatsappId, onSave }) => {
                                                                         <Box display="flex" alignItems="center" mt={1}>
                                                                             <ImageIcon />
                                                                             <Typography variant="body2" style={{ marginLeft: 8 }}>
-                                                                                {component.example.header_handle[0].split('/').pop()}
+                                                                                {component.mediaFileName || 'Documento carregado'}
                                                                             </Typography>
                                                                         </Box>
                                                                     )}
                                                                     <Typography variant="caption" display="block" color="textSecondary" style={{ wordBreak: 'break-all' }}>
-                                                                        {component.example.header_handle[0]}
+                                                                        Handle da Meta: {component.example.header_handle[0]}
                                                                     </Typography>
+                                                                    {!previewUrl && component.format !== 'DOCUMENT' && (
+                                                                        <Typography variant="caption" display="block" color="textSecondary">
+                                                                            Preview indisponível neste contexto, mas o handle da Meta foi gerado.
+                                                                        </Typography>
+                                                                    )}
+                                                                    </>
+                                                                        );
+                                                                    })()}
                                                                 </Box>
                                                             )}
                                                         </Box>

@@ -7,6 +7,10 @@ import { AppError } from 'src/@core/infra/errors/app.error';
 export class TemplatesWhatsappService {
   logger = new Logger(TemplatesWhatsappService.name);
 
+  private isMetaMediaHandle(value: string): boolean {
+    return /^\d+::.+$/.test(value);
+  }
+
   constructor(
     private readonly whatsappOficial: WhatsappOficialService,
     private readonly metaService: MetaService,
@@ -55,48 +59,29 @@ export class TemplatesWhatsappService {
       // Validar dados do template
       this.validateTemplateData(templateData);
 
-      // ✅ CORREÇÃO: Para templates, a Meta API exige URL pública acessível
-      // O upload de mídia retorna ID que só funciona para mensagens diretas
-      // Para templates, devemos manter a URL pública no header_handle
+      // Templates com mídia precisam de handle válido da Meta em example.header_handle.
       for (let i = 0; i < templateData.components.length; i++) {
         const comp = templateData.components[i];
         
         if (comp.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(comp.format) && comp.example?.header_handle) {
-          const mediaUrl = comp.example.header_handle[0];
+          const mediaReference = comp.example.header_handle[0];
           
-          this.logger.log(`[CREATE TEMPLATE] Validando mídia: ${mediaUrl}`);
-          
-          // ✅ Meta API exige HTTPS para templates
-          if (!mediaUrl.startsWith('https://')) {
-            throw new Error('URL da mídia deve usar HTTPS (não HTTP). A Meta API não aceita URLs HTTP em templates.');
+          this.logger.log(`[CREATE TEMPLATE] Validando mídia: ${mediaReference}`);
+
+          if (typeof mediaReference !== 'string' || !mediaReference.trim()) {
+            throw new Error('HEADER com mídia precisa de um handle válido da Meta em example.header_handle.');
           }
-          
-          // Verificar se URL é acessível
-          try {
-            const axios = require('axios');
-            const response = await axios.head(mediaUrl, { timeout: 5000 });
-            
-            if (response.status !== 200) {
-              throw new Error(`URL da mídia retornou status ${response.status}`);
-            }
-            
-            this.logger.log(`[CREATE TEMPLATE] ✅ Mídia validada e acessível`);
-            this.logger.log(`[CREATE TEMPLATE] URL: ${mediaUrl}`);
-            this.logger.log(`[CREATE TEMPLATE] Content-Type: ${response.headers['content-type']}`);
-            this.logger.log(`[CREATE TEMPLATE] Content-Length: ${response.headers['content-length']}`);
-          } catch (error: any) {
-            this.logger.error(`[CREATE TEMPLATE] Erro ao validar mídia: ${error.message}`);
-            throw new Error(`URL da mídia não está acessível: ${error.message}`);
+
+          if (this.isMetaMediaHandle(mediaReference)) {
+            this.logger.log(`[CREATE TEMPLATE] ✅ Handle da Meta validado`);
+            continue;
           }
-          
-          // ✅ Manter URL pública (não fazer upload)
-          // A Meta API valida e baixa a mídia diretamente da URL fornecida
-          
-          // ⚠️ IMPORTANTE: Verificar se URL é acessível externamente
-          // A Meta precisa conseguir baixar a mídia de seus servidores
-          this.logger.warn(`[CREATE TEMPLATE] ⚠️ ATENÇÃO: Certifique-se que a URL é acessível EXTERNAMENTE`);
-          this.logger.warn(`[CREATE TEMPLATE] ⚠️ A Meta tentará baixar de: ${mediaUrl}`);
-          this.logger.warn(`[CREATE TEMPLATE] ⚠️ Teste em: https://reqbin.com/ ou curl externo`);
+
+          if (/^https?:\/\//i.test(mediaReference)) {
+            throw new Error('Templates com cabeçalho de mídia exigem handle da Meta. Faça upload da mídia antes de criar o template.');
+          }
+
+          throw new Error('HEADER com mídia inválido. Faça upload da mídia novamente para gerar um handle válido da Meta.');
         }
       }
 
@@ -319,14 +304,14 @@ export class TemplatesWhatsappService {
         throw new Error(`Nenhuma conexão existente com este token ${token}`);
       }
 
+      this.logger.log(`[UPLOAD MEDIA] Business ID: ${conexao.business_id}`);
       this.logger.log(`[UPLOAD MEDIA] WABA ID: ${conexao.waba_id}`);
       this.logger.log(`[UPLOAD MEDIA] Phone Number ID: ${conexao.phone_number_id}`);
 
-      // Usar phone_number_id para upload (funciona melhor que waba_id)
-      const uploadId = conexao.phone_number_id || conexao.waba_id;
+      const uploadId = conexao.business_id;
 
       if (!uploadId) {
-        throw new Error('Nenhum ID de upload disponível (phone_number_id ou waba_id)');
+        throw new Error('Nenhum business_id disponível para criar a sessão de upload da Meta');
       }
 
       this.logger.log(`[UPLOAD MEDIA] Usando ID para upload: ${uploadId}`);

@@ -23,6 +23,10 @@ interface Request {
   whatsappId: number;
 }
 
+const isMetaMediaHandle = (value: string): boolean => /^\d+::.+$/.test(value);
+
+const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value);
+
 const CreateTemplateService = async (data: Request) => {
   console.log('[CREATE TEMPLATE SERVICE] Raw Data Received:', JSON.stringify(data, null, 2));
   const { companyId, whatsappId, ...templateData } = data;
@@ -64,26 +68,32 @@ const CreateTemplateService = async (data: Request) => {
     console.log(`[CREATE TEMPLATE] Idioma: ${templateData.language}`);
     console.log(`[CREATE TEMPLATE] Total de componentes: ${templateData.components.length}`);
 
-    // Validar URLs de mídia antes de processar
+    // Templates com midia precisam de handle valido da Meta.
     for (let i = 0; i < templateData.components.length; i++) {
       const comp = templateData.components[i];
       if (comp.type === 'HEADER' && comp.example?.header_handle && comp.example.header_handle.length > 0) {
-        const mediaUrl = comp.example.header_handle[0];
+        const mediaReference = comp.example.header_handle[0];
 
-        if (!mediaUrl.startsWith('https://')) {
-          console.warn(`[CREATE TEMPLATE] ⚠️ URL da mídia não é HTTPS: ${mediaUrl}`);
-          console.warn(`[CREATE TEMPLATE] A Meta pode rejeitar URLs HTTP. Configure BACKEND_URL com HTTPS em produção.`);
+        if (typeof mediaReference !== "string" || !mediaReference.trim()) {
+          throw new AppError("Cabecalho de midia invalido. Faca upload do arquivo novamente para gerar um handle valido da Meta.", 400);
         }
 
-        // Testar se a URL é acessível
-        try {
-          console.log(`[CREATE TEMPLATE] Testando acessibilidade da URL: ${mediaUrl}`);
-          const testResponse = await axios.head(mediaUrl, { timeout: 5000 });
-          console.log(`[CREATE TEMPLATE] ✅ URL acessível - Status: ${testResponse.status}, Content-Type: ${testResponse.headers['content-type']}`);
-        } catch (error: any) {
-          console.error(`[CREATE TEMPLATE] ❌ URL não acessível: ${error.message}`);
-          throw new AppError(`A URL da mídia não está acessível: ${mediaUrl}. Verifique se o arquivo existe e está público.`, 400);
+        if (isMetaMediaHandle(mediaReference)) {
+          console.log(`[CREATE TEMPLATE] ✅ HEADER com handle da Meta: ${mediaReference}`);
+          continue;
         }
+
+        if (isHttpUrl(mediaReference)) {
+          throw new AppError(
+            "Templates com cabecalho de midia exigem handle da Meta. Refaca o upload da midia para gerar o handle correto.",
+            400
+          );
+        }
+
+        throw new AppError(
+          "Referencia de midia invalida para o cabecalho. Refaca o upload da midia para gerar um handle valido da Meta.",
+          400
+        );
       }
     }
 
@@ -141,7 +151,7 @@ const CreateTemplateService = async (data: Request) => {
               const handleValue = comp.example.header_handle[0];
 
               // Verificar se é handle da Meta (formato: "4:xxxxx") ou URL
-              const isMetaHandle = /^\d+:[a-zA-Z0-9+/=]+$/.test(handleValue);
+              const isMetaHandle = isMetaMediaHandle(handleValue);
 
               if (isMetaHandle) {
                 console.log(`[CREATE TEMPLATE] ✅ HEADER com Meta Handle (CORRETO):`, handleValue);
@@ -154,7 +164,7 @@ const CreateTemplateService = async (data: Request) => {
             } else if (typeof comp.example.header_handle === 'string') {
               // ✅ Se vier como string, converter para array
               const handleValue = comp.example.header_handle;
-              const isMetaHandle = /^\d+:[a-zA-Z0-9+/=]+$/.test(handleValue);
+              const isMetaHandle = isMetaMediaHandle(handleValue);
 
               cleanedComp.example = {
                 header_handle: [handleValue]

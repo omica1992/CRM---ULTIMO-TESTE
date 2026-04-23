@@ -102,6 +102,13 @@ const UploadTemplateMediaService = async ({
 
     let metaHandle: string | undefined;
 
+    if (uploadToMeta && !whatsappToken) {
+      throw new AppError(
+        "Token da conexao nao informado para gerar o handle da Meta",
+        400
+      );
+    }
+
     // Se solicitado, fazer upload para Meta API via api_oficial
     if (uploadToMeta && whatsappToken) {
       console.log(`[UPLOAD TEMPLATE MEDIA] 🚀 Fazendo upload para Meta API via api_oficial...`);
@@ -122,8 +129,10 @@ const UploadTemplateMediaService = async ({
         if (error.response) {
           console.error(`[UPLOAD TEMPLATE MEDIA] Resposta:`, JSON.stringify(error.response.data, null, 2));
         }
-        // Não falhar se upload para Meta falhar - ainda temos a URL local
-        console.warn(`[UPLOAD TEMPLATE MEDIA] ⚠️ Continuando com URL local apenas`);
+        throw new AppError(
+          `Nao foi possivel gerar o handle da Meta para a midia: ${error.message}`,
+          error.statusCode || error.response?.status || 500
+        );
       }
     } else {
       console.log(`[UPLOAD TEMPLATE MEDIA] ℹ️ Upload para Meta não solicitado ou token faltando:`, {
