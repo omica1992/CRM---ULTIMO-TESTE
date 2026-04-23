@@ -234,32 +234,38 @@ export class MetaService {
       let allTemplates: IResultTemplates['data'] = [];
       const templatesUrl = `${this.urlMeta}/${wabaId}/message_templates`;
       const fields = 'name,components,language,status,category,id,parameter_format';
-      let after: string | undefined;
-      let limit = 100;
+      let limit = 1000;
       let pageCount = 0;
-      const seenCursors = new Set<string>();
+      let nextPageUrl: string | undefined;
+      const seenNextUrls = new Set<string>();
 
       this.logger.log(`[GET TEMPLATES] Iniciando busca de templates para WABA ${wabaId}`);
 
       while (true) {
         const currentPage = pageCount + 1;
         let result;
+        const isCursorPage = Boolean(nextPageUrl);
 
         while (true) {
           try {
             this.logger.log(
-              `[GET TEMPLATES] Buscando pagina ${currentPage} (limit=${limit}${after ? ', after=...' : ''})...`,
+              isCursorPage
+                ? `[GET TEMPLATES] Buscando pagina ${currentPage} via paging.next...`
+                : `[GET TEMPLATES] Buscando pagina ${currentPage} (limit=${limit})...`,
             );
 
-            result = await axios.get(templatesUrl, {
+            result = await axios.get(nextPageUrl || templatesUrl, {
               headers,
               httpsAgent: this.ipv4Agent,
               timeout: 30000,
-              params: {
-                limit,
-                fields,
-                ...(after ? { after } : {}),
-              },
+              ...(isCursorPage
+                ? {}
+                : {
+                    params: {
+                      limit,
+                      fields,
+                    },
+                  }),
             });
             break;
           } catch (error: any) {
@@ -268,11 +274,19 @@ export class MetaService {
             const message = metaError?.message || error.message;
 
             this.logger.error(
-              `[GET TEMPLATES] Erro na pagina ${currentPage} (status=${status}, limit=${limit}): code=${metaError?.code || 'n/a'} type=${metaError?.type || 'n/a'} message=${message} fbtrace=${metaError?.fbtrace_id || 'n/a'}`,
+              `[GET TEMPLATES] Erro na pagina ${currentPage} (status=${status}${isCursorPage ? ', paging.next' : `, limit=${limit}`}): code=${metaError?.code || 'n/a'} type=${metaError?.type || 'n/a'} message=${message} fbtrace=${metaError?.fbtrace_id || 'n/a'}`,
             );
 
-            if (status === 400 && limit > 25) {
-              limit = limit > 50 ? 50 : 25;
+            if (!isCursorPage && status === 400 && limit > 25) {
+              if (limit > 500) {
+                limit = 500;
+              } else if (limit > 200) {
+                limit = 200;
+              } else if (limit > 100) {
+                limit = 100;
+              } else {
+                limit = limit > 50 ? 50 : 25;
+              }
               this.logger.warn(
                 `[GET TEMPLATES] Tentando novamente a pagina ${currentPage} com limit=${limit}`,
               );
@@ -303,19 +317,19 @@ export class MetaService {
           this.logger.log(`[GET TEMPLATES] Pagina ${pageCount}: ${pageTemplates.length} templates encontrados`);
         }
 
-        const nextCursor = pageData.paging?.cursors?.after;
-        if (!pageData.paging?.next || !nextCursor) {
+        const nextUrl = pageData.paging?.next;
+        if (!nextUrl) {
           this.logger.log(`[GET TEMPLATES] Ultima pagina alcancada`);
           break;
         }
 
-        if (seenCursors.has(nextCursor)) {
-          this.logger.warn(`[GET TEMPLATES] Cursor repetido detectado; encerrando paginacao`);
+        if (seenNextUrls.has(nextUrl)) {
+          this.logger.warn(`[GET TEMPLATES] paging.next repetido detectado; encerrando paginacao`);
           break;
         }
 
-        seenCursors.add(nextCursor);
-        after = nextCursor;
+        seenNextUrls.add(nextUrl);
+        nextPageUrl = nextUrl;
       }
 
       this.logger.log(`[GET TEMPLATES] Total de templates carregados: ${allTemplates.length} (${pageCount} paginas)`);

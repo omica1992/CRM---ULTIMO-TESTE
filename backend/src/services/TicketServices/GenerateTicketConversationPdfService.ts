@@ -24,13 +24,62 @@ interface Response {
   filename: string;
 }
 
+const collectBrowserExecutablesFromCache = (baseDir?: string | null): string[] => {
+  if (!baseDir || !fs.existsSync(baseDir)) {
+    return [];
+  }
+
+  return fs
+    .readdirSync(baseDir, { withFileTypes: true })
+    .filter(
+      entry =>
+        entry.isDirectory() &&
+        /chromium|chrome|headless_shell/i.test(entry.name)
+    )
+    .flatMap(entry => {
+      const browserDir = path.join(baseDir, entry.name);
+
+      return [
+        path.join(browserDir, "chrome-win", "chrome.exe"),
+        path.join(browserDir, "chrome-win", "headless_shell.exe"),
+        path.join(browserDir, "chrome-linux", "chrome"),
+        path.join(browserDir, "chrome-linux", "headless_shell"),
+        path.join(
+          browserDir,
+          "chrome-mac",
+          "Chromium.app",
+          "Contents",
+          "MacOS",
+          "Chromium"
+        )
+      ];
+    })
+    .filter(candidate => fs.existsSync(candidate));
+};
+
 const resolveBrowserExecutablePath = (): string => {
   const envPath =
     process.env.PUPPETEER_EXECUTABLE_PATH ||
     process.env.CHROME_BIN ||
     process.env.CHROMIUM_PATH;
 
-  const candidates = [
+  const cacheCandidates = [
+    ...collectBrowserExecutablesFromCache(
+      process.env.PLAYWRIGHT_BROWSERS_PATH ||
+        path.join(process.env.LOCALAPPDATA || "", "ms-playwright")
+    ),
+    ...collectBrowserExecutablesFromCache(
+      path.join(process.env.HOME || process.env.USERPROFILE || "", ".cache", "ms-playwright")
+    ),
+    ...collectBrowserExecutablesFromCache(
+      path.join(process.env.LOCALAPPDATA || "", "puppeteer", "Cache")
+    ),
+    ...collectBrowserExecutablesFromCache(
+      path.join(process.env.HOME || process.env.USERPROFILE || "", ".cache", "puppeteer")
+    )
+  ];
+
+  const candidates = Array.from(new Set([
     envPath,
     "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
     "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
@@ -40,8 +89,9 @@ const resolveBrowserExecutablePath = (): string => {
     "/usr/bin/google-chrome-stable",
     "/usr/bin/chromium-browser",
     "/usr/bin/chromium",
-    "/snap/bin/chromium"
-  ].filter(Boolean) as string[];
+    "/snap/bin/chromium",
+    ...cacheCandidates
+  ].filter(Boolean) as string[]));
 
   const executablePath = candidates.find(candidate => fs.existsSync(candidate));
 
