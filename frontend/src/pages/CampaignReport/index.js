@@ -24,31 +24,24 @@ import {
   TableHead,
   TableRow,
   TablePagination,
-  IconButton,
   Chip,
   Avatar,
-  Tooltip
+  Tooltip,
+  Checkbox
 } from "@material-ui/core";
 import ArrowBackIcon from "@material-ui/icons/ArrowBack";
 import SendIcon from "@material-ui/icons/Send";
-import PhoneIcon from "@material-ui/icons/Phone";
 import MessageIcon from "@material-ui/icons/Message";
 import ScheduleIcon from "@material-ui/icons/Schedule";
 import EventAvailableIcon from "@material-ui/icons/EventAvailable";
-import DoneIcon from "@material-ui/icons/Done";
 import DoneAllIcon from "@material-ui/icons/DoneAll";
 import CheckCircleIcon from "@material-ui/icons/CheckCircle";
 import ErrorIcon from "@material-ui/icons/Error";
 import WhatsAppIcon from "@material-ui/icons/WhatsApp";
 import ListAltIcon from "@material-ui/icons/ListAlt";
-import PieChartIcon from '@material-ui/icons/PieChart';
-import BarChartIcon from '@material-ui/icons/BarChart';
 import { useDate } from "../../hooks/useDate";
 import usePlans from "../../hooks/usePlans";
 import { AuthContext } from "../../context/Auth/AuthContext";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { has, get, isNull } from "lodash";
 import api from "../../services/api";
 import {
   Chart as ChartJS,
@@ -63,7 +56,7 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import { Line, Pie, Doughnut } from 'react-chartjs-2';
+import { Doughnut } from 'react-chartjs-2';
 
 // import { SocketContext } from "../../context/Socket/SocketContext";
 import { i18n } from "../../translate/i18n";
@@ -173,43 +166,85 @@ const CampaignReport = () => {
   const { campaignId } = useParams();
 
   const [campaign, setCampaign] = useState({});
-  const [validContacts, setValidContacts] = useState(0);
-  const [delivered, setDelivered] = useState(0);
-  const [confirmationRequested, setConfirmationRequested] = useState(0);
-  const [confirmed, setConfirmed] = useState(0);
-  const [percent, setPercent] = useState(0);
   const [loading, setLoading] = useState(false);
   const [messageRows, setMessageRows] = useState([]);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [uniqueNumbers, setUniqueNumbers] = useState(0);
-  const [failedMessages, setFailedMessages] = useState(0);
+  const [selectedFailedShippingIds, setSelectedFailedShippingIds] = useState([]);
+  const [resendingFailed, setResendingFailed] = useState(false);
   const mounted = useRef(true);
   const { user, socket } = useContext(AuthContext);
 
   const { datetimeToClient } = useDate();
   const { getPlanCompany } = usePlans();
-  
-  // Dados para o gráfico de pizza
-  const [chartData, setChartData] = useState({
-    labels: ['Entregues', 'Aguardando', 'Falhas'],
+
+  const getShippingStatus = (item) => {
+    if (item?.deliveredAt) return "delivered";
+    if (item?.failedAt) return "failed";
+    if (item?.sentAt) return "sent";
+    return "pending";
+  };
+
+  const normalizeShippingItem = (item) => ({
+    id: item.id,
+    jobId: item.jobId,
+    number: item.number,
+    message: item.message
+      ? item.message.substring(0, 50) + (item.message.length > 50 ? "..." : "")
+      : "",
+    fullMessage: item.message || "",
+    sentAt: item.sentAt ? datetimeToClient(item.sentAt) : null,
+    deliveredAt: item.deliveredAt ? datetimeToClient(item.deliveredAt) : null,
+    failedAt: item.failedAt ? datetimeToClient(item.failedAt) : null,
+    errorMessage: item.errorMessage || null,
+    createdAt: item.createdAt ? datetimeToClient(item.createdAt) : null,
+    metaMessageId: item.metaMessageId || null,
+    status: getShippingStatus(item)
+  });
+
+  const statusCounts = React.useMemo(() => {
+    const counts = {
+      attempts: messageRows.length,
+      pending: 0,
+      sent: 0,
+      delivered: 0,
+      failed: 0,
+      uniqueNumbers: new Set(messageRows.map((row) => row.number)).size
+    };
+
+    messageRows.forEach((row) => {
+      counts[row.status] += 1;
+    });
+
+    return counts;
+  }, [messageRows]);
+
+  const chartData = React.useMemo(() => ({
+    labels: ["Pendentes", "Enviadas à Meta", "Entregues", "Falhas"],
     datasets: [
       {
-        data: [0, 0, 0],
+        data: [
+          statusCounts.pending,
+          statusCounts.sent,
+          statusCounts.delivered,
+          statusCounts.failed
+        ],
         backgroundColor: [
-          'rgba(75, 192, 192, 0.7)',
-          'rgba(255, 206, 86, 0.7)',
-          'rgba(255, 99, 132, 0.7)',
+          "rgba(255, 206, 86, 0.7)",
+          "rgba(54, 162, 235, 0.7)",
+          "rgba(75, 192, 192, 0.7)",
+          "rgba(255, 99, 132, 0.7)"
         ],
         borderColor: [
-          'rgba(75, 192, 192, 1)',
-          'rgba(255, 206, 86, 1)',
-          'rgba(255, 99, 132, 1)',
+          "rgba(255, 206, 86, 1)",
+          "rgba(54, 162, 235, 1)",
+          "rgba(75, 192, 192, 1)",
+          "rgba(255, 99, 132, 1)"
         ],
-        borderWidth: 1,
-      },
-    ],
-  });
+        borderWidth: 1
+      }
+    ]
+  }), [statusCounts]);
   
   // Opções para o gráfico de pizza
   const chartOptions = {
@@ -249,42 +284,6 @@ const CampaignReport = () => {
   }, []);
 
   useEffect(() => {
-    if (mounted.current) {
-      if (has(campaign, "contactList") && has(campaign.contactList, "contacts")) {
-        const contactList = get(campaign, "contactList");
-        const valids = contactList.contacts.filter((c) => c.isWhatsappValid);
-        setValidContacts(valids.length);
-      } else if (has(campaign, "tagListId")) {
-        // Se estamos usando tags em vez de listas de contato
-        setValidContacts(delivered); // Usamos as entregas como contatos válidos
-      }
-
-      if (has(campaign, "shipping") && Array.isArray(campaign.shipping)) {
-        const contacts = get(campaign, "shipping");
-        const delivered = contacts.filter((c) => !isNull(c.deliveredAt));
-        const confirmationRequested = contacts.filter(
-          (c) => !isNull(c.confirmationRequestedAt)
-        );
-        const confirmed = contacts.filter(
-          (c) => !isNull(c.deliveredAt) && !isNull(c.confirmationRequestedAt)
-        );
-        setDelivered(delivered.length);
-        setConfirmationRequested(confirmationRequested.length);
-        setConfirmed(confirmed.length);
-      }
-    }
-  }, [campaign]);
-
-  useEffect(() => {
-    // Evitar divisão por zero
-    if (validContacts > 0) {
-      setPercent((delivered / validContacts) * 100);
-    } else {
-      setPercent(0);
-    }
-  }, [delivered, validContacts]);
-
-  useEffect(() => {
     const companyId = user.companyId;
     // const socket = socketManager.GetSocket();
 
@@ -307,6 +306,54 @@ const CampaignReport = () => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId]);
+
+  useEffect(() => {
+    const companyId = user.companyId;
+
+    const onCampaignShippingEvent = (data) => {
+      const record = data?.record;
+
+      if (!record || Number(record.campaignId) !== Number(campaignId)) {
+        return;
+      }
+
+      setMessageRows((prevRows) => {
+        let found = false;
+        const nextRows = prevRows.map((row) => {
+          if (row.id !== record.id) {
+            return row;
+          }
+
+          found = true;
+          return {
+            ...row,
+            sentAt: record.sentAt ? datetimeToClient(record.sentAt) : null,
+            deliveredAt: record.deliveredAt ? datetimeToClient(record.deliveredAt) : null,
+            failedAt: record.failedAt ? datetimeToClient(record.failedAt) : null,
+            errorMessage: record.errorMessage || null,
+            metaMessageId: record.metaMessageId || null,
+            status: getShippingStatus(record)
+          };
+        });
+
+        return found ? nextRows : prevRows;
+      });
+
+      setSelectedFailedShippingIds((prevState) => {
+        if (record.failedAt) {
+          return prevState;
+        }
+
+        return prevState.filter((id) => id !== record.id);
+      });
+    };
+
+    socket.on(`company-${companyId}-campaign-shipping`, onCampaignShippingEvent);
+
+    return () => {
+      socket.off(`company-${companyId}-campaign-shipping`, onCampaignShippingEvent);
+    };
+  }, [campaignId, datetimeToClient, socket, user.companyId]);
 
   const findCampaign = async () => {
     try {
@@ -335,48 +382,10 @@ const CampaignReport = () => {
         }
       }
 
-      const formattedRows = shippingData.map(item => ({
-        id: item.id,
-        jobId: item.jobId,
-        number: item.number,
-        message: item.message ? item.message.substring(0, 50) + (item.message.length > 50 ? '...' : '') : '',
-        fullMessage: item.message || '',
-        deliveredAt: item.deliveredAt ? datetimeToClient(item.deliveredAt) : null,
-        failedAt: item.failedAt ? datetimeToClient(item.failedAt) : null,
-        errorMessage: item.errorMessage || null,
-        createdAt: item.createdAt ? datetimeToClient(item.createdAt) : null,
-        status: item.deliveredAt ? 'delivered' : (item.failedAt ? 'failed' : 'pending')
-      }));
+      const formattedRows = shippingData.map(normalizeShippingItem);
 
       setMessageRows(formattedRows);
-
-      const delivered = shippingData.filter(item => item.deliveredAt).length;
-      const failed = shippingData.filter(item => item.failedAt && !item.deliveredAt).length;
-      const pending = shippingData.length - delivered - failed;
-
-      const uniquePhoneNumbers = new Set(shippingData.map(item => item.number)).size;
-      setUniqueNumbers(uniquePhoneNumbers);
-      setFailedMessages(failed);
-
-      setChartData({
-        labels: ['Entregues', 'Aguardando', 'Falhas'],
-        datasets: [
-          {
-            data: [delivered, pending, failed],
-            backgroundColor: [
-              'rgba(75, 192, 192, 0.7)',
-              'rgba(255, 206, 86, 0.7)',
-              'rgba(255, 99, 132, 0.7)',
-            ],
-            borderColor: [
-              'rgba(75, 192, 192, 1)',
-              'rgba(255, 206, 86, 1)',
-              'rgba(255, 99, 132, 1)',
-            ],
-            borderWidth: 1,
-          },
-        ],
-      });
+      setSelectedFailedShippingIds([]);
 
       setCampaign(prevCampaign => ({
         ...prevCampaign,
@@ -415,6 +424,68 @@ const CampaignReport = () => {
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
+  };
+
+  const handleToggleFailedShippingSelection = (shippingId) => {
+    setSelectedFailedShippingIds((prevState) => {
+      if (prevState.includes(shippingId)) {
+        return prevState.filter((id) => id !== shippingId);
+      }
+
+      return [...prevState, shippingId];
+    });
+  };
+
+  const handleToggleSelectAllFailed = (checked) => {
+    if (!checked) {
+      setSelectedFailedShippingIds([]);
+      return;
+    }
+
+    const failedIds = messageRows
+      .filter((row) => row.status === "failed")
+      .map((row) => row.id);
+
+    setSelectedFailedShippingIds(failedIds);
+  };
+
+  const handleResendFailedShippings = async () => {
+    if (!selectedFailedShippingIds.length) {
+      toast.info("Selecione ao menos uma linha com falha para reenviar.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Reenviar ${selectedFailedShippingIds.length} envio(s) com falha?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setResendingFailed(true);
+
+      const { data } = await api.post(`/campaigns/${campaignId}/resend-failed`, {
+        shippingIds: selectedFailedShippingIds
+      });
+
+      toast.success(
+        `${data?.requeuedCount || 0} envio(s) reenfileirado(s) para reenvio.`
+      );
+
+      if (data?.skippedCount) {
+        toast.info(
+          `${data.skippedCount} item(ns) foram ignorados por não estarem mais em falha.`
+        );
+      }
+
+      await findCampaign();
+    } catch (error) {
+      toast.error("Não foi possível reenviar os itens selecionados.");
+    } finally {
+      setResendingFailed(false);
+    }
   };
   
   // Função para formatar o número de telefone
@@ -456,6 +527,15 @@ const CampaignReport = () => {
             size="small" 
             icon={<ScheduleIcon fontSize="small" />} 
             className={`${classes.statusChip} ${classes.pendingChip}`} 
+          />
+        );
+      case 'sent':
+        return (
+          <Chip
+            label="Enviada à Meta"
+            size="small"
+            icon={<SendIcon fontSize="small" />}
+            style={{ backgroundColor: "#2196f3", color: "#fff", fontWeight: "bold" }}
           />
         );
       case 'failed':
@@ -512,7 +592,7 @@ const CampaignReport = () => {
         
         <Grid container spacing={3} className={classes.summaryCards}>
           {/* Card de Status */}
-          <Grid item xs={12} md={6} lg={3}>
+          <Grid item xs={12} md={12} lg={4}>
             <Card className={classes.summaryCard} variant="outlined">
               <CardContent>
                 <Typography variant="h6" color="textSecondary" gutterBottom>
@@ -526,43 +606,57 @@ const CampaignReport = () => {
           </Grid>
           
           {/* Cards com estatísticas principais */}
-          <Grid item xs={12} md={6} lg={3}>
+          <Grid item xs={12} md={6} lg={2}>
             <Card className={classes.summaryCard} variant="outlined">
               <CardContent>
                 <SendIcon className={classes.cardIcon} />
                 <Typography variant="h4" component="div">
-                  {messageRows.length}
+                  {statusCounts.attempts}
                 </Typography>
                 <Typography color="textSecondary">
-                  Mensagens Enviadas
+                  Tentativas
                 </Typography>
               </CardContent>
             </Card>
           </Grid>
           
-          <Grid item xs={12} md={6} lg={3}>
+          <Grid item xs={12} md={6} lg={2}>
             <Card className={classes.summaryCard} variant="outlined">
               <CardContent>
-                <PhoneIcon className={classes.cardIcon} />
+                <MessageIcon className={classes.cardIcon} />
                 <Typography variant="h4" component="div">
-                  {uniqueNumbers}
+                  {statusCounts.sent}
                 </Typography>
                 <Typography color="textSecondary">
-                  Destinatários Únicos
+                  Enviadas à Meta
                 </Typography>
               </CardContent>
             </Card>
           </Grid>
           
-          <Grid item xs={12} md={6} lg={3}>
+          <Grid item xs={12} md={6} lg={2}>
             <Card className={classes.summaryCard} variant="outlined">
               <CardContent>
                 <CheckCircleIcon className={classes.cardIcon} />
                 <Typography variant="h4" component="div">
-                  {messageRows.filter(row => row.status === 'delivered').length}
+                  {statusCounts.delivered}
                 </Typography>
                 <Typography color="textSecondary">
                   Mensagens Entregues
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          <Grid item xs={12} md={6} lg={2}>
+            <Card className={classes.summaryCard} variant="outlined">
+              <CardContent>
+                <ErrorIcon className={classes.cardIcon} />
+                <Typography variant="h4" component="div">
+                  {statusCounts.failed}
+                </Typography>
+                <Typography color="textSecondary">
+                  Falhas
                 </Typography>
               </CardContent>
             </Card>
@@ -573,18 +667,18 @@ const CampaignReport = () => {
         <Box className={classes.progressContainer}>
           <Grid container spacing={2} alignItems="center">
             <Grid item xs>
-              <Typography variant="body2" color="textSecondary">{i18n.t("campaignReport.deliver")}</Typography>
+              <Typography variant="body2" color="textSecondary">Processadas</Typography>
             </Grid>
             <Grid item>
               <Typography variant="body2" color="textPrimary">
-                {messageRows.filter(row => row.status === 'delivered').length} de {messageRows.length}
+                {statusCounts.delivered + statusCounts.failed} de {statusCounts.attempts}
               </Typography>
             </Grid>
           </Grid>
           <LinearProgress
             variant="determinate"
             style={{ height: 10, borderRadius: 5, margin: "8px 0" }}
-            value={(messageRows.filter(row => row.status === 'delivered').length / (messageRows.length || 1)) * 100}
+            value={((statusCounts.delivered + statusCounts.failed) / (statusCounts.attempts || 1)) * 100}
           />
         </Box>
         
@@ -674,16 +768,50 @@ const CampaignReport = () => {
             Detalhes das Mensagens
           </Typography>
           <Divider />
+
+          <Box mt={2} mb={1} display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap">
+            <Typography variant="body2" color="textSecondary">
+              {statusCounts.failed
+                ? `${statusCounts.failed} item(ns) com falha.`
+                : "Nenhuma falha registrada."}
+            </Typography>
+
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleResendFailedShippings}
+              disabled={!selectedFailedShippingIds.length || resendingFailed}
+            >
+              {resendingFailed
+                ? "Reenviando..."
+                : `Reenviar falhas selecionadas (${selectedFailedShippingIds.length})`}
+            </Button>
+          </Box>
           
           <TableContainer className={classes.tableContainer}>
             <Table aria-label="tabela de mensagens">
               <TableHead>
                 <TableRow>
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      color="primary"
+                      indeterminate={
+                        selectedFailedShippingIds.length > 0 &&
+                        selectedFailedShippingIds.length < statusCounts.failed
+                      }
+                      checked={
+                        statusCounts.failed > 0 &&
+                        selectedFailedShippingIds.length === statusCounts.failed
+                      }
+                      onChange={(event) => handleToggleSelectAllFailed(event.target.checked)}
+                    />
+                  </TableCell>
                   <TableCell>ID</TableCell>
                   <TableCell>Destinatário</TableCell>
                   <TableCell>Mensagem</TableCell>
-                  <TableCell>Enviado em</TableCell>
+                  <TableCell>Enviada à Meta em</TableCell>
                   <TableCell>Entregue em</TableCell>
+                  <TableCell>Erro</TableCell>
                   <TableCell>Status</TableCell>
                 </TableRow>
               </TableHead>
@@ -692,6 +820,14 @@ const CampaignReport = () => {
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map((row) => (
                     <TableRow key={row.id}>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          color="primary"
+                          checked={selectedFailedShippingIds.includes(row.id)}
+                          disabled={row.status !== "failed"}
+                          onChange={() => handleToggleFailedShippingSelection(row.id)}
+                        />
+                      </TableCell>
                       <TableCell>{row.jobId}</TableCell>
                       <TableCell>
                         <Tooltip title={row.number}>
@@ -703,14 +839,23 @@ const CampaignReport = () => {
                           <span>{row.message}</span>
                         </Tooltip>
                       </TableCell>
-                      <TableCell>{row.createdAt}</TableCell>
+                      <TableCell>{row.sentAt || '-'}</TableCell>
                       <TableCell>{row.deliveredAt || '-'}</TableCell>
+                      <TableCell>
+                        {row.errorMessage ? (
+                          <Tooltip title={row.errorMessage}>
+                            <span>{row.errorMessage}</span>
+                          </Tooltip>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
                       <TableCell>{getMessageStatusChip(row.status)}</TableCell>
                     </TableRow>
                   ))}
                 {messageRows.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} align="center">
+                    <TableCell colSpan={8} align="center">
                       {loading ? "Carregando..." : "Nenhuma mensagem encontrada"}
                     </TableCell>
                   </TableRow>

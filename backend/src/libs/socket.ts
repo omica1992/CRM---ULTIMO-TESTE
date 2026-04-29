@@ -8,6 +8,7 @@ import { ReceibedWhatsAppService } from "../services/WhatsAppOficial/ReceivedWha
 import { JwtPayload, verify } from "jsonwebtoken";
 import authConfig from "../config/auth";
 import BirthdayService from "../services/BirthdayService/BirthdayService";
+import SyncCampaignShippingMetaStatusService from "../services/CampaignService/SyncCampaignShippingMetaStatusService";
 
 let io: SocketIO;
 
@@ -291,7 +292,16 @@ export const initIO = (httpServer: Server): SocketIO => {
 
 
         if (!message) {
-          callback?.({ ok: false, error: "message not found" });
+          const syncedShipping = await SyncCampaignShippingMetaStatusService({
+            companyId,
+            messageId,
+            status,
+            error
+          });
+          callback?.({
+            ok: !!syncedShipping,
+            error: syncedShipping ? undefined : "message not found"
+          });
           logger.warn(`[SOCKET STATUS] ⚠️ Mensagem ${messageId} não encontrada para companyId ${companyId}`);
           return;
         }
@@ -317,6 +327,13 @@ export const initIO = (httpServer: Server): SocketIO => {
             ack: -1 // Indicar falha
           });
 
+          await SyncCampaignShippingMetaStatusService({
+            companyId,
+            messageId,
+            status,
+            error
+          });
+
           logger.info(`[SOCKET STATUS] ✅ Mensagem ${message.id} atualizada com erro de entrega no banco`);
 
           // Recarregar mensagem com associações para emitir dados completos ao frontend
@@ -336,9 +353,21 @@ export const initIO = (httpServer: Server): SocketIO => {
         // Se status é sucesso, atualizar ack
         else if (status === 'sent') {
           await message.update({ ack: 1 });
+          await SyncCampaignShippingMetaStatusService({
+            companyId,
+            messageId,
+            status,
+            error
+          });
           logger.info(`[SOCKET] ✅ Mensagem ${messageId} marcada como enviada (ack: 1)`);
         } else if (status === 'delivered') {
           await message.update({ ack: 2 });
+          await SyncCampaignShippingMetaStatusService({
+            companyId,
+            messageId,
+            status,
+            error
+          });
           logger.info(`[SOCKET] ✅ Mensagem ${messageId} marcada como entregue (ack: 2)`);
         } else if (status === 'read') {
           await message.update({ ack: 3, read: true });

@@ -55,6 +55,18 @@ const getTypeMessage = (type: string): 'text' | 'reaction' | 'audio' | 'document
   }
 }
 
+const getOfficialMessageId = (result: any): string | null => {
+  if (Array.isArray(result?.idMessageWhatsApp) && result.idMessageWhatsApp[0]) {
+    return result.idMessageWhatsApp[0];
+  }
+
+  if (Array.isArray(result?.messages) && result.messages[0]?.id) {
+    return result.messages[0].id;
+  }
+
+  return null;
+};
+
 const SendWhatsAppOficialMessage = async ({
   body,
   ticket,
@@ -244,11 +256,11 @@ const SendWhatsAppOficialMessage = async ({
       fromMe: true
     });
 
-    const wid: any = sendMessage
+    const officialMessageId = getOfficialMessageId(sendMessage);
 
     const bodyMessage = !isNil(vCard) ? vcard : !bodyMsg ? '' : bodyMsg;
     messageData = {
-      wid: wid?.idMessageWhatsApp[0],
+      wid: officialMessageId,
       ticketId: ticket.id,
       contactId: contact.id,
       body: type === 'interactive' ? bodyToSave : bodyMessage,
@@ -257,7 +269,7 @@ const SendWhatsAppOficialMessage = async ({
       mediaUrl: !!media ? media.filename : null,
       read: true,
       quotedMsgId: quotedMsg?.id || null,
-      ack: 2,
+      ack: 1,
       channel: 'whatsapp_oficial',
       remoteJid: `${contact.number}@s.whatsapp.net`,
       participant: null,

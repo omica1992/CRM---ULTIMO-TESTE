@@ -14,6 +14,7 @@ routes.get("/campaigns/list", isAuth, CampaignController.findList);
 routes.get("/campaigns", isAuth, CampaignController.index);
 routes.get("/campaigns/:id", isAuth, CampaignController.show);
 routes.get("/campaigns/:id/shipping", isAuth, CampaignController.shipping);
+routes.post("/campaigns/:id/resend-failed", isAuth, CampaignController.resendFailed);
 routes.post("/campaigns", isAuth, CampaignController.store);
 routes.put("/campaigns/:id", isAuth, CampaignController.update);
 routes.delete("/campaigns/:id", isAuth, CampaignController.remove);

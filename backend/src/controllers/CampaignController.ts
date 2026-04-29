@@ -29,6 +29,7 @@ import AppError from "../errors/AppError";
 import { CancelService } from "../services/CampaignService/CancelService";
 import { RestartService } from "../services/CampaignService/RestartService";
 import RecurrenceService from "../services/CampaignService/RecurrenceService";
+import ResendFailedCampaignShippingService from "../services/CampaignService/ResendFailedCampaignShippingService";
 import { campaignQueue } from "../queues";
 import logger from "../utils/logger";
 
@@ -85,6 +86,10 @@ type StoreData = {
 
 type FindParams = {
   companyId: string;
+};
+
+type ResendFailedBody = {
+  shippingIds: number[];
 };
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
@@ -533,9 +538,11 @@ export const shipping = async (req: Request, res: Response): Promise<Response> =
       "jobId",
       "number",
       "message",
+      "sentAt",
       "deliveredAt",
       "failedAt",
       "errorMessage",
+      "metaMessageId",
       "createdAt"
     ],
     order: [["createdAt", "ASC"]],
@@ -551,6 +558,23 @@ export const shipping = async (req: Request, res: Response): Promise<Response> =
     hasMore,
     pageNumber
   });
+};
+
+export const resendFailed = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId } = req.user;
+  const { id } = req.params;
+  const { shippingIds } = req.body as ResendFailedBody;
+
+  const response = await ResendFailedCampaignShippingService({
+    campaignId: Number(id),
+    companyId,
+    shippingIds
+  });
+
+  return res.status(200).json(response);
 };
 
 export const cancel = async (

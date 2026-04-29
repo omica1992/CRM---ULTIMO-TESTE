@@ -2,6 +2,7 @@ import amqplib, { Channel, Connection } from "amqplib";
 import logger from "../../utils/logger";
 import { ReceibedWhatsAppService } from "../WhatsAppOficial/ReceivedWhatsApp";
 import AppError from "../../errors/AppError";
+import SyncCampaignShippingMetaStatusService from "../CampaignService/SyncCampaignShippingMetaStatusService";
 
 class RabbitMQListener {
     private connection: any = null;
@@ -128,6 +129,12 @@ class RabbitMQListener {
 
         if (!message) {
             logger.warn(`[RabbitMQ STATUS] ⚠️ Message ${messageId} not found for company ${companyId}`);
+            await SyncCampaignShippingMetaStatusService({
+                companyId,
+                messageId,
+                status,
+                error
+            });
             return;
         }
 
@@ -146,10 +153,29 @@ class RabbitMQListener {
                 ack: -1
             });
 
+            await SyncCampaignShippingMetaStatusService({
+                companyId,
+                messageId,
+                status,
+                error
+            });
+
         } else if (status === 'sent') {
             await message.update({ ack: 1 });
+            await SyncCampaignShippingMetaStatusService({
+                companyId,
+                messageId,
+                status,
+                error
+            });
         } else if (status === 'delivered') {
             await message.update({ ack: 2 });
+            await SyncCampaignShippingMetaStatusService({
+                companyId,
+                messageId,
+                status,
+                error
+            });
         } else if (status === 'read') {
             await message.update({ ack: 3, read: true });
         }

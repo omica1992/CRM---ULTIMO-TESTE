@@ -195,7 +195,7 @@ let isProcessing = false;
 let lastCampaignVerifyDiagnosticAt = 0;
 const campaignFinalizeTimers = new Map<number, NodeJS.Timeout>();
 
-function scheduleCampaignFinalizeCheck(campaignId: number) {
+export function scheduleCampaignFinalizeCheck(campaignId: number) {
   if (campaignFinalizeTimers.has(campaignId)) {
     return;
   }
@@ -2221,6 +2221,33 @@ async function buildCampaignTemplateData(
   return { templateData, bodyToSave };
 }
 
+function extractMetaMessageId(sendResult: any): string | null {
+  if (Array.isArray(sendResult?.idMessageWhatsApp) && sendResult.idMessageWhatsApp[0]) {
+    return sendResult.idMessageWhatsApp[0];
+  }
+
+  if (Array.isArray(sendResult?.messages) && sendResult.messages[0]?.id) {
+    return sendResult.messages[0].id;
+  }
+
+  return null;
+}
+
+async function markOfficialCampaignShippingAsSent(
+  campaignShipping: CampaignShipping,
+  sendResult: any
+) {
+  const metaMessageId = extractMetaMessageId(sendResult);
+
+  await campaignShipping.update({
+    sentAt: moment(),
+    jobId: null,
+    metaMessageId
+  });
+
+  return metaMessageId;
+}
+
 async function handleDispatchCampaign(job) {
   const { data } = job;
   const { campaignShippingId, campaignId }: DispatchCampaignData = data;
@@ -2389,11 +2416,12 @@ async function handleDispatchCampaign(job) {
           quotedMsg: null
         });
 
-        const messageId = sendResult?.messages?.[0]?.id || 'N/A';
+        const messageId = await markOfficialCampaignShippingAsSent(
+          campaignShipping,
+          sendResult
+        );
         logger.info(`[CAMPAIGN-DISPATCH] ✅ Template enviado com sucesso - Ticket=${ticket.id}, MessageId=${messageId}`);
-
-        await campaignShipping.update({ deliveredAt: moment() });
-        logger.info(`[CAMPAIGN-DISPATCH] 📝 CampaignShipping atualizado com deliveredAt - ID=${campaignShippingId}`);
+        logger.info(`[CAMPAIGN-DISPATCH] 📝 CampaignShipping atualizado com sentAt/metaMessageId - ID=${campaignShippingId}`);
       }
       // ✅ Lógica original para WhatsApp não oficial
       else if (whatsapp.status === "CONNECTED") {
@@ -2575,9 +2603,12 @@ async function handleDispatchCampaign(job) {
             options
           );
 
-          await campaignShipping.update({ deliveredAt: moment() });
+          const metaMessageId = await markOfficialCampaignShippingAsSent(
+            campaignShipping,
+            result
+          );
           campaignLogger.templateSent(campaignId, formattedNumber, parseInt(campaign.templateId), result);
-          logger.info(`[CAMPAIGN-DISPATCH] ✅ Template enviado sem ticket: Campanha=${campaignId};Numero=${cleanNumber}`);
+          logger.info(`[CAMPAIGN-DISPATCH] ✅ Template enviado sem ticket: Campanha=${campaignId};Numero=${cleanNumber};MessageId=${metaMessageId || "N/A"}`);
         } catch (error) {
           campaignLogger.templateFailed(campaignId, formattedNumber, error);
           logger.error(`[CAMPAIGN-DISPATCH] ❌ Erro ao enviar template: Campanha=${campaignId};Numero=${formattedNumber};Erro=${error.message}`);
