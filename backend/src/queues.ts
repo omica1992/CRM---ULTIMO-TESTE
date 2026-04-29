@@ -2149,11 +2149,13 @@ async function buildCampaignTemplateData(
                     });
                   }
                 } else {
-                  if (templateComponents[index].format === 'IMAGE') {
+                  const mediaFormat = templateComponents[index].format;
+                  if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(mediaFormat)) {
+                    const mediaType = mediaFormat.toLowerCase();
                     newComponent.parameters.push({
-                      type: "image",
-                      image: { link: variableValue }
-                    });
+                      type: mediaType,
+                      [mediaType]: { link: variableValue }
+                    } as any);
                   } else {
                     const paramObj: any = {
                       type: "text",

@@ -171,12 +171,14 @@ export interface IMetaMessageTemplateComponents {
 }
 
 export interface IMetaMessageTemplateComponentsParameters {
-    type: 'location' | 'currency' | 'date_time' | 'text' | 'payload' | 'location' | 'url' | 'image' | 'video';
+    type: 'location' | 'currency' | 'date_time' | 'text' | 'payload' | 'location' | 'url' | 'image' | 'video' | 'document';
     text?: string;
     url?: string;
     location?: IMetaMessageTemplateComponentsParametersLocation
     currency?: IMetaMessageTemplateComponentsParametersCurrency;
-    image?: IMetaMessageTemplateComponentsParametersImage;
+    image?: IMetaMessageTemplateComponentsParametersMedia;
+    video?: IMetaMessageTemplateComponentsParametersMedia;
+    document?: IMetaMessageTemplateComponentsParametersMedia;
     date_time?: IMetaMessageTemplateComponentsParametersDateTime;
     payload?: string;
 }
@@ -194,8 +196,10 @@ export interface IMetaMessageTemplateComponentsParametersCurrency {
     amount_1000: number;
 }
 
-export interface IMetaMessageTemplateComponentsParametersImage {
-    link: string;
+export interface IMetaMessageTemplateComponentsParametersMedia {
+    id?: string;
+    link?: string;
+    filename?: string;
 }
 
 export interface IMetaMessageTemplateComponentsParametersDateTime {

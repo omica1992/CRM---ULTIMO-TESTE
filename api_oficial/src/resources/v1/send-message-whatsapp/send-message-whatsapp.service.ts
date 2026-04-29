@@ -22,6 +22,14 @@ import {
 } from 'src/@core/infra/meta/interfaces/IMeta.interfaces';
 import { WhatsappOficialService } from '../whatsapp-oficial/whatsapp-oficial.service';
 
+const TEMPLATE_MEDIA_PARAMETER_TYPES = ['image', 'video', 'document'] as const;
+type TemplateMediaParameterType = (typeof TEMPLATE_MEDIA_PARAMETER_TYPES)[number];
+
+const isTemplateMediaParameterType = (
+  value: string | undefined,
+): value is TemplateMediaParameterType =>
+  TEMPLATE_MEDIA_PARAMETER_TYPES.includes(value as TemplateMediaParameterType);
+
 @Injectable()
 export class SendMessageWhatsappService extends BaseService<SendMessageWhatsApp> {
   constructor(
@@ -88,6 +96,77 @@ export class SendMessageWhatsappService extends BaseService<SendMessageWhatsApp>
       this.logger.error(`getIdMetaMedia - ${error.message}`);
       throw new Error(error.message);
     }
+  }
+
+  private async normalizeTemplateMediaParameters(
+    templatePayload: IMetaMessageTemplate,
+    phoneNumberId: string,
+    token: string,
+  ): Promise<IMetaMessageTemplate> {
+    if (!templatePayload?.components) {
+      return templatePayload;
+    }
+
+    const components = Array.isArray(templatePayload.components)
+      ? templatePayload.components
+      : [templatePayload.components];
+
+    for (const [componentIndex, component] of components.entries()) {
+      if (!component?.parameters) {
+        continue;
+      }
+
+      const parameters = Array.isArray(component.parameters)
+        ? component.parameters
+        : [component.parameters];
+
+      for (const [parameterIndex, parameter] of parameters.entries()) {
+        if (!isTemplateMediaParameterType(parameter?.type)) {
+          continue;
+        }
+
+        const mediaType = parameter.type;
+        const mediaPayload = (parameter as any)[mediaType];
+
+        if (!mediaPayload?.link || mediaPayload?.id) {
+          continue;
+        }
+
+        this.logger.log(
+          `[TEMPLATE MEDIA] Convertendo ${mediaType}.link em ${mediaType}.id (component=${componentIndex}, parameter=${parameterIndex})`,
+        );
+
+        try {
+          const mediaId = await this.metaService.uploadMedia(
+            phoneNumberId,
+            token,
+            mediaPayload.link,
+          );
+
+          (parameter as any)[mediaType] = {
+            id: mediaId,
+            ...(mediaType === 'document' && mediaPayload.filename
+              ? { filename: mediaPayload.filename }
+              : {}),
+          };
+        } catch (error: any) {
+          this.logger.error(
+            `[TEMPLATE MEDIA] Falha ao converter ${mediaType}.link em id: ${error.message}`,
+          );
+          throw new Error(
+            `Nao foi possivel fazer upload da midia do template para a Meta: ${error.message}`,
+          );
+        }
+      }
+    }
+
+    templatePayload.components = (
+      Array.isArray(templatePayload.components)
+        ? components
+        : components[0]
+    ) as any;
+
+    return templatePayload;
   }
 
   async createMessage(
@@ -324,6 +403,12 @@ export class SendMessageWhatsappService extends BaseService<SendMessageWhatsApp>
         case 'template':
           if (!templatePayload?.name)
             throw new Error('Necessário informar o template para enviar a mensagem');
+
+          await this.normalizeTemplateMediaParameters(
+            templatePayload,
+            whats.phone_number_id,
+            whats.send_token,
+          );
 
           entity.template = templatePayload as any;
 

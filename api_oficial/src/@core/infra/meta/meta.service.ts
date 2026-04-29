@@ -346,20 +346,38 @@ export class MetaService {
     }
   }
 
-  async uploadMedia(phoneNumberId: string, token: string, fileUrl: string, mimeType: string) {
+  async uploadMedia(phoneNumberId: string, token: string, fileUrl: string, mimeType?: string) {
     try {
       this.logger.log(`[META] Fazendo upload de mídia: ${fileUrl}`);
 
       // Baixar o arquivo da URL
       const fileResponse = await axios.get(fileUrl, { responseType: 'arraybuffer', httpsAgent: this.ipv4Agent });
       const fileBuffer = Buffer.from(fileResponse.data);
+      const responseMimeType = String(fileResponse.headers?.['content-type'] || '')
+        .split(';')[0]
+        .trim();
+      const resolvedMimeType =
+        mimeType ||
+        responseMimeType ||
+        lookup(fileUrl) ||
+        'application/octet-stream';
+      const fileNameFromUrl = (() => {
+        try {
+          const parsedUrl = new URL(fileUrl);
+          const candidate = parsedUrl.pathname.split('/').pop();
+          return candidate || 'file';
+        } catch {
+          const candidate = fileUrl.split('/').pop();
+          return candidate || 'file';
+        }
+      })();
 
       // Criar FormData
       const FormData = require('form-data');
       const formData = new FormData();
       formData.append('file', fileBuffer, {
-        filename: fileUrl.split('/').pop(),
-        contentType: mimeType
+        filename: fileNameFromUrl,
+        contentType: resolvedMimeType
       });
       formData.append('messaging_product', 'whatsapp');
 

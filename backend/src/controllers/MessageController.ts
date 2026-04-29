@@ -844,13 +844,15 @@ export const storeTemplate = async (req: Request, res: Response): Promise<Respon
 
               }
               else {
-                if (template.components[index].format === 'IMAGE') {
+                const mediaFormat = template.components[index].format;
+                if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(mediaFormat)) {
+                  const mediaType = mediaFormat.toLowerCase();
                   newComponent.parameters.push({
-                    type: "image",
-                    image: {
+                    type: mediaType,
+                    [mediaType]: {
                       link: variables[componentType][key].value
                     }
-                  })
+                  } as any)
                 }
                 else {
                   const variableObj = variables[componentType][key];

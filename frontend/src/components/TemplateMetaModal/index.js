@@ -4,7 +4,6 @@ import {
     Box,
     TextField,
     Typography,
-    IconButton,
     List,
     ListItem,
     ListItemText,
@@ -95,6 +94,21 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate, contact
         }));
     };
 
+    const getTemplateDefaultMediaValue = (component) => {
+        const example = component?.example || {};
+
+        if (typeof example?.default_media_url === "string" && example.default_media_url.trim() !== "") {
+            return example.default_media_url.trim();
+        }
+
+        const headerHandle = example?.header_handle?.[0];
+        if (typeof headerHandle === "string" && headerHandle.trim() !== "") {
+            return headerHandle.trim();
+        }
+
+        return "";
+    };
+
     const extractVariablesByComponent = (components) => {
         const regex = /{{([^{}]+)}}/g;
         let variables = {
@@ -109,8 +123,19 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate, contact
             const type = component.type?.toLowerCase();
             const text = component.text || '';
 
-            if (type === 'header' && ['IMAGE', 'VIDEO'].includes(component?.format)) {
-                variables[type].push({ type: `${component?.format.toLowerCase()}`, prompt: component?.format.toLowerCase() === 'image' ? 'Insira a URL da imagem' : 'Insira a URL do vídeo' });
+            if (type === 'header' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(component?.format)) {
+                const mediaType = component?.format?.toLowerCase();
+                const promptByType = {
+                    image: 'URL da imagem do cabeçalho',
+                    video: 'URL do vídeo do cabeçalho',
+                    document: 'URL do documento do cabeçalho'
+                };
+
+                variables[type].push({
+                    type: mediaType,
+                    prompt: promptByType[mediaType] || 'URL da mídia do cabeçalho',
+                    defaultValue: getTemplateDefaultMediaValue(component)
+                });
             }
             // Para os botões, verifique a URL para variáveis
             if (type === 'buttons') {
@@ -199,7 +224,7 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate, contact
             if (extractedVariables[key].length > 0) {
                 initialValues[key] = {};
                 extractedVariables[key].forEach((variable, index) => {
-                    const autoFill = getAutoFillValue(variable.name);
+                    const autoFill = variable.defaultValue || getAutoFillValue(variable.name);
                     initialValues[key][index] = {
                         value: autoFill || '',
                         name: variable.name || '' // Garante que o nome seja passado
@@ -436,7 +461,14 @@ const TemplateModal = ({ open, handleClose, templates, onSelectTemplate, contact
                                                     fullWidth
                                                     margin="normal"
                                                     error={!variableValues[componentType]?.[index]?.value}
-                                                    helperText={!variableValues[componentType]?.[index]?.value ? "Campo obrigatório" : ""}
+                                                    helperText={!variableValues[componentType]?.[index]?.value
+                                                        ? "Campo obrigatório"
+                                                        : variable?.defaultValue
+                                                            ? variableValues[componentType]?.[index]?.value === variable.defaultValue
+                                                                ? "Usando a mídia padrão do template. Altere se quiser."
+                                                                : "Mídia do template substituída para este disparo."
+                                                            : ""
+                                                    }
                                                 />
                                                 <Grid container spacing={1} style={{ marginBottom: 16 }}>
                                                     {availableVariables.map((availVar) => (
