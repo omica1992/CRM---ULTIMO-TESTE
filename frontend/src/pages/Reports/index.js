@@ -391,6 +391,7 @@ const Reports = () => {
           Conexão: ticket.whatsappName,
           Contato: ticket.contactName,
           Empresa: ticket.empresa || "-",
+          Tags: ticket.tags || "-",
           Usuário: ticket.userName,
           Fila: ticket.queueName,
           Status: ticket.status,
@@ -457,6 +458,7 @@ const Reports = () => {
             "reports.exportExcel.columns.company",
             "Empresa"
           ),
+          tags: getTranslation("reports.exportExcel.columns.tags", "Tags"),
           user: getTranslation("reports.exportExcel.columns.user", "Usuário"),
           queue: getTranslation("reports.exportExcel.columns.queue", "Fila"),
           status: getTranslation(
@@ -514,6 +516,7 @@ const Reports = () => {
           translations.columns.connection,
           translations.columns.contact,
           translations.columns.company,
+          translations.columns.tags,
           translations.columns.user,
           translations.columns.queue,
           translations.columns.status,
@@ -536,7 +539,7 @@ const Reports = () => {
       });
 
       if (!ws["!merges"]) ws["!merges"] = [];
-      ws["!merges"].push({ s: { c: 0, r: 0 }, e: { c: 16, r: 0 } });
+      ws["!merges"].push({ s: { c: 0, r: 0 }, e: { c: 17, r: 0 } });
 
       if (!ws["!cols"]) ws["!cols"] = [];
       ws["!cols"] = [
@@ -544,6 +547,7 @@ const Reports = () => {
         { wch: 15 },
         { wch: 25 },
         { wch: 20 },
+        { wch: 24 },
         { wch: 15 },
         { wch: 12 },
         { wch: 30 },
@@ -948,6 +952,7 @@ const Reports = () => {
                 {i18n.t("reports.table.contact")}
               </TableCell>
               <TableCell align="left">Empresa</TableCell>
+              <TableCell align="left">Tags</TableCell>
               <TableCell align="left">{i18n.t("reports.table.user")}</TableCell>
               <TableCell align="left">
                 {i18n.t("reports.table.queue")}
@@ -987,6 +992,7 @@ const Reports = () => {
                   <TableCell align="left">{ticket?.whatsappName}</TableCell>
                   <TableCell align="left">{ticket?.contactName}</TableCell>
                   <TableCell align="left">{ticket?.empresa || "-"}</TableCell>
+                  <TableCell align="left">{ticket?.tags || "-"}</TableCell>
                   <TableCell align="left">{ticket?.userName}</TableCell>
                   <TableCell align="left">{ticket?.queueName}</TableCell>
                   <TableCell align="left">

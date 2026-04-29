@@ -44,6 +44,12 @@ export default async function ListTicketsServiceReport(
 	  w."name" as "whatsappName",
     c."name" as "contactName",
     c."empresa" as "empresa",
+    COALESCE((
+      SELECT STRING_AGG(DISTINCT tg."name", ', ' ORDER BY tg."name")
+      FROM "ContactTags" ct2
+      INNER JOIN "Tags" tg ON tg.id = ct2."tagId"
+      WHERE ct2."contactId" = c.id
+    ), '') as "tags",
 	  u."name" as "userName",
 	  q."name" as "queueName",
 	  wallet_user."name" as "walletName",
@@ -98,6 +104,12 @@ export default async function ListTicketsServiceReport(
 	  w."name" as "whatsappName",
     c."name" as "contactName",
     c."empresa" as "empresa",
+    COALESCE((
+      SELECT STRING_AGG(DISTINCT tg."name", ', ' ORDER BY tg."name")
+      FROM "ContactTags" ct2
+      INNER JOIN "Tags" tg ON tg.id = ct2."tagId"
+      WHERE ct2."contactId" = c.id
+    ), '') as "tags",
 	  u."name" as "userName",
 	  q."name" as "queueName",
 	  wallet_user."name" as "walletName",
